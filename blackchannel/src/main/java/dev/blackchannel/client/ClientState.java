@@ -106,7 +106,7 @@ public final class ClientState {
             toastLine = Component.translatable(toastKey, toastArg).getString();
             toastUntil = System.currentTimeMillis() + 4200;
             if (Minecraft.getInstance().player != null) {
-                Minecraft.getInstance().player.playSound(SoundEvents.NOTE_BLOCK_PLING, 0.45f, 1.5f);
+                Minecraft.getInstance().player.playSound(SoundEvents.NOTE_BLOCK_PLING.value(), 0.45f, 1.5f);
             }
         }
     }
