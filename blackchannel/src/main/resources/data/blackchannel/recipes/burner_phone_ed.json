@@ -1,0 +1,29 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    " C ",
+    "PBP",
+    " P "
+  ],
+  "key": {
+    "C": {
+      "item": "electrodynamics:circuitbasic"
+    },
+    "P": {
+      "item": "electrodynamics:platecopper"
+    },
+    "B": {
+      "item": "electrodynamics:battery"
+    }
+  },
+  "result": {
+    "item": "blackchannel:burner_phone",
+    "count": 1
+  },
+  "conditions": [
+    {
+      "type": "forge:mod_loaded",
+      "modid": "electrodynamics"
+    }
+  ]
+}

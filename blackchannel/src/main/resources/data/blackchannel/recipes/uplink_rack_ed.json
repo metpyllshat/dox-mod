@@ -1,0 +1,32 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "CSC",
+    "PBP",
+    "CSC"
+  ],
+  "key": {
+    "C": {
+      "item": "electrodynamics:circuitadvanced"
+    },
+    "S": {
+      "item": "electrodynamics:platesteel"
+    },
+    "P": {
+      "item": "electrodynamics:platecopper"
+    },
+    "B": {
+      "item": "electrodynamics:battery"
+    }
+  },
+  "result": {
+    "item": "blackchannel:uplink_rack",
+    "count": 1
+  },
+  "conditions": [
+    {
+      "type": "forge:mod_loaded",
+      "modid": "electrodynamics"
+    }
+  ]
+}
