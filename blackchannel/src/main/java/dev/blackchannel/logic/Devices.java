@@ -71,14 +71,14 @@ public final class Devices {
 
     public static int battery(Player player) {
         if (player.getAbilities().instabuild) return 100;
-        int best = 0;
+        int[] best = {0};
         boolean[] any = {false};
         forEach(player, stack -> {
             any[0] = true;
             int b = battery(stack);
-            if (b > best) best = b;
+            if (b > best[0]) best[0] = b;
         });
-        return any[0] ? best : 0;
+        return any[0] ? best[0] : 0;
     }
 
     public static void drain(Player player, int amount) {
