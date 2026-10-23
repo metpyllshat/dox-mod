@@ -99,7 +99,7 @@ public final class Ops {
     public static void toggleAir(ServerPlayer player, NetData.Profile profile) {
         profile.airplane = !profile.airplane;
         if (profile.airplane) profile.bombUntil = player.getServer().getTickCount();
-        player.playNotifySound(SoundEvents.NOTE_BLOCK_BIT, SoundSource.MASTER, 0.5f, profile.airplane ? 0.7f : 1.6f);
+        player.playNotifySound(SoundEvents.NOTE_BLOCK_BIT.value(), SoundSource.MASTER, 0.5f, profile.airplane ? 0.7f : 1.6f);
         result(player, profile, profile.airplane ? "blackchannel.result.air_on" : "blackchannel.result.air_off");
     }
 
@@ -465,7 +465,7 @@ public final class Ops {
         profile.cdTrace = now + Config.TRACE_CD.get() * 20;
         result(player, profile, stale ? "blackchannel.result.trace_stale" : "blackchannel.result.trace_ok",
                 handle, Str.dimShort(dim), String.valueOf(x), String.valueOf(y), String.valueOf(z), String.valueOf(err));
-        player.playNotifySound(SoundEvents.NOTE_BLOCK_PLING, SoundSource.MASTER, 0.7f, 1.4f);
+        player.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.MASTER, 0.7f, 1.4f);
         if (online != null && (target.ids || random.nextFloat() < 0.4f)) alert(online, player, "blackchannel.chat.ids_trace");
         if (Config.LOG_OPS.get()) BlackChannelMod.LOGGER.info("TRACE {} -> {} ±{}", player.getGameProfile().getName(), handle, err);
     }
@@ -552,7 +552,7 @@ public final class Ops {
             ServerPlayer online = player.getServer().getPlayerList().getPlayer(target.id);
             if (online != null) {
                 online.sendSystemMessage(Component.translatable("blackchannel.chat.strike_target", Config.SWAT_DELAY.get(), x, intel.y, z, Str.dimShort(intel.dim)));
-                online.playNotifySound(SoundEvents.NOTE_BLOCK_BELL, SoundSource.MASTER, 1f, 0.5f);
+                online.playNotifySound(SoundEvents.NOTE_BLOCK_BELL.value(), SoundSource.MASTER, 1f, 0.5f);
             }
         }
         if (Config.LOG_OPS.get()) {
@@ -766,7 +766,7 @@ public final class Ops {
                     level.sendParticles(net.minecraft.core.particles.ParticleTypes.END_ROD, strike.x + 0.5, strike.y + 1.2, strike.z + 0.5, 6, 0.2, 0.4, 0.2, 0.01);
                 }
                 if (level != null && (strike.ticksLeft % 100 == 0 || (strike.ticksLeft < 200 && strike.ticksLeft % 20 == 0))) {
-                    level.playSound(null, strike.x, strike.y, strike.z, SoundEvents.NOTE_BLOCK_BELL, SoundSource.BLOCKS, 1.3f, 0.55f);
+                    level.playSound(null, strike.x, strike.y, strike.z, SoundEvents.NOTE_BLOCK_BELL.value(), SoundSource.BLOCKS, 1.3f, 0.55f);
                 }
                 continue;
             }
@@ -896,7 +896,7 @@ public final class Ops {
     private static void alert(ServerPlayer target, ServerPlayer attacker, String key) {
         String dir = bearing(target, attacker);
         target.sendSystemMessage(Component.translatable(key, dir));
-        target.playNotifySound(SoundEvents.NOTE_BLOCK_BASS, SoundSource.MASTER, 0.8f, 0.6f);
+        target.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.value(), SoundSource.MASTER, 0.8f, 0.6f);
         NetData.Profile profile = NetData.get(target).profile(target.getUUID());
         profile.toast(key, dir);
         profile.log(key, dir, target.getServer().getTickCount());

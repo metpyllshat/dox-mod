@@ -14,6 +14,7 @@ import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 
 public final class ModCommands {
@@ -73,7 +74,7 @@ public final class ModCommands {
     }
 
     private static int pulse(CommandSourceStack source, int radius) {
-        if (!(source.getLevel() instanceof net.minecraft.server.level.ServerLevel level)) return 0;
+        ServerLevel level = source.getLevel();
         BlockPos pos = BlockPos.containing(source.getPosition());
         BlackChannelAPI.pulse(level, pos, radius, 12);
         source.sendSuccess(() -> Component.translatable("blackchannel.cmd.pulse", radius), true);

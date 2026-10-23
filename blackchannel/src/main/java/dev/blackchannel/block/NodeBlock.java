@@ -21,6 +21,7 @@ import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.material.MapColor;
 import net.minecraft.world.phys.BlockHitResult;
 import net.minecraft.world.SimpleMenuProvider;
+import net.minecraftforge.network.NetworkHooks;
 import org.jetbrains.annotations.Nullable;
 
 public class NodeBlock extends BaseEntityBlock {
@@ -90,8 +91,8 @@ public class NodeBlock extends BaseEntityBlock {
                 Ops.killSwitch(sp, pos);
                 return InteractionResult.CONSUME;
             }
-            sp.openMenu(new SimpleMenuProvider((id, inv, p) -> new dev.blackchannel.menu.Menus.RackMenu(id, inv, pos),
-                    Component.translatable("screen.blackchannel.rack")), buf -> buf.writeBlockPos(pos));
+            NetworkHooks.openScreen(sp, new SimpleMenuProvider((id, inv, p) -> new dev.blackchannel.menu.Menus.RackMenu(id, inv, pos),
+                    Component.translatable("screen.blackchannel.rack")), pos);
             return InteractionResult.CONSUME;
         }
         if (kind == Kind.BEACON) {
