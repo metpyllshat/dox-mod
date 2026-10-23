@@ -1,0 +1,11 @@
+{
+  "replace": false,
+  "values": [
+    "blackchannel:uplink_rack",
+    "blackchannel:sigint_dish",
+    "blackchannel:faraday_anchor",
+    "blackchannel:signal_jammer",
+    "blackchannel:team_beacon",
+    "blackchannel:decoy_beacon"
+  ]
+}
