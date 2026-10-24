@@ -2,6 +2,8 @@ package dev.blackchannel;
 
 import net.minecraftforge.common.ForgeConfigSpec;
 
+import java.util.List;
+
 public final class Config {
     public static final ForgeConfigSpec SPEC;
 
@@ -58,6 +60,12 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue STRUCTURE_RADAR;
     public static final ForgeConfigSpec.IntValue STRUCTURE_PHONE;
     public static final ForgeConfigSpec.DoubleValue SWAT_POWER;
+    public static final ForgeConfigSpec.DoubleValue FLOOD_VOLUME;
+    public static final ForgeConfigSpec.IntValue FLOOD_SOUND_TICKS;
+    public static final ForgeConfigSpec.IntValue FLOOD_CHAT_TICKS;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> FLOOD_LINES;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> FLOOD_SOUNDS;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> FLOOD_IMAGES;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -123,6 +131,39 @@ public final class Config {
         EMP_SECONDS = b.defineInRange("empShutdownSeconds", 28, 1, 180);
         EMP_RADIUS = b.defineInRange("ballistixEmpRadius", 40, 4, 128);
         DRONE_EMP_RADIUS = b.defineInRange("droneEmpCollateralRadius", 16, 4, 64);
+        b.pop();
+
+        b.push("flood");
+        b.comment("Текст, звуки и картинки флуда. Пустой floodLines оставляет короткие встроенные фразы. Звук — id события, например minecraft:block.note_block.bit. Картинка — путь ресурса. Свои PNG кладутся в config/blackchannel/flood, не больше 4 файлов по 48 КБ.");
+        FLOOD_LINES = b.defineList("floodLines", List.of(
+                "НЕИЗВЕСТНЫЙ НОМЕР",
+                "ЛИНИЯ ЗАНЯТА",
+                "ПОТОК ПАКЕТОВ",
+                "ОБРАТНЫЙ ВЫЗОВ СОРВАН",
+                "SIM ЗАБЛОКИРОВАНА",
+                "ПЕТЛЯ МАРШРУТА",
+                "КАНАЛ ПЕРЕГРУЖЕН",
+                "ПОВТОРИТЕ КОД",
+                "СООБЩЕНИЕ НЕ ДОСТАВЛЕНО",
+                "ВАМ ЗВОНИЛИ 14 РАЗ",
+                "СРОЧНО ПЕРЕЗВОНИТЕ",
+                "БАЛАНС ОТРИЦАТЕЛЬНЫЙ"
+        ), o -> o instanceof String);
+        FLOOD_SOUNDS = b.defineList("floodSounds", List.of(
+                "minecraft:block.note_block.bit",
+                "minecraft:block.note_block.pling",
+                "minecraft:block.note_block.bell",
+                "minecraft:entity.experience_orb.pickup",
+                "minecraft:block.amethyst_block.chime",
+                "minecraft:entity.villager.no"
+        ), o -> o instanceof String);
+        FLOOD_IMAGES = b.defineList("floodImages", List.of(
+                "blackchannel:textures/flood/noise.png",
+                "blackchannel:textures/flood/warn.png"
+        ), o -> o instanceof String);
+        FLOOD_VOLUME = b.defineInRange("floodSoundVolume", 0.7D, 0.0D, 1.0D);
+        FLOOD_SOUND_TICKS = b.defineInRange("floodSoundTicks", 10, 2, 200);
+        FLOOD_CHAT_TICKS = b.defineInRange("floodChatTicks", 15, 5, 200);
         b.pop();
 
         b.push("world");

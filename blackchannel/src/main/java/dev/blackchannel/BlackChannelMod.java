@@ -28,6 +28,7 @@ public class BlackChannelMod {
     private void commonSetup(FMLCommonSetupEvent event) {
         event.enqueueWork(() -> {
             ModNetwork.register();
+            dev.blackchannel.logic.Flood.ensureDir();
             Bridges.init(MinecraftForge.EVENT_BUS);
             LOGGER.info("Black Channel ready. Hooks: {}", Bridges.hookSummary());
         });

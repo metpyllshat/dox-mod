@@ -214,7 +214,8 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             if (on) picked = row;
             if (lot(g, sx, sy, stack, row.price, on, mx, my)) {
                 hits.add(new Ui.Hit(sx, sy, 36, 38, "lpick", String.valueOf(row.id), null));
-                armTip(stack, row.price, row.seller, row.intel ? row.desc : null);
+                armTip(stack, row.price, row.seller, null);
+                if (row.intel) armSecret(row);
             }
         }
         if (picked == null) drawMarketFoot(g, x, y, ItemStack.EMPTY, null, "", 0, null, "", pages);
@@ -222,7 +223,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             ItemStack stack = listingStack(picked);
             String name = stack.isEmpty() ? picked.desc : stack.getHoverName().getString();
             if (!picked.intel && stack.getCount() > 1) name = name + " x" + stack.getCount();
-            drawMarketFoot(g, x, y, stack, name, picked.seller, picked.price, Actions.BUY_LIST, String.valueOf(picked.id), pages);
+            drawMarketFoot(g, x, y, stack, name, picked.seller, picked.price, Actions.BUY_LIST, String.valueOf(picked.id), pages, picked.intel ? secret(picked) : null);
         }
     }
 
@@ -285,11 +286,22 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         if (extra != null && !extra.isEmpty()) hoverLines.add(Component.literal(extra).withStyle(ChatFormatting.DARK_AQUA));
     }
 
+    private void armSecret(ClientState.ListingRow row) {
+        if (row.dim != null && !row.dim.isEmpty()) hoverLines.add(Component.literal(row.dim).withStyle(ChatFormatting.GRAY));
+        if (row.stale) hoverLines.add(Component.literal(Ui.t("screen.blackchannel.market.stale")).withStyle(ChatFormatting.DARK_GRAY));
+        hoverLines.add(secret(row));
+    }
+
+    private Component secret(ClientState.ListingRow row) {
+        return Component.literal(Ui.maskCoords(row.id)).withStyle(ChatFormatting.OBFUSCATED);
+    }
+
     private ItemStack listingStack(ClientState.ListingRow row) {
         if (row.intel) {
             ItemStack paper = new ItemStack(Items.PAPER);
             String name = Ui.t("screen.blackchannel.market.intel");
             if (row.desc != null && !row.desc.isEmpty()) name = name + " " + row.desc;
+            if (row.dim != null && !row.dim.isEmpty()) name = name + " " + row.dim;
             paper.setHoverName(Component.literal(name));
             return paper;
         }
@@ -302,6 +314,10 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     }
 
     private void drawMarketFoot(GuiGraphics g, int x, int y, ItemStack stack, String title, String meta, int price, String buyAction, String buyArg, int pages) {
+        drawMarketFoot(g, x, y, stack, title, meta, price, buyAction, buyArg, pages, null);
+    }
+
+    private void drawMarketFoot(GuiGraphics g, int x, int y, ItemStack stack, String title, String meta, int price, String buyAction, String buyArg, int pages, Component secret) {
         int resultW = imageWidth - 16;
         if (pages > 1) {
             Ui.button(g, font, hits, x + 188, y + 186, 22, 11, "<", marketPage > 0, "mpage", "-1");
@@ -323,11 +339,27 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         }
         g.renderItem(stack, x + 10, y + 204);
         g.drawString(font, Ui.trim(font, title, 116), x + 30, y + 202, Ui.TEXT, false);
-        String line = (meta == null || meta.isEmpty() ? "" : meta + "  ") + "#" + price;
-        g.drawString(font, Ui.trim(font, line, 116), x + 30, y + 212, price > ClientState.crypto ? Ui.RED : Ui.AMBER, false);
+        int priceColor = price > ClientState.crypto ? Ui.RED : Ui.AMBER;
+        if (secret != null) {
+            g.drawString(font, secret, x + 30, y + 212, Ui.RED, false);
+            g.drawString(font, "#" + price, x + 34 + font.width(secret.getString()), y + 212, priceColor, false);
+        } else {
+            String line = (meta == null || meta.isEmpty() ? "" : meta + "  ") + "#" + price;
+            g.drawString(font, Ui.trim(font, line, 116), x + 30, y + 212, priceColor, false);
+        }
         if (buyAction != null) {
             Ui.button(g, font, hits, x + 160, y + 204, 76, 14, Ui.t("screen.blackchannel.market.buy"), price <= ClientState.crypto, buyAction, buyArg);
         }
+    }
+
+    private void buffRow(GuiGraphics g, int x, int y, String label, boolean on, String refundKey, int fallback, String arg) {
+        g.drawString(font, label, x + 8, y + 2, on ? Ui.TEXT : Ui.MUTED, false);
+        if (!on) {
+            g.drawString(font, Ui.t("screen.blackchannel.buff.none"), x + 52, y + 2, Ui.MUTED, false);
+            return;
+        }
+        int refund = ClientState.cfg(refundKey, fallback);
+        Ui.button(g, font, hits, x + 122, y, 110, 12, Ui.t("screen.blackchannel.btn.sell_buff") + " #" + refund, Ui.t("screen.blackchannel.tip.sell_buff"), false, Actions.SELL_BUFF, arg);
     }
 
     private void drawGear(GuiGraphics g, int x, int y) {
@@ -335,9 +367,11 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         Ui.button(g, font, hits, x + 122, y + 48, 110, 12, "DND", Ui.t("screen.blackchannel.tip.dnd"), ClientState.dnd, Actions.DND, "");
         Ui.button(g, font, hits, x + 8, y + 64, 110, 12, "CREW", Ui.t("screen.blackchannel.tip.crew"), false, Actions.CREW, input == null ? "" : input.getValue());
         Ui.button(g, font, hits, x + 122, y + 64, 110, 12, Ui.t("screen.blackchannel.btn.manual"), false, "manual", "");
-        g.drawString(font, "VPN " + ClientState.vpn + (ClientState.ids ? "  IDS" : "") + (ClientState.hard ? "  EMP+" : ""), x + 8, y + 84, Ui.TEXT, false);
-        g.drawString(font, "SAT " + ClientState.sat + "  CREW " + ClientState.crew, x + 8, y + 96, Ui.MUTED, false);
-        int ly = y + 112;
+        buffRow(g, x, y + 82, ClientState.vpn >= 2 ? Ui.t("screen.blackchannel.buff.vpn2") : Ui.t("screen.blackchannel.buff.vpn"), ClientState.vpn > 0, ClientState.vpn >= 2 ? "refundDeep" : "refundVpn", ClientState.vpn >= 2 ? 24 : 14, "vpn");
+        buffRow(g, x, y + 96, Ui.t("screen.blackchannel.buff.ids"), ClientState.ids, "refundIds", 12, "ids");
+        buffRow(g, x, y + 110, Ui.t("screen.blackchannel.buff.harden"), ClientState.hard, "refundHarden", 11, "harden");
+        g.drawString(font, "SAT " + ClientState.sat + "  CREW " + ClientState.crew, x + 8, y + 126, Ui.MUTED, false);
+        int ly = y + 140;
         for (ClientState.DeanonRow row : ClientState.deanons) {
             if (ly > y + 180) break;
             g.drawString(font, Ui.trim(font, row.handle() + " = " + row.name(), 220), x + 8, ly, Ui.BLUE, false);

@@ -168,6 +168,7 @@ public class NetData extends SavedData {
         public String dm = "";
         public int empUntil;
         public int bombUntil;
+        public int floodPicsFor;
         public int cdTrace, cdDeanon, cdSwat, cdBomb, cdOptic, cdPeek;
         public byte[] optic = new byte[0];
         public int[] opticColor = new int[0];

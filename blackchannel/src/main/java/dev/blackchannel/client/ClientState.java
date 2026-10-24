@@ -38,6 +38,8 @@ public final class ClientState {
     public static final List<BountyRow> bounties = new ArrayList<>();
     public static final List<LogRow> logs = new ArrayList<>();
     public static final List<DeanonRow> deanons = new ArrayList<>();
+    public static final List<String> floodLines = new ArrayList<>();
+    public static final List<String> floodImages = new ArrayList<>();
     public static final List<PeekSlot> peek = new ArrayList<>();
     public static final Map<String, Integer> cfg = new HashMap<>();
     public static byte[] optic = new byte[0];
@@ -126,6 +128,8 @@ public final class ClientState {
         if (tag.contains("radarHud")) radarHud = tag.getBoolean("radarHud");
         if (tag.contains("blips")) readBlips(tag.getList("blips", Tag.TAG_COMPOUND));
         if (tag.contains("cfg")) readCfg(tag.getCompound("cfg"));
+        readStrings(tag, "floodLines", floodLines);
+        readStrings(tag, "floodImages", floodImages);
         if (toastId != seenToast && toastKey != null && !toastKey.isEmpty()) {
             seenToast = toastId;
             toastLine = Component.translatable(toastKey, toastArg).getString();
@@ -201,6 +205,8 @@ public final class ClientState {
             row.price = c.getInt("price");
             row.intel = c.getBoolean("intel");
             row.desc = c.getString("desc");
+            row.dim = c.getString("dim");
+            row.stale = c.getBoolean("stale");
             row.item = c.getString("item");
             row.count = c.getInt("count");
             row.nbt = c.getCompound("s");
@@ -230,6 +236,13 @@ public final class ClientState {
             CompoundTag c = list.getCompound(i);
             deanons.add(new DeanonRow(c.getString("h"), c.getString("n")));
         }
+    }
+
+    private static void readStrings(CompoundTag tag, String key, List<String> into) {
+        if (!tag.contains(key)) return;
+        into.clear();
+        ListTag list = tag.getList(key, Tag.TAG_STRING);
+        for (int i = 0; i < list.size(); i++) into.add(list.getString(i));
     }
 
     private static void readCfg(CompoundTag tag) {
@@ -263,8 +276,8 @@ public final class ClientState {
     public record Blip(int dx, int dz, int dist, String kind, String label) {}
     public static final class ListingRow {
         public int id, price, count;
-        public String seller = "", desc = "", item = "";
-        public boolean intel;
+        public String seller = "", desc = "", item = "", dim = "";
+        public boolean intel, stale;
         public CompoundTag nbt = new CompoundTag();
     }
     public record TrackRow(String label, String dim, int x, int y, int z, boolean live) {}

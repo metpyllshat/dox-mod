@@ -12,6 +12,8 @@ import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 
+import java.util.ArrayList;
+import java.util.List;
 import java.util.function.Supplier;
 
 public final class ModNetwork {
@@ -28,6 +30,7 @@ public final class ModNetwork {
         CHANNEL.registerMessage(id++, SyncPkt.class, SyncPkt::encode, SyncPkt::decode, SyncPkt::handle);
         CHANNEL.registerMessage(id++, StatusPkt.class, StatusPkt::encode, StatusPkt::decode, StatusPkt::handle);
         CHANNEL.registerMessage(id++, OpenPkt.class, OpenPkt::encode, OpenPkt::decode, OpenPkt::handle);
+        CHANNEL.registerMessage(id++, FloodPkt.class, FloodPkt::encode, FloodPkt::decode, FloodPkt::handle);
     }
 
     public static void syncFull(ServerPlayer player) {
@@ -38,6 +41,11 @@ public final class ModNetwork {
     public static void syncStatus(ServerPlayer player) {
         if (CHANNEL == null || player == null) return;
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new StatusPkt(Sync.status(player)));
+    }
+
+    public static void sendFlood(ServerPlayer player) {
+        if (CHANNEL == null || player == null) return;
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new FloodPkt(dev.blackchannel.logic.Flood.images()));
     }
 
     public static void open(ServerPlayer player, String screen) {
@@ -112,6 +120,53 @@ public final class ModNetwork {
 
         public static void handle(StatusPkt msg, Supplier<NetworkEvent.Context> ctx) {
             ctx.get().enqueueWork(() -> dev.blackchannel.client.ClientState.applyStatus(msg.tag));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    public static final class FloodPkt {
+        public final List<String> names;
+        public final List<byte[]> pngs;
+
+        public FloodPkt(List<dev.blackchannel.logic.Flood.NamedPng> images) {
+            names = new ArrayList<>();
+            pngs = new ArrayList<>();
+            if (images == null) return;
+            for (dev.blackchannel.logic.Flood.NamedPng image : images) {
+                if (image == null || image.bytes() == null || image.bytes().length == 0 || image.bytes().length > 48_000) continue;
+                names.add(image.name() == null ? "flood.png" : image.name());
+                pngs.add(image.bytes());
+                if (names.size() >= 4) break;
+            }
+        }
+
+        private FloodPkt(List<String> names, List<byte[]> pngs) {
+            this.names = names;
+            this.pngs = pngs;
+        }
+
+        public static void encode(FloodPkt msg, FriendlyByteBuf buf) {
+            int n = Math.min(msg.names.size(), msg.pngs.size());
+            buf.writeVarInt(n);
+            for (int i = 0; i < n; i++) {
+                buf.writeUtf(msg.names.get(i), 64);
+                buf.writeByteArray(msg.pngs.get(i));
+            }
+        }
+
+        public static FloodPkt decode(FriendlyByteBuf buf) {
+            int n = Math.min(4, buf.readVarInt());
+            List<String> names = new ArrayList<>();
+            List<byte[]> pngs = new ArrayList<>();
+            for (int i = 0; i < n; i++) {
+                names.add(buf.readUtf(64));
+                pngs.add(buf.readByteArray(48_000));
+            }
+            return new FloodPkt(names, pngs);
+        }
+
+        public static void handle(FloodPkt msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> dev.blackchannel.client.FloodHud.install(msg.names, msg.pngs));
             ctx.get().setPacketHandled(true);
         }
     }

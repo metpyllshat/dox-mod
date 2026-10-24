@@ -73,6 +73,14 @@ public final class Ui {
         return Component.translatable(key).getString();
     }
 
+    public static String maskCoords(int id) {
+        int n = id * 1103515245 + 12345;
+        int x = (n & 511) - 256;
+        int y = 8 + ((n >>> 9) & 63);
+        int z = ((n >>> 16) & 511) - 256;
+        return x + " " + y + " " + z;
+    }
+
     public static String trim(Font font, String text, int width) {
         if (text == null) return "";
         if (font.width(text) <= width) return text;

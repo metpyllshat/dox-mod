@@ -10,6 +10,7 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.world.inventory.MenuType;
 import net.minecraftforge.api.distmarker.Dist;
 import net.minecraftforge.client.event.RenderGuiEvent;
+import net.minecraftforge.client.event.ScreenEvent;
 import net.minecraftforge.common.MinecraftForge;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -29,6 +30,11 @@ public final class ClientHooks {
             MenuScreens.register((MenuType<Menus.RackMenu>) (Object) ModContent.RACK_MENU.get(), RackScreen::new);
         });
         MinecraftForge.EVENT_BUS.addListener(ClientHooks::hud);
+        MinecraftForge.EVENT_BUS.addListener(ClientHooks::screen);
+    }
+
+    public static void screen(ScreenEvent.Render.Post event) {
+        FloodHud.draw(event.getGuiGraphics());
     }
 
     public static void open(String id) {
@@ -37,8 +43,10 @@ public final class ClientHooks {
 
     public static void hud(RenderGuiEvent.Post event) {
         Minecraft mc = Minecraft.getInstance();
-        if (mc.player == null || mc.options.hideGui) return;
+        if (mc.player == null) return;
         GuiGraphics g = event.getGuiGraphics();
+        if (mc.screen == null) FloodHud.draw(g);
+        if (mc.options.hideGui) return;
         int w = mc.getWindow().getGuiScaledWidth();
         glitch++;
         if (ClientState.strikeT > 0) {
@@ -57,10 +65,6 @@ public final class ClientHooks {
             }
             String dead = Component.translatable("blackchannel.hud.emp").getString();
             g.drawString(mc.font, dead, w / 2 - mc.font.width(dead) / 2, 28, Ui.EDGE, false);
-        }
-        if (ClientState.bomb > 0 && mc.screen == null) {
-            String spam = Component.translatable("blackchannel.spam." + (1 + (glitch / 12) % 6)).getString();
-            g.drawString(mc.font, spam, 6 + (glitch % 5), 40 + (glitch % 7), Ui.RED, false);
         }
         if (ClientState.radarHud && mc.screen == null && ClientState.emp <= 0) {
             int cx = w - 42;
