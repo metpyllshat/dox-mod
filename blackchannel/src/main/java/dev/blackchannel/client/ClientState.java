@@ -188,6 +188,7 @@ public final class ClientState {
             row.desc = c.getString("desc");
             row.item = c.getString("item");
             row.count = c.getInt("count");
+            row.nbt = c.getCompound("s");
             listings.add(row);
         }
     }
@@ -249,6 +250,7 @@ public final class ClientState {
         public int id, price, count;
         public String seller = "", desc = "", item = "";
         public boolean intel;
+        public CompoundTag nbt = new CompoundTag();
     }
     public record TrackRow(String label, String dim, int x, int y, int z, boolean live) {}
     public record LogRow(String key, String arg, int age) {}

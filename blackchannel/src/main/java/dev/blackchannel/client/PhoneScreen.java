@@ -4,11 +4,16 @@ import dev.blackchannel.logic.Actions;
 import dev.blackchannel.logic.Catalog;
 import dev.blackchannel.menu.Menus;
 import dev.blackchannel.net.ModNetwork;
+import dev.blackchannel.registry.ModContent;
+import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
+import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.item.Items;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -18,7 +23,13 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     private EditBox input;
     private int tab;
     private int scroll;
+    private int marketTab;
+    private int marketPage;
+    private int listPick = -1;
+    private String shopPick = "";
     private String dmTarget = "";
+    private ItemStack hoverStack = ItemStack.EMPTY;
+    private final List<Component> hoverLines = new ArrayList<>();
 
     public PhoneScreen(Menus.PhoneMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
@@ -47,6 +58,12 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     public void render(GuiGraphics g, int mx, int my, float pt) {
         renderBackground(g);
         hits.clear();
+        hoverStack = ItemStack.EMPTY;
+        hoverLines.clear();
+        if (input != null) {
+            input.visible = tab != 2;
+            if (tab == 2 && input.isFocused()) input.setFocused(false);
+        }
         int x = leftPos;
         int y = topPos;
         Ui.panel(g, x, y, imageWidth, imageHeight);
@@ -60,11 +77,12 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         Ui.button(g, font, hits, x + 182, y + 28, 58, 12, Ui.t("screen.blackchannel.tab.gear"), tab == 3, "tab", "3");
         if (tab == 0) drawChat(g, x, y);
         else if (tab == 1) drawRadar(g, x, y);
-        else if (tab == 2) drawMarket(g, x, y);
+        else if (tab == 2) drawMarket(g, x, y, mx, my);
         else drawGear(g, x, y);
-        g.fill(x + 6, y + imageHeight - 22, x + imageWidth - 6, y + imageHeight - 6, 0xFF0C1210);
+        if (tab != 2) g.fill(x + 6, y + imageHeight - 22, x + imageWidth - 6, y + imageHeight - 6, 0xFF0C1210);
         for (var renderable : renderables) renderable.render(g, mx, my, pt);
-        Ui.tips(g, font, hits, mx, my);
+        if (!hoverStack.isEmpty() && !hoverLines.isEmpty()) g.renderTooltip(font, hoverLines, mx, my);
+        else Ui.tips(g, font, hits, mx, my);
     }
 
     private void drawChat(GuiGraphics g, int x, int y) {
@@ -122,26 +140,187 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
                 ClientState.radarHud, Actions.RADAR, "");
     }
 
-    private void drawMarket(GuiGraphics g, int x, int y) {
+    private void drawMarket(GuiGraphics g, int x, int y, int mx, int my) {
+        Ui.button(g, font, hits, x + 6, y + 44, 74, 14, Ui.t("screen.blackchannel.market.shop"), marketTab == 0, "mkt", "0");
+        Ui.button(g, font, hits, x + 84, y + 44, 74, 14, Ui.t("screen.blackchannel.market.board"), marketTab == 1, "mkt", "1");
+        Ui.button(g, font, hits, x + 162, y + 44, 78, 14, Ui.t("screen.blackchannel.market.bounty"), marketTab == 2, "mkt", "2");
+        g.fill(x + 8, y + 60, x + imageWidth - 8, y + 186, 0xFF07110C);
+        if (marketTab == 0) drawShop(g, x, y, mx, my);
+        else if (marketTab == 1) drawBoard(g, x, y, mx, my);
+        else drawBounties(g, x, y);
+    }
+
+    private void drawShop(GuiGraphics g, int x, int y, int mx, int my) {
         var entries = Catalog.entries();
-        for (int i = 0; i < entries.size() && i < 16; i++) {
+        Catalog.Entry picked = null;
+        for (int i = 0; i < 18; i++) {
+            int sx = lotX(x, i % 6);
+            int sy = lotY(y, i / 6);
+            if (i >= entries.size()) {
+                emptyLot(g, sx, sy);
+                continue;
+            }
             Catalog.Entry entry = entries.get(i);
-            int col = i / 8;
-            int row = i % 8;
-            String name = Ui.t("blackchannel.shop." + entry.id());
-            Ui.button(g, font, hits, x + 6 + col * 118, y + 44 + row * 13, 114, 12, Ui.trim(font, name + " #" + entry.price(), 108), name + "  #" + entry.price(), false, Actions.BUY, entry.id());
+            ItemStack stack = new ItemStack(entry.item().get(), Math.max(1, entry.count()));
+            boolean on = entry.id().equals(shopPick);
+            if (on) picked = entry;
+            if (lot(g, sx, sy, stack, entry.price(), on, mx, my)) {
+                hits.add(new Ui.Hit(sx, sy, 36, 38, "mpick", entry.id(), null));
+                armTip(stack, entry.price(), Ui.t("screen.blackchannel.market.vendor"), null);
+            }
         }
-        int ly = y + 152;
+        if (picked == null) drawMarketFoot(g, x, y, ItemStack.EMPTY, null, "", 0, null, "", 1);
+        else {
+            ItemStack stack = new ItemStack(picked.item().get(), Math.max(1, picked.count()));
+            String name = stack.getHoverName().getString();
+            if (picked.count() > 1) name = name + " x" + picked.count();
+            drawMarketFoot(g, x, y, stack, name, Ui.t("screen.blackchannel.market.vendor"), picked.price(), Actions.BUY, picked.id(), 1);
+        }
+    }
+
+    private void drawBoard(GuiGraphics g, int x, int y, int mx, int my) {
+        var rows = ClientState.listings;
+        int pages = Math.max(1, (rows.size() + 17) / 18);
+        if (marketPage >= pages) marketPage = pages - 1;
+        if (marketPage < 0) marketPage = 0;
+        if (rows.isEmpty()) {
+            int ly = y + 96;
+            for (String line : Ui.wrap(font, Ui.t("screen.blackchannel.market.empty"), imageWidth - 28)) {
+                g.drawString(font, line, x + 14, ly, Ui.MUTED, false);
+                ly += 10;
+            }
+            drawMarketFoot(g, x, y, ItemStack.EMPTY, "", "", 0, null, "", 1);
+            return;
+        }
+        int start = marketPage * 18;
+        ClientState.ListingRow picked = null;
+        for (int i = 0; i < 18; i++) {
+            int sx = lotX(x, i % 6);
+            int sy = lotY(y, i / 6);
+            int idx = start + i;
+            if (idx >= rows.size()) {
+                emptyLot(g, sx, sy);
+                continue;
+            }
+            ClientState.ListingRow row = rows.get(idx);
+            ItemStack stack = listingStack(row);
+            boolean on = row.id == listPick;
+            if (on) picked = row;
+            if (lot(g, sx, sy, stack, row.price, on, mx, my)) {
+                hits.add(new Ui.Hit(sx, sy, 36, 38, "lpick", String.valueOf(row.id), null));
+                armTip(stack, row.price, row.seller, row.intel ? row.desc : null);
+            }
+        }
+        if (picked == null) drawMarketFoot(g, x, y, ItemStack.EMPTY, null, "", 0, null, "", pages);
+        else {
+            ItemStack stack = listingStack(picked);
+            String name = stack.isEmpty() ? picked.desc : stack.getHoverName().getString();
+            if (!picked.intel && stack.getCount() > 1) name = name + " x" + stack.getCount();
+            drawMarketFoot(g, x, y, stack, name, picked.seller, picked.price, Actions.BUY_LIST, String.valueOf(picked.id), pages);
+        }
+    }
+
+    private void drawBounties(GuiGraphics g, int x, int y) {
+        if (ClientState.bounties.isEmpty()) {
+            int ly = y + 90;
+            for (String line : Ui.wrap(font, Ui.t("screen.blackchannel.market.no_bounty"), imageWidth - 28)) {
+                g.drawString(font, line, x + 14, ly, Ui.MUTED, false);
+                ly += 10;
+            }
+        }
+        int ly = y + 70;
+        ItemStack coin = new ItemStack(ModContent.HASH.get());
         for (ClientState.BountyRow bounty : ClientState.bounties) {
-            if (ly > y + 176) break;
-            g.drawString(font, Ui.trim(font, Ui.t("blackchannel.shop.bounty") + " @" + bounty.handle() + " #" + bounty.reward(), 230), x + 8, ly, Ui.AMBER, false);
-            ly += 10;
+            if (ly > y + 160) break;
+            g.fill(x + 14, ly, x + imageWidth - 14, ly + 28, 0xFF101614);
+            g.fill(x + 14, ly, x + imageWidth - 14, ly + 1, Ui.AMBER);
+            g.renderItem(coin, x + 18, ly + 6);
+            g.drawString(font, Ui.trim(font, "@" + bounty.handle(), 150), x + 40, ly + 6, Ui.TEXT, false);
+            g.drawString(font, "#" + bounty.reward(), x + 40, ly + 16, Ui.AMBER, false);
+            ly += 32;
         }
-        for (ClientState.ListingRow listing : ClientState.listings) {
-            if (ly > y + 188) break;
-            String label = "#" + listing.id + " " + (listing.intel ? listing.desc : listing.item) + " $" + listing.price;
-            Ui.button(g, font, hits, x + 6, ly, 230, 11, Ui.trim(font, label, 220), false, Actions.BUY_LIST, String.valueOf(listing.id));
-            ly += 12;
+        drawMarketFoot(g, x, y, ItemStack.EMPTY, Ui.t("screen.blackchannel.market.bounty_note"), "", 0, null, "", 1);
+    }
+
+    private int lotX(int x, int col) {
+        return x + 11 + col * 38;
+    }
+
+    private int lotY(int y, int row) {
+        return y + 64 + row * 40;
+    }
+
+    private void emptyLot(GuiGraphics g, int sx, int sy) {
+        g.fill(sx, sy, sx + 36, sy + 38, 0xFF0C1210);
+        g.fill(sx, sy, sx + 36, sy + 1, 0xFF1B3A30);
+    }
+
+    private boolean lot(GuiGraphics g, int sx, int sy, ItemStack stack, int price, boolean on, int mx, int my) {
+        boolean over = mx >= sx && my >= sy && mx < sx + 36 && my < sy + 38;
+        g.fill(sx, sy, sx + 36, sy + 38, on ? 0xFF16382C : 0xFF101614);
+        g.fill(sx, sy, sx + 36, sy + 1, on ? Ui.EDGE : over ? Ui.AMBER : Ui.EDGE_DIM);
+        if (stack != null && !stack.isEmpty()) {
+            g.renderItem(stack, sx + 10, sy + 3);
+            g.renderItemDecorations(font, stack, sx + 10, sy + 3);
+        }
+        String label = "#" + price;
+        int pw = font.width(label);
+        int color = price > ClientState.crypto ? Ui.RED : Ui.AMBER;
+        g.drawString(font, label, sx + Math.max(2, (36 - pw) / 2), sy + 26, color, false);
+        return over;
+    }
+
+    private void armTip(ItemStack stack, int price, String seller, String extra) {
+        hoverStack = stack == null ? ItemStack.EMPTY : stack;
+        hoverLines.clear();
+        if (minecraft != null && hoverStack != null && !hoverStack.isEmpty()) hoverLines.addAll(getTooltipFromItem(hoverStack));
+        hoverLines.add(Component.literal("#" + price).withStyle(ChatFormatting.GOLD));
+        if (seller != null && !seller.isEmpty()) hoverLines.add(Component.literal(seller).withStyle(ChatFormatting.GRAY));
+        if (extra != null && !extra.isEmpty()) hoverLines.add(Component.literal(extra).withStyle(ChatFormatting.DARK_AQUA));
+    }
+
+    private ItemStack listingStack(ClientState.ListingRow row) {
+        if (row.intel) {
+            ItemStack paper = new ItemStack(Items.PAPER);
+            String name = Ui.t("screen.blackchannel.market.intel");
+            if (row.desc != null && !row.desc.isEmpty()) name = name + " " + row.desc;
+            paper.setHoverName(Component.literal(name));
+            return paper;
+        }
+        CompoundTag nbt = row.nbt;
+        if (nbt != null && nbt.contains("id")) {
+            ItemStack stack = ItemStack.of(nbt);
+            if (!stack.isEmpty()) return stack;
+        }
+        return ItemStack.EMPTY;
+    }
+
+    private void drawMarketFoot(GuiGraphics g, int x, int y, ItemStack stack, String title, String meta, int price, String buyAction, String buyArg, int pages) {
+        int resultW = imageWidth - 16;
+        if (pages > 1) {
+            Ui.button(g, font, hits, x + 188, y + 186, 22, 11, "<", marketPage > 0, "mpage", "-1");
+            Ui.button(g, font, hits, x + 214, y + 186, 22, 11, ">", marketPage + 1 < pages, "mpage", "1");
+            resultW = 170;
+        }
+        g.drawString(font, Ui.trim(font, ClientState.resultLine(), resultW), x + 8, y + 187, Ui.AMBER, false);
+        g.fill(x + 6, y + 200, x + imageWidth - 6, y + 224, 0xFF101614);
+        g.fill(x + 6, y + 200, x + imageWidth - 6, y + 201, Ui.EDGE_DIM);
+        if (stack == null || stack.isEmpty()) {
+            String note = title == null ? Ui.t("screen.blackchannel.market.pick") : title;
+            int ly = y + 206;
+            for (String line : Ui.wrap(font, note, imageWidth - 24)) {
+                if (ly > y + 216) break;
+                g.drawString(font, line, x + 12, ly, Ui.MUTED, false);
+                ly += 10;
+            }
+            return;
+        }
+        g.renderItem(stack, x + 10, y + 204);
+        g.drawString(font, Ui.trim(font, title, 116), x + 30, y + 202, Ui.TEXT, false);
+        String line = (meta == null || meta.isEmpty() ? "" : meta + "  ") + "#" + price;
+        g.drawString(font, Ui.trim(font, line, 116), x + 30, y + 212, price > ClientState.crypto ? Ui.RED : Ui.AMBER, false);
+        if (buyAction != null) {
+            Ui.button(g, font, hits, x + 160, y + 204, 76, 14, Ui.t("screen.blackchannel.market.buy"), price <= ClientState.crypto, buyAction, buyArg);
         }
     }
 
@@ -174,6 +353,13 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     private void onHit(Ui.Hit hit) {
         switch (hit.action()) {
             case "tab" -> tab = Integer.parseInt(hit.arg());
+            case "mkt" -> {
+                marketTab = Integer.parseInt(hit.arg());
+                marketPage = 0;
+            }
+            case "mpage" -> marketPage = Math.max(0, marketPage + Integer.parseInt(hit.arg()));
+            case "mpick" -> shopPick = hit.arg();
+            case "lpick" -> listPick = Integer.parseInt(hit.arg());
             case "pick-dm" -> {
                 dmTarget = hit.arg();
                 send(Actions.CHAN, "dm:" + hit.arg());
@@ -218,7 +404,8 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double delta) {
-        scroll = Math.max(0, scroll - (int) Math.signum(delta));
+        if (tab == 2 && marketTab == 1) marketPage = Math.max(0, marketPage - (int) Math.signum(delta));
+        else scroll = Math.max(0, scroll - (int) Math.signum(delta));
         return true;
     }
 
