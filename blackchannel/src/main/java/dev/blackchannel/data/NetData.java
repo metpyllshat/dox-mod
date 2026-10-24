@@ -168,7 +168,12 @@ public class NetData extends SavedData {
         public String dm = "";
         public int empUntil;
         public int bombUntil;
-        public int cdTrace, cdDeanon, cdSwat, cdBomb;
+        public int cdTrace, cdDeanon, cdSwat, cdBomb, cdOptic, cdPeek;
+        public byte[] optic = new byte[0];
+        public int[] opticColor = new int[0];
+        public int opticHx = -1, opticHz = -1, opticConf;
+        public String opticBearing = "";
+        public final List<CompoundTag> peek = new ArrayList<>();
         public int lastPosTick;
         public String lastDim = "";
         public int lastX, lastY, lastZ;
@@ -215,6 +220,8 @@ public class NetData extends SavedData {
             tag.putInt("cdD", cdDeanon);
             tag.putInt("cdS", cdSwat);
             tag.putInt("cdB", cdBomb);
+            tag.putInt("cdO", cdOptic);
+            tag.putInt("cdP", cdPeek);
             tag.putInt("lpT", lastPosTick);
             tag.putString("lpD", lastDim);
             tag.putInt("lpX", lastX);
@@ -270,6 +277,8 @@ public class NetData extends SavedData {
             profile.cdDeanon = tag.getInt("cdD");
             profile.cdSwat = tag.getInt("cdS");
             profile.cdBomb = tag.getInt("cdB");
+            profile.cdOptic = tag.getInt("cdO");
+            profile.cdPeek = tag.getInt("cdP");
             profile.lastPosTick = tag.getInt("lpT");
             profile.lastDim = tag.getString("lpD");
             profile.lastX = tag.getInt("lpX");

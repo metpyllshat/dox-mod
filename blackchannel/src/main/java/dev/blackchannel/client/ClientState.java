@@ -8,7 +8,9 @@ import net.minecraft.network.chat.Component;
 import net.minecraft.sounds.SoundEvents;
 
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 
 public final class ClientState {
     public static String handle = "";
@@ -35,6 +37,12 @@ public final class ClientState {
     public static final List<BountyRow> bounties = new ArrayList<>();
     public static final List<LogRow> logs = new ArrayList<>();
     public static final List<DeanonRow> deanons = new ArrayList<>();
+    public static final List<PeekSlot> peek = new ArrayList<>();
+    public static final Map<String, Integer> cfg = new HashMap<>();
+    public static byte[] optic = new byte[0];
+    public static int[] opticColor = new int[0];
+    public static int opticHx = -1, opticHz = -1, opticConf;
+    public static String opticBearing = "";
 
     private ClientState() {}
 
@@ -59,6 +67,13 @@ public final class ClientState {
         readLogs(tag.getList("logs", Tag.TAG_COMPOUND));
         readDean(tag.getList("deanons", Tag.TAG_COMPOUND));
         readBounties(tag.getList("bounties", Tag.TAG_COMPOUND));
+        optic = tag.contains("optic") ? tag.getByteArray("optic") : new byte[0];
+        opticColor = tag.contains("opticC") ? tag.getIntArray("opticC") : new int[0];
+        opticHx = tag.contains("opticHx") ? tag.getInt("opticHx") : -1;
+        opticHz = tag.getInt("opticHz");
+        opticConf = tag.getInt("opticConf");
+        opticBearing = tag.getString("opticBear");
+        readPeek(tag.getList("peek", Tag.TAG_COMPOUND));
         contacts.clear();
         ListTag names = tag.getList("contacts", Tag.TAG_STRING);
         for (int i = 0; i < names.size(); i++) contacts.add(names.getString(i));
@@ -101,6 +116,7 @@ public final class ClientState {
         toastArg = tag.getString("toastArg");
         if (tag.contains("radarHud")) radarHud = tag.getBoolean("radarHud");
         if (tag.contains("blips")) readBlips(tag.getList("blips", Tag.TAG_COMPOUND));
+        if (tag.contains("cfg")) readCfg(tag.getCompound("cfg"));
         if (toastId != seenToast && toastKey != null && !toastKey.isEmpty()) {
             seenToast = toastId;
             toastLine = Component.translatable(toastKey, toastArg).getString();
@@ -109,6 +125,14 @@ public final class ClientState {
                 Minecraft.getInstance().player.playSound(SoundEvents.NOTE_BLOCK_PLING.value(), 0.45f, 1.5f);
             }
         }
+    }
+
+    public static int cfg(String key, int fallback) {
+        return cfg.getOrDefault(key, fallback);
+    }
+
+    public static String tip(String key, Object... args) {
+        return Component.translatable(key, args).getString();
     }
 
     public static String resultLine() {
@@ -192,6 +216,19 @@ public final class ClientState {
         }
     }
 
+    private static void readCfg(CompoundTag tag) {
+        cfg.clear();
+        for (String key : tag.getAllKeys()) cfg.put(key, tag.getInt(key));
+    }
+
+    private static void readPeek(ListTag list) {
+        peek.clear();
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag c = list.getCompound(i);
+            peek.add(new PeekSlot(c.getInt("i"), c.getString("id"), c.getInt("n"), c.getBoolean("h"), c.getBoolean("lie")));
+        }
+    }
+
     private static void readBounties(ListTag list) {
         bounties.clear();
         for (int i = 0; i < list.size(); i++) {
@@ -217,4 +254,5 @@ public final class ClientState {
     public record LogRow(String key, String arg, int age) {}
     public record DeanonRow(String handle, String name) {}
     public record BountyRow(String handle, int reward) {}
+    public record PeekSlot(int slot, String id, int count, boolean hidden, boolean lie) {}
 }

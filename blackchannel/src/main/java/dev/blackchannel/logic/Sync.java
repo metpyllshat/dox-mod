@@ -1,5 +1,6 @@
 package dev.blackchannel.logic;
 
+import dev.blackchannel.Config;
 import dev.blackchannel.block.NodeBlockEntity;
 import dev.blackchannel.data.NetData;
 import dev.blackchannel.menu.Menus;
@@ -131,6 +132,15 @@ public final class Sync {
             bounties.add(c);
         }
         tag.put("bounties", bounties);
+        if (profile.optic != null && profile.optic.length == Optics.GRID * Optics.GRID) {
+            tag.putByteArray("optic", profile.optic);
+            if (profile.opticColor != null && profile.opticColor.length == profile.optic.length) tag.putIntArray("opticC", profile.opticColor);
+            tag.putInt("opticHx", profile.opticHx);
+            tag.putInt("opticHz", profile.opticHz);
+            tag.putInt("opticConf", profile.opticConf);
+            tag.putString("opticBear", profile.opticBearing == null ? "" : profile.opticBearing);
+        }
+        tag.put("peek", Optics.peekTag(profile));
 
         if (player.containerMenu instanceof Menus.RackMenu menu && player.level().getBlockEntity(menu.pos) instanceof NodeBlockEntity be) {
             tag.putInt("rackCharge", be.charge);
@@ -176,9 +186,37 @@ public final class Sync {
         tag.putString("toastKey", profile.toastKey == null ? "" : profile.toastKey);
         tag.putString("toastArg", profile.toastArg == null ? "" : profile.toastArg);
         tag.putInt("radarR", SignalEnv.radarRange(player, profile));
+        putCfg(tag);
         putStrikes(tag, player, profile);
         putBlips(tag, player, profile);
         return tag;
+    }
+
+    private static void putCfg(CompoundTag tag) {
+        CompoundTag cfg = new CompoundTag();
+        cfg.putInt("traceBase", Config.TRACE_BASE.get());
+        cfg.putInt("traceVpn", Config.TRACE_VPN.get());
+        cfg.putInt("traceStale", Config.TRACE_STALE.get());
+        cfg.putInt("traceFail", Config.TRACE_FAIL.get());
+        cfg.putInt("traceFailVpn", Config.TRACE_FAIL_VPN.get());
+        cfg.putInt("traceFailDeep", Config.TRACE_FAIL_DEEP.get());
+        cfg.putInt("traceCost", Config.TRACE_COST.get());
+        cfg.putInt("deanonCost", Config.DEANON_COST.get());
+        cfg.putInt("swatCost", Config.SWAT_COST.get());
+        cfg.putInt("swatContract", Config.SWAT_CONTRACT_COST.get());
+        cfg.putInt("swatDelay", Config.SWAT_DELAY.get());
+        cfg.putInt("bombCost", Config.BOMB_COST.get());
+        cfg.putInt("uavCost", Config.UAV_COST.get());
+        cfg.putInt("uavRange", Config.UAV_RANGE.get());
+        cfg.putInt("uavError", Config.UAV_ERROR.get());
+        cfg.putInt("opticCost", Config.OPTIC_COST.get());
+        cfg.putInt("peekCost", Config.PEEK_COST.get());
+        cfg.putInt("radarPhone", Config.RADAR_PHONE.get());
+        cfg.putInt("radarLaptop", Config.RADAR_LAPTOP.get());
+        cfg.putInt("dishBonus", Config.DISH_RADAR_BONUS.get());
+        cfg.putInt("structure", Config.STRUCTURE_RADAR.get());
+        cfg.putInt("structurePhone", Config.STRUCTURE_PHONE.get());
+        tag.put("cfg", cfg);
     }
 
     private static void putBlips(CompoundTag tag, ServerPlayer player, NetData.Profile profile) {

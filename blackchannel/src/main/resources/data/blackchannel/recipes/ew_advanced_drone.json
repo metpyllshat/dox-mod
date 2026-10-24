@@ -1,0 +1,26 @@
+{
+  "type": "minecraft:crafting_shaped",
+  "pattern": [
+    "PMP",
+    "CDC",
+    "PMP"
+  ],
+  "key": {
+    "P": {
+      "item": "superbwarfare:propeller"
+    },
+    "M": {
+      "item": "superbwarfare:motor"
+    },
+    "C": {
+      "item": "superbwarfare:cell"
+    },
+    "D": {
+      "item": "superbwarfare:drone"
+    }
+  },
+  "result": {
+    "item": "sbw_ew_addon:advanced_drone",
+    "count": 1
+  }
+}
