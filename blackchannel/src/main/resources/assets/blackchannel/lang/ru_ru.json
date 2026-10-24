@@ -247,5 +247,15 @@
   "screen.blackchannel.inv_label": "Твой инвентарь",
   "screen.blackchannel.slot_held": "В ТОРГЕ",
   "screen.blackchannel.price_label": "ЦЕНА",
-  "screen.blackchannel.slot_label": "СЛОТ"
+  "screen.blackchannel.slot_label": "СЛОТ",
+  "screen.blackchannel.market.shop": "ЛАВКА",
+  "screen.blackchannel.market.board": "ДОСКА",
+  "screen.blackchannel.market.bounty": "НАГРАДЫ",
+  "screen.blackchannel.market.buy": "КУПИТЬ",
+  "screen.blackchannel.market.pick": "Выбери лот",
+  "screen.blackchannel.market.empty": "Доска пуста. Лоты ставятся с ноутбука, вкладка ТОРГ.",
+  "screen.blackchannel.market.vendor": "лавка",
+  "screen.blackchannel.market.intel": "след",
+  "screen.blackchannel.market.no_bounty": "Сейчас наград нет.",
+  "screen.blackchannel.market.bounty_note": "Награда сдаётся образцом сигнала в руке, не кнопкой."
 }

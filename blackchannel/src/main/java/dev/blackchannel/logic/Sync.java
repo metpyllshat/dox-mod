@@ -86,6 +86,8 @@ public final class Sync {
                 ItemStack stack = ItemStack.of(listing.stack);
                 c.putString("item", Bridges.itemName(stack));
                 c.putInt("count", Math.max(1, stack.getCount()));
+                CompoundTag preview = previewStack(stack);
+                if (!preview.isEmpty()) c.put("s", preview);
             }
             listings.add(c);
         }
@@ -190,6 +192,30 @@ public final class Sync {
         putStrikes(tag, player, profile);
         putBlips(tag, player, profile);
         return tag;
+    }
+
+    private static CompoundTag previewStack(ItemStack stack) {
+        if (stack.isEmpty()) return new CompoundTag();
+        ItemStack shown = new ItemStack(stack.getItem(), Math.max(1, Math.min(64, stack.getCount())));
+        if (stack.isDamageableItem()) shown.setDamageValue(stack.getDamageValue());
+        CompoundTag src = stack.getTag();
+        if (src != null) {
+            CompoundTag dst = shown.getOrCreateTag();
+            copyKey(src, dst, "Enchantments");
+            copyKey(src, dst, "StoredEnchantments");
+            copyKey(src, dst, "display");
+            copyKey(src, dst, "Potion");
+            copyKey(src, dst, "CustomPotionEffects");
+            copyKey(src, dst, "CustomPotionColor");
+            copyKey(src, dst, "Trim");
+            copyKey(src, dst, "AttributeModifiers");
+            if (src.getBoolean("Unbreakable")) dst.putBoolean("Unbreakable", true);
+        }
+        return shown.save(new CompoundTag());
+    }
+
+    private static void copyKey(CompoundTag src, CompoundTag dst, String key) {
+        if (src.contains(key)) dst.put(key, src.get(key).copy());
     }
 
     private static void putCfg(CompoundTag tag) {

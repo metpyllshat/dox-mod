@@ -247,5 +247,15 @@
   "screen.blackchannel.inv_label": "Your inventory",
   "screen.blackchannel.slot_held": "IN TRADE",
   "screen.blackchannel.price_label": "PRICE",
-  "screen.blackchannel.slot_label": "SLOT"
+  "screen.blackchannel.slot_label": "SLOT",
+  "screen.blackchannel.market.shop": "SHOP",
+  "screen.blackchannel.market.board": "BOARD",
+  "screen.blackchannel.market.bounty": "BOUNTIES",
+  "screen.blackchannel.market.buy": "BUY",
+  "screen.blackchannel.market.pick": "Pick a lot",
+  "screen.blackchannel.market.empty": "The board is empty. Lots are posted from the laptop trade tab.",
+  "screen.blackchannel.market.vendor": "shop",
+  "screen.blackchannel.market.intel": "fix",
+  "screen.blackchannel.market.no_bounty": "No bounties right now.",
+  "screen.blackchannel.market.bounty_note": "Turn a bounty in with a signal sample in hand, not a button."
 }
