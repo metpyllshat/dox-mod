@@ -75,8 +75,13 @@ public class NodeBlockEntity extends BlockEntity {
                 NetData data = NetData.get(level.getServer());
                 NetData.Profile profile = data.profile(owner);
                 int gain = Config.CRYPTO_PER_MIN.get();
-                if (gain > 0 && profile.crypto < 5000) {
+                if (gain > 0 && profile.crypto < 5000 && mintFree(profile)) {
                     profile.crypto = Math.min(5000, profile.crypto + gain);
+                    profile.mintTick = level.getServer().getTickCount();
+                    profile.mintDim = level.dimension().location().toString();
+                    profile.mintX = getBlockPos().getX();
+                    profile.mintY = getBlockPos().getY();
+                    profile.mintZ = getBlockPos().getZ();
                     data.setDirty();
                 }
             }
@@ -85,6 +90,18 @@ public class NodeBlockEntity extends BlockEntity {
             charge--;
             setChanged();
         }
+    }
+
+    private boolean mintFree(NetData.Profile profile) {
+        if (level == null || level.getServer() == null || profile.mintTick <= 0 || profile.mintDim == null || profile.mintDim.isEmpty()) return true;
+        int now = level.getServer().getTickCount();
+        if (now - profile.mintTick >= 20 * 60) return true;
+        if (!profile.mintDim.equals(level.dimension().location().toString())) return true;
+        int range = Config.RACK_MINT_RANGE.get();
+        long dx = (long) profile.mintX - getBlockPos().getX();
+        long dy = (long) profile.mintY - getBlockPos().getY();
+        long dz = (long) profile.mintZ - getBlockPos().getZ();
+        return dx * dx + dy * dy + dz * dz > (long) range * range;
     }
 
     public boolean tryFuel(Player player, ItemStack stack) {

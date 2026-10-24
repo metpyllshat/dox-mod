@@ -34,6 +34,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         input.setBordered(false);
         input.setTextColor(Ui.TEXT);
         addRenderableWidget(input);
+        setInitialFocus(input);
     }
 
     @Override
@@ -63,6 +64,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         else drawGear(g, x, y);
         g.fill(x + 6, y + imageHeight - 22, x + imageWidth - 6, y + imageHeight - 6, 0xFF0C1210);
         for (var renderable : renderables) renderable.render(g, mx, my, pt);
+        Ui.tips(g, font, hits, mx, my);
     }
 
     private void drawChat(GuiGraphics g, int x, int y) {
@@ -112,7 +114,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             g.drawString(font, Ui.trim(font, line, 220), x + 8, ly, track.live() ? Ui.AMBER : Ui.MUTED, false);
             ly += 10;
         }
-        Ui.button(g, font, hits, x + 8, y + imageHeight - 40, 90, 12, Ui.t("screen.blackchannel.btn.radar_hud"), ClientState.radarHud, Actions.RADAR, "");
+        Ui.button(g, font, hits, x + 8, y + imageHeight - 40, 90, 12, Ui.t("screen.blackchannel.btn.radar_hud"), Ui.t("screen.blackchannel.tip.radar_hud"), ClientState.radarHud, Actions.RADAR, "");
     }
 
     private void drawMarket(GuiGraphics g, int x, int y) {
@@ -121,7 +123,8 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             Catalog.Entry entry = entries.get(i);
             int col = i / 8;
             int row = i % 8;
-            Ui.button(g, font, hits, x + 6 + col * 118, y + 44 + row * 13, 114, 12, Ui.trim(font, Ui.t("blackchannel.shop." + entry.id()) + " #" + entry.price(), 108), false, Actions.BUY, entry.id());
+            String name = Ui.t("blackchannel.shop." + entry.id());
+            Ui.button(g, font, hits, x + 6 + col * 118, y + 44 + row * 13, 114, 12, Ui.trim(font, name + " #" + entry.price(), 108), name + "  #" + entry.price(), false, Actions.BUY, entry.id());
         }
         int ly = y + 152;
         for (ClientState.BountyRow bounty : ClientState.bounties) {
@@ -138,9 +141,9 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     }
 
     private void drawGear(GuiGraphics g, int x, int y) {
-        Ui.button(g, font, hits, x + 8, y + 48, 110, 12, Ui.t("screen.blackchannel.btn.airplane"), ClientState.airplane, Actions.AIR, "");
-        Ui.button(g, font, hits, x + 122, y + 48, 110, 12, "DND", ClientState.dnd, Actions.DND, "");
-        Ui.button(g, font, hits, x + 8, y + 64, 110, 12, "CREW", false, Actions.CREW, input == null ? "" : input.getValue());
+        Ui.button(g, font, hits, x + 8, y + 48, 110, 12, Ui.t("screen.blackchannel.btn.airplane"), Ui.t("screen.blackchannel.tip.airplane"), ClientState.airplane, Actions.AIR, "");
+        Ui.button(g, font, hits, x + 122, y + 48, 110, 12, "DND", Ui.t("screen.blackchannel.tip.dnd"), ClientState.dnd, Actions.DND, "");
+        Ui.button(g, font, hits, x + 8, y + 64, 110, 12, "CREW", Ui.t("screen.blackchannel.tip.crew"), false, Actions.CREW, input == null ? "" : input.getValue());
         Ui.button(g, font, hits, x + 122, y + 64, 110, 12, Ui.t("screen.blackchannel.btn.manual"), false, "manual", "");
         g.drawString(font, "VPN " + ClientState.vpn + (ClientState.ids ? "  IDS" : "") + (ClientState.hard ? "  EMP+" : ""), x + 8, y + 84, Ui.TEXT, false);
         g.drawString(font, "SAT " + ClientState.sat + "  CREW " + ClientState.crew, x + 8, y + 96, Ui.MUTED, false);
@@ -183,12 +186,25 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             submit();
             return true;
         }
+        if (typing(key, scan)) return true;
         return super.keyPressed(key, scan, mods);
+    }
+
+    private boolean typing(int key, int scan) {
+        return input != null && input.isFocused() && minecraft != null && minecraft.options.keyInventory.matches(key, scan);
     }
 
     private void submit() {
         String text = input.getValue().trim();
         if (text.isEmpty()) return;
+        if (text.startsWith("@")) {
+            int sp = text.indexOf(' ');
+            if (sp > 1) {
+                send(Actions.DM, text.substring(1, sp) + " " + text.substring(sp + 1).trim());
+                input.setValue("");
+                return;
+            }
+        }
         if (tab == 3) send(Actions.CREW, text);
         else if ("dm".equals(ClientState.channel) && !dmTarget.isEmpty()) send(Actions.DM, dmTarget + " " + text);
         else send(Actions.SAY, text);
