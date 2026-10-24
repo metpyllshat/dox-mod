@@ -117,10 +117,12 @@ public final class Ui {
 
     public static int blipColor(String kind) {
         if (kind == null) return RED;
+        if (kind.startsWith("own")) return EDGE;
         return switch (kind) {
-            case "friend", "beacon" -> EDGE;
-            case "decoy" -> BLUE;
-            case "drone" -> AMBER;
+            case "friend", "beacon", "radio" -> EDGE;
+            case "decoy", "dish", "radar" -> BLUE;
+            case "drone", "rack" -> AMBER;
+            case "cage" -> MUTED;
             default -> RED;
         };
     }

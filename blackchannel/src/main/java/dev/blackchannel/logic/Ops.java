@@ -46,6 +46,18 @@ public final class Ops {
         } catch (Throwable t) {
             BlackChannelMod.LOGGER.warn("Drone EMP scan failed: {}", t.toString());
         }
+        if (tick % 100 == 0) {
+            try {
+                Bridges.refreshForeign(server);
+            } catch (Throwable t) {
+                BlackChannelMod.LOGGER.warn("Foreign station scan failed: {}", t.toString());
+            }
+        }
+        try {
+            Bridges.suppressForeign(server);
+        } catch (Throwable t) {
+            BlackChannelMod.LOGGER.warn("Foreign suppress failed: {}", t.toString());
+        }
         data.prune(tick);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) tickPlayer(server, data, player, tick);
         tickBounties(server, data, tick);
@@ -88,6 +100,8 @@ public final class Ops {
             case Actions.BUY -> buy(player, profile, arg);
             case Actions.BUY_LIST -> buyList(player, profile, arg);
             case Actions.SELL -> sell(player, profile, arg);
+            case Actions.OPTIC -> Optics.optic(player, profile, arg);
+            case Actions.PEEK -> Optics.peek(player, profile, arg);
             case Actions.BOUNTY -> turnInHeld(player);
             case Actions.HACK -> hack(player, profile);
             case Actions.KILL -> killSwitch(player, rackPos(player));
@@ -429,7 +443,7 @@ public final class Ops {
             result(player, profile, "blackchannel.result.no_target");
             return;
         }
-        if (!pay(player, profile, 2)) return;
+        if (!pay(player, profile, Config.TRACE_COST.get())) return;
         ServerPlayer online = player.getServer().getPlayerList().getPlayer(target.id);
         int now = player.getServer().getTickCount();
         boolean live = online != null && SignalEnv.transmitting(online, target);
@@ -442,7 +456,8 @@ public final class Ops {
         }
         boolean exploit = takeOptional(player, ModContent.EXPLOIT.get());
         RandomSource random = player.getRandom();
-        double fail = target.vpn >= 2 ? 0.35 : target.vpn == 1 ? 0.12 : 0.05;
+        int failPct = target.vpn >= 2 ? Config.TRACE_FAIL_DEEP.get() : target.vpn == 1 ? Config.TRACE_FAIL_VPN.get() : Config.TRACE_FAIL.get();
+        double fail = failPct / 100.0;
         if (exploit) fail *= 0.4;
         if (!free(player) && random.nextFloat() < fail) {
             profile.cdTrace = now + Config.TRACE_CD.get() * 20;
@@ -454,7 +469,7 @@ public final class Ops {
         if (SignalEnv.dishNear(player, profile, 128)) err = Math.max(3, (int) (err * 0.55));
         if (exploit) err = Math.max(2, (int) (err * 0.65));
         boolean stale = !live;
-        if (stale) err += 40;
+        if (stale) err += Config.TRACE_STALE.get();
         int x = live ? online.blockPosition().getX() : target.lastX;
         int y = live ? online.blockPosition().getY() : target.lastY;
         int z = live ? online.blockPosition().getZ() : target.lastZ;
@@ -479,7 +494,7 @@ public final class Ops {
             result(player, profile, "blackchannel.result.no_target");
             return;
         }
-        if (!pay(player, profile, 4)) return;
+        if (!pay(player, profile, Config.DEANON_COST.get())) return;
         boolean zero = takeOptional(player, ModContent.ZERO.get());
         boolean sample = !Devices.takeSample(player, handle, zero, zero).isEmpty() || hasSample(player, handle);
         boolean traced = false;
@@ -521,7 +536,7 @@ public final class Ops {
             return;
         }
         boolean contract = free(player) || Devices.count(player, ModContent.CONTRACT.get()) > 0;
-        int cost = contract ? 8 : 40;
+        int cost = contract ? Config.SWAT_CONTRACT_COST.get() : Config.SWAT_COST.get();
         if (!pay(player, profile, cost)) return;
         if (contract && !free(player)) Devices.consume(player, ModContent.CONTRACT.get(), 1);
         int now = player.getServer().getTickCount();
@@ -577,7 +592,7 @@ public final class Ops {
             result(player, profile, "blackchannel.result.no_carrier");
             return;
         }
-        if (!pay(player, profile, 3)) return;
+        if (!pay(player, profile, Config.BOMB_COST.get())) return;
         int dur = target.dnd ? 12 : 25;
         if (target.vpn > 0) dur = Math.max(6, dur - 6);
         int now = player.getServer().getTickCount();
@@ -592,7 +607,7 @@ public final class Ops {
     private static void traceUav(ServerPlayer player, NetData.Profile profile) {
         if (!gate(player, profile, true, false)) return;
         if (!cd(player, profile, profile.cdTrace)) return;
-        Entity drone = Bridges.nearestDrone(player, 96);
+        Entity drone = Bridges.nearestDrone(player, Config.UAV_RANGE.get());
         if (drone == null) {
             result(player, profile, "blackchannel.result.drone_none");
             return;
@@ -603,9 +618,9 @@ public final class Ops {
             result(player, profile, "blackchannel.result.drone_blind");
             return;
         }
-        if (!pay(player, profile, 3)) return;
+        if (!pay(player, profile, Config.UAV_COST.get())) return;
         NetData.Profile target = data(player).profile(op.getUUID());
-        int err = 30 + player.getRandom().nextInt(12);
+        int err = Config.UAV_ERROR.get() + player.getRandom().nextInt(12);
         int x = op.blockPosition().getX() + player.getRandom().nextInt(err * 2 + 1) - err;
         int z = op.blockPosition().getZ() + player.getRandom().nextInt(err * 2 + 1) - err;
         int now = player.getServer().getTickCount();
@@ -676,16 +691,6 @@ public final class Ops {
         result(player, profile, "blackchannel.result.bought", String.valueOf(id));
     }
 
-    private static ItemStack sellable(ServerPlayer player) {
-        ItemStack off = player.getOffhandItem();
-        if (!off.isEmpty() && !Devices.isDevice(off)) return off;
-        for (int i = 0; i < 9; i++) {
-            ItemStack stack = player.getInventory().getItem(i);
-            if (!stack.isEmpty() && !Devices.isDevice(stack)) return stack;
-        }
-        return ItemStack.EMPTY;
-    }
-
     private static void sell(ServerPlayer player, NetData.Profile profile, String arg) {
         String[] parts = arg.trim().split(" ");
         if (parts.length < 2) {
@@ -700,16 +705,19 @@ public final class Ops {
         try {
             if ("item".equals(parts[0])) {
                 int price = clampPrice(Integer.parseInt(parts[1]));
-                ItemStack held = sellable(player);
-                if (held.isEmpty()) {
-                    result(player, profile, "blackchannel.result.no_target");
+                if (!(player.containerMenu instanceof Menus.LaptopMenu menu)) {
+                    result(player, profile, "blackchannel.result.need_slot");
                     return;
                 }
-                ItemStack one = held.copy();
-                one.setCount(1);
-                if (!player.getAbilities().instabuild) held.shrink(1);
+                ItemStack held = menu.sale.getItem(0);
+                if (held.isEmpty() || Devices.isDevice(held)) {
+                    result(player, profile, "blackchannel.result.need_slot");
+                    return;
+                }
+                ItemStack stack = held.copy();
+                if (!player.getAbilities().instabuild) menu.sale.setItem(0, ItemStack.EMPTY);
                 NetData.Listing listing = newListing(data, player, profile, price);
-                listing.stack = one.save(new CompoundTag());
+                listing.stack = stack.save(new CompoundTag());
                 data.listings.add(listing);
                 result(player, profile, "blackchannel.result.sold", String.valueOf(price));
             } else if ("intel".equals(parts[0]) && parts.length >= 3) {
@@ -903,7 +911,7 @@ public final class Ops {
         }
     }
 
-    private static void alert(ServerPlayer target, ServerPlayer attacker, String key) {
+    static void alert(ServerPlayer target, ServerPlayer attacker, String key) {
         String dir = bearing(target, attacker);
         target.sendSystemMessage(Component.translatable(key, dir));
         target.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.value(), SoundSource.MASTER, 0.8f, 0.6f);
@@ -923,7 +931,7 @@ public final class Ops {
         return names[idx];
     }
 
-    private static boolean gate(ServerPlayer player, NetData.Profile profile, boolean laptop, boolean uplink) {
+    static boolean gate(ServerPlayer player, NetData.Profile profile, boolean laptop, boolean uplink) {
         if (player.isSpectator()) {
             result(player, profile, "blackchannel.result.no_device");
             return false;
@@ -1018,7 +1026,7 @@ public final class Ops {
         return true;
     }
 
-    private static boolean cd(ServerPlayer player, NetData.Profile profile, int ready) {
+    static boolean cd(ServerPlayer player, NetData.Profile profile, int ready) {
         if (free(player)) return true;
         int now = player.getServer().getTickCount();
         if (now < ready) {
@@ -1028,7 +1036,7 @@ public final class Ops {
         return true;
     }
 
-    private static boolean pay(ServerPlayer player, NetData.Profile profile, int cost) {
+    static boolean pay(ServerPlayer player, NetData.Profile profile, int cost) {
         if (free(player)) return true;
         if (profile.crypto < cost) {
             result(player, profile, "blackchannel.result.no_crypto", String.valueOf(cost));
@@ -1126,7 +1134,7 @@ public final class Ops {
         return null;
     }
 
-    private static void result(ServerPlayer player, NetData.Profile profile, String key, String... args) {
+    static void result(ServerPlayer player, NetData.Profile profile, String key, String... args) {
         profile.result(key, args);
         ModNetwork.syncFull(player);
     }

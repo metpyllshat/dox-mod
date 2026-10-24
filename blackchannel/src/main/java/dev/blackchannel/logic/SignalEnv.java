@@ -141,6 +141,7 @@ public final class SignalEnv {
         long dish2 = (long) dishRange * dishRange;
         NodeBlockEntity.each(level, be -> {
             if (be.kind() != NodeBlock.Kind.RACK || !be.powered() || !friendly(profile, be.owner, player.getServer())) return;
+            if (silenced(level, be.getBlockPos())) return;
             if (be.getBlockPos().distSqr(pos) <= uplink2) {
                 link.mode = Link.Mode.RACK;
                 link.rack = be.getBlockPos();
@@ -149,9 +150,9 @@ public final class SignalEnv {
         if (link.mode == Link.Mode.NONE) {
             NodeBlockEntity.each(level, dish -> {
                 if (dish.kind() != NodeBlock.Kind.DISH || !dish.powered() || !friendly(profile, dish.owner, player.getServer())) return;
-                if (dish.getBlockPos().distSqr(pos) > dish2) return;
+                if (silenced(level, dish.getBlockPos()) || dish.getBlockPos().distSqr(pos) > dish2) return;
                 NodeBlockEntity.each(level, rack -> {
-                    if (rack.kind() == NodeBlock.Kind.RACK && rack.powered() && dish.owner != null && dish.owner.equals(rack.owner)
+                    if (rack.kind() == NodeBlock.Kind.RACK && rack.powered() && !silenced(level, rack.getBlockPos()) && dish.owner != null && dish.owner.equals(rack.owner)
                             && rack.getBlockPos().distSqr(dish.getBlockPos()) <= 32L * 32L) {
                         link.mode = Link.Mode.DISH;
                         link.rack = rack.getBlockPos();
@@ -169,7 +170,8 @@ public final class SignalEnv {
         long r2 = (long) range * range;
         boolean[] hit = {false};
         NodeBlockEntity.each(player.serverLevel(), be -> {
-            if (be.kind() == NodeBlock.Kind.DISH && be.powered() && friendly(profile, be.owner, player.getServer())
+            if (be.kind() == NodeBlock.Kind.DISH && be.powered() && !silenced(player.serverLevel(), be.getBlockPos())
+                    && friendly(profile, be.owner, player.getServer())
                     && be.getBlockPos().distSqr(player.blockPosition()) <= r2) {
                 hit[0] = true;
             }
@@ -182,8 +184,35 @@ public final class SignalEnv {
         int range = 0;
         if (Devices.has(player, dev.blackchannel.registry.ModContent.PHONE.get())) range = Config.RADAR_PHONE.get();
         if (Devices.has(player, dev.blackchannel.registry.ModContent.LAPTOP.get())) range = Math.max(range, Config.RADAR_LAPTOP.get());
-        if (dishNear(player, profile, 128)) range += 80;
+        if (dishNear(player, profile, 128)) range += Config.DISH_RADAR_BONUS.get();
         return range;
+    }
+
+    public static int structureRange(ServerPlayer player, NetData.Profile profile) {
+        if (radarRange(player, profile) <= 0) return 0;
+        int range = Devices.has(player, dev.blackchannel.registry.ModContent.LAPTOP.get())
+                ? Config.STRUCTURE_RADAR.get() : Config.STRUCTURE_PHONE.get();
+        if (dishNear(player, profile, 128)) range += Config.DISH_RADAR_BONUS.get();
+        return range;
+    }
+
+    public static boolean silenced(ServerLevel level, BlockPos pos) {
+        return jammed(level, pos) || faraday(level, pos);
+    }
+
+    public static boolean localSilenced(ServerLevel level, BlockPos pos) {
+        int jam = Config.JAMMER_RANGE.get();
+        long jam2 = (long) jam * jam;
+        int cage = Config.FARADAY_RANGE.get();
+        long cage2 = (long) cage * cage;
+        boolean[] hit = {false};
+        NodeBlockEntity.each(level, be -> {
+            if (!be.powered()) return;
+            long dist = be.getBlockPos().distSqr(pos);
+            if (be.kind() == NodeBlock.Kind.JAMMER && dist <= jam2) hit[0] = true;
+            if (be.kind() == NodeBlock.Kind.FARADAY && dist <= cage2) hit[0] = true;
+        });
+        return hit[0];
     }
 
     public static int signalBars(ServerPlayer player, NetData.Profile profile) {
@@ -286,7 +315,7 @@ public final class SignalEnv {
             if (self.deanons.containsKey(op.handle)) label = self.deanons.get(op.handle);
             else if (op.vpn <= 0 || "friend".equals(kind)) label = op.handle;
             out.add(new Blip(dx, dz, (int) Math.sqrt(d2), kind, label));
-            if (out.size() >= 32) return out;
+            if (out.size() >= 24) break;
         }
         if (Config.HOOK_DRONE.get()) {
             for (net.minecraft.world.entity.Entity entity : level.getEntities(viewer, viewer.getBoundingBox().inflate(range),
@@ -294,7 +323,7 @@ public final class SignalEnv {
                 int dx = (int) (entity.getX() - viewer.getX());
                 int dz = (int) (entity.getZ() - viewer.getZ());
                 out.add(new Blip(dx, dz, (int) Math.sqrt(viewer.distanceToSqr(entity)), "drone", "uav"));
-                if (out.size() >= 32) return out;
+                if (out.size() >= 32) break;
             }
         }
         NodeBlockEntity.each(level, be -> {
@@ -315,7 +344,43 @@ public final class SignalEnv {
                 out.add(new Blip(dx, dz, dist, kind, label));
             }
         });
-        return out.size() > 32 ? out.subList(0, 32) : out;
+        addStructures(out, viewer, self, server, level);
+        return out.size() > 48 ? out.subList(0, 48) : out;
+    }
+
+    private static void addStructures(List<Blip> out, ServerPlayer viewer, NetData.Profile self, MinecraftServer server, ServerLevel level) {
+        int range = structureRange(viewer, self);
+        if (range <= 0) return;
+        BlockPos origin = viewer.blockPosition();
+        NodeBlockEntity.each(level, be -> {
+            if (!be.powered() || out.size() >= 48) return;
+            int dist = (int) Math.sqrt(be.getBlockPos().distSqr(origin));
+            if (dist > range) return;
+            boolean own = friendly(self, be.owner, server);
+            int dx = be.getBlockPos().getX() - origin.getX();
+            int dz = be.getBlockPos().getZ() - origin.getZ();
+            switch (be.kind()) {
+                case RACK, DISH -> {
+                    if (silenced(level, be.getBlockPos())) return;
+                    String kind = be.kind() == NodeBlock.Kind.RACK ? "rack" : "dish";
+                    out.add(new Blip(dx, dz, dist, own ? "own" + kind : kind, own ? "own" : "?"));
+                }
+                case JAMMER -> out.add(new Blip(dx, dz, dist, "jammer", own ? "own" : "?"));
+                case FARADAY -> out.add(new Blip(dx, dz, dist, "cage", own ? "own" : "?"));
+                default -> { }
+            }
+        });
+        for (Bridges.Station station : Bridges.foreign()) {
+            if (out.size() >= 48) return;
+            if (!station.dim.equals(Str.dim(level))) continue;
+            long dx = station.x - origin.getX();
+            long dz = station.z - origin.getZ();
+            int dist = (int) Math.sqrt(dx * dx + (long) (station.y - origin.getY()) * (station.y - origin.getY()) + dz * dz);
+            if (dist > range) continue;
+            BlockPos pos = new BlockPos(station.x, station.y, station.z);
+            if (!"jammer".equals(station.kind) && silenced(level, pos)) continue;
+            out.add(new Blip((int) dx, (int) dz, dist, station.kind, station.label));
+        }
     }
 
     public static List<Track> tracks(ServerPlayer viewer, NetData.Profile self) {

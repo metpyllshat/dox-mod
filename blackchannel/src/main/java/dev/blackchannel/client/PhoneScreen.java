@@ -104,7 +104,8 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         int n = 0;
         for (ClientState.Blip blip : ClientState.blips) {
             if (n++ >= 6) break;
-            g.drawString(font, Ui.trim(font, blip.kind() + " " + blip.label() + " " + blip.dist() + "m", 120), x + 112, ly, Ui.blipColor(blip.kind()), false);
+            String kind = Ui.t("blackchannel.blip." + blip.kind());
+            g.drawString(font, Ui.trim(font, kind + " " + blip.label() + " " + blip.dist() + "m", 120), x + 112, ly, Ui.blipColor(blip.kind()), false);
             ly += 10;
         }
         ly += 4;
@@ -114,7 +115,10 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             g.drawString(font, Ui.trim(font, line, 220), x + 8, ly, track.live() ? Ui.AMBER : Ui.MUTED, false);
             ly += 10;
         }
-        Ui.button(g, font, hits, x + 8, y + imageHeight - 40, 90, 12, Ui.t("screen.blackchannel.btn.radar_hud"), Ui.t("screen.blackchannel.tip.radar_hud"), ClientState.radarHud, Actions.RADAR, "");
+        Ui.button(g, font, hits, x + 8, y + imageHeight - 40, 90, 12, Ui.t("screen.blackchannel.btn.radar_hud"),
+                ClientState.tip("screen.blackchannel.tip.radar_hud", ClientState.cfg("radarPhone", 52), ClientState.cfg("radarLaptop", 110),
+                        ClientState.cfg("structure", 360), ClientState.cfg("dishBonus", 80)),
+                ClientState.radarHud, Actions.RADAR, "");
     }
 
     private void drawMarket(GuiGraphics g, int x, int y) {

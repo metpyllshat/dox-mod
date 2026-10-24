@@ -75,7 +75,8 @@ public class NodeBlockEntity extends BlockEntity {
                 NetData data = NetData.get(level.getServer());
                 NetData.Profile profile = data.profile(owner);
                 int gain = Config.CRYPTO_PER_MIN.get();
-                if (gain > 0 && profile.crypto < 5000 && mintFree(profile)) {
+                if (gain > 0 && profile.crypto < 5000 && mintFree(profile) && level instanceof net.minecraft.server.level.ServerLevel serverLevel
+                        && !dev.blackchannel.logic.SignalEnv.silenced(serverLevel, getBlockPos())) {
                     profile.crypto = Math.min(5000, profile.crypto + gain);
                     profile.mintTick = level.getServer().getTickCount();
                     profile.mintDim = level.dimension().location().toString();

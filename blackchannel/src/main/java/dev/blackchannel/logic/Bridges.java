@@ -4,6 +4,9 @@ import dev.blackchannel.BlackChannelMod;
 import dev.blackchannel.Config;
 import dev.blackchannel.api.BlackChannelAPI;
 import net.minecraft.core.BlockPos;
+import net.minecraft.world.level.block.entity.BlockEntity;
+import net.minecraft.world.level.chunk.LevelChunk;
+import net.minecraftforge.common.capabilities.ForgeCapabilities;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
@@ -25,9 +28,13 @@ import net.minecraftforge.registries.ForgeRegistries;
 import java.lang.reflect.Field;
 import java.lang.reflect.Method;
 import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.HashSet;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.Optional;
+import java.util.Set;
 import java.util.UUID;
 
 public final class Bridges {
@@ -306,6 +313,151 @@ public final class Bridges {
             method.setAccessible(true);
             return method;
         }
+    }
+
+    public record Station(String dim, int x, int y, int z, String kind, String label) {}
+
+    private static final List<Station> FOREIGN = new ArrayList<>();
+    private static final Map<String, Method> DRAIN = new HashMap<>();
+    private static final Set<String> DRAIN_MISS = new HashSet<>();
+    private static boolean radioFailed;
+
+    public static List<Station> foreign() {
+        return FOREIGN;
+    }
+
+    public static void refreshForeign(MinecraftServer server) {
+        FOREIGN.clear();
+        if (ewSeen) collectEwStations(server);
+        if (ModList.get().isLoaded("ballistix")) scanBallistix(server);
+    }
+
+    private static void collectEwStations(MinecraftServer server) {
+        if (!radioFailed) {
+            try {
+                Class<?> type = Class.forName("com.example.sbw_ew_addon.RadioBlockEntity");
+                Method active = method(type, "getActiveRadios", Level.class);
+                addPositions(server, active, "radio", "ew");
+            } catch (Throwable t) {
+                radioFailed = true;
+                BlackChannelMod.LOGGER.warn("EW radio bridge failed: {}", t.toString());
+            }
+        }
+        try {
+            Class<?> type = Class.forName("com.example.sbw_ew_addon.JammerBlockEntity");
+            Method active = method(type, "getActiveJammers", Level.class);
+            addPositions(server, active, "jammer", "ew");
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static void addPositions(MinecraftServer server, Method active, String kind, String label) throws Exception {
+        for (ServerLevel level : server.getAllLevels()) {
+            Object set = active.invoke(null, level);
+            if (!(set instanceof Iterable<?> positions)) continue;
+            for (Object entry : positions) {
+                if (entry instanceof BlockPos pos) {
+                    FOREIGN.add(new Station(Str.dim(level), pos.getX(), pos.getY(), pos.getZ(), kind, label));
+                }
+            }
+        }
+    }
+
+    private static void scanBallistix(MinecraftServer server) {
+        int range = Config.STRUCTURE_RADAR.get();
+        for (ServerLevel level : server.getAllLevels()) {
+            Set<Long> seen = new HashSet<>();
+            for (ServerPlayer player : level.players()) {
+                int minX = (player.blockPosition().getX() - range) >> 4;
+                int maxX = (player.blockPosition().getX() + range) >> 4;
+                int minZ = (player.blockPosition().getZ() - range) >> 4;
+                int maxZ = (player.blockPosition().getZ() + range) >> 4;
+                for (int cx = minX; cx <= maxX; cx++) {
+                    for (int cz = minZ; cz <= maxZ; cz++) {
+                        long key = (((long) cx) << 32) ^ (cz & 0xffffffffL);
+                        if (!seen.add(key)) continue;
+                        LevelChunk chunk = level.getChunkSource().getChunkNow(cx, cz);
+                        if (chunk == null) continue;
+                        for (BlockEntity be : chunk.getBlockEntities().values()) {
+                            String name = be.getClass().getName();
+                            String kind = null;
+                            String label = "";
+                            if (name.contains("TileSearchRadar")) {
+                                kind = "radar";
+                                label = "search";
+                            } else if (name.contains("TileFireControlRadar")) {
+                                kind = "radar";
+                                label = "fire";
+                            } else if (name.contains("TileESMTower")) {
+                                kind = "radar";
+                                label = "esm";
+                            }
+                            if (kind == null) continue;
+                            BlockPos pos = be.getBlockPos();
+                            FOREIGN.add(new Station(Str.dim(level), pos.getX(), pos.getY(), pos.getZ(), kind, label));
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    public static void suppressForeign(MinecraftServer server) {
+        for (Station station : FOREIGN) {
+            if ("jammer".equals(station.kind)) continue;
+            ServerLevel level = Ops.levelOf(server, station.dim);
+            if (level == null) continue;
+            BlockPos pos = new BlockPos(station.x, station.y, station.z);
+            if (!SignalEnv.localSilenced(level, pos)) continue;
+            BlockEntity be = level.getBlockEntity(pos);
+            if (be != null) drain(be);
+        }
+    }
+
+    private static void drain(BlockEntity be) {
+        be.getCapability(ForgeCapabilities.ENERGY).ifPresent(storage -> {
+            int stored = storage.getEnergyStored();
+            if (stored > 0 && storage.canExtract()) storage.extractEnergy(stored, false);
+        });
+        String key = be.getClass().getName();
+        if (DRAIN_MISS.contains(key)) return;
+        Method method = DRAIN.get(key);
+        if (method == null) {
+            method = findDrain(be.getClass());
+            if (method == null) {
+                DRAIN_MISS.add(key);
+                return;
+            }
+            DRAIN.put(key, method);
+        }
+        try {
+            if (method.getName().startsWith("set") && method.getParameterCount() == 1) method.invoke(be, 0.0d);
+            else if (method.getParameterCount() == 2) method.invoke(be, Integer.MAX_VALUE / 4, false);
+            else method.invoke(be, 1.0E7d);
+        } catch (Throwable ignored) {
+        }
+    }
+
+    private static Method findDrain(Class<?> type) {
+        for (Method method : type.getMethods()) {
+            if (method.getName().equals("setJoules") && method.getParameterCount() == 1 && method.getParameterTypes()[0] == double.class) {
+                method.setAccessible(true);
+                return method;
+            }
+        }
+        for (Method method : type.getMethods()) {
+            if (method.getName().equals("extractJoules") && method.getParameterCount() == 1) {
+                method.setAccessible(true);
+                return method;
+            }
+        }
+        for (Method method : type.getMethods()) {
+            if (method.getName().equals("extractEnergy") && method.getParameterCount() == 2) {
+                method.setAccessible(true);
+                return method;
+            }
+        }
+        return null;
     }
 
     private static final class Watch {
