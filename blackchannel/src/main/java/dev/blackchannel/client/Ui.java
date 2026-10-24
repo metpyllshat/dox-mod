@@ -102,6 +102,31 @@ public final class Ui {
         return lines;
     }
 
+    public static void selfArrow(GuiGraphics g, int cx, int cy, float yaw, int length) {
+        double rad = Math.toRadians(yaw);
+        float fx = (float) -Math.sin(rad);
+        float fz = (float) Math.cos(rad);
+        float sideX = -fz;
+        float sideZ = fx;
+        int len = Math.max(4, length);
+        for (int i = 0; i <= len; i++) {
+            int px = cx + Math.round(fx * i);
+            int py = cy + Math.round(fz * i);
+            g.fill(px, py, px + 2, py + 2, TEXT);
+        }
+        int back = len - 3;
+        int bx = cx + Math.round(fx * back);
+        int by = cy + Math.round(fz * back);
+        for (int wing = 2; wing <= 3; wing++) {
+            int lx = bx + Math.round(sideX * wing);
+            int ly = by + Math.round(sideZ * wing);
+            int rx = bx - Math.round(sideX * wing);
+            int ry = by - Math.round(sideZ * wing);
+            g.fill(lx, ly, lx + 2, ly + 2, TEXT);
+            g.fill(rx, ry, rx + 2, ry + 2, TEXT);
+        }
+    }
+
     public static void blip(GuiGraphics g, int cx, int cy, int radius, int range, int dx, int dz, int color) {
         float sx = dx / (float) Math.max(1, range);
         float sz = dz / (float) Math.max(1, range);
