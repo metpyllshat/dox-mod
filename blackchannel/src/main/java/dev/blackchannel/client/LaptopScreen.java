@@ -23,10 +23,6 @@ import java.util.List;
 public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     private static final int WIDTH = 260;
     private static final int HEIGHT = 222;
-    private static final int SALE_X = 8;
-    private static final int SALE_Y = 84;
-    private static final int INV_X = 8;
-    private static final int INV_Y = 130;
     private static final int PRICE_X = 32;
     private static final int PRICE_Y = 86;
     private static final int SLIDER_X = 100;
@@ -314,25 +310,6 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     private void layoutSlots() {
         this.menu.showSlots = page == 3;
-        for (Slot slot : this.menu.slots) {
-            if (!this.menu.showSlots) {
-                slot.x = -1000;
-                slot.y = -1000;
-                continue;
-            }
-            if (slot.index == 0) {
-                slot.x = SALE_X;
-                slot.y = SALE_Y;
-            } else if (slot.index <= 27) {
-                int i = slot.index - 1;
-                slot.x = INV_X + (i % 9) * 18;
-                slot.y = INV_Y + (i / 9) * 18;
-            } else {
-                int i = slot.index - 28;
-                slot.x = INV_X + i * 18;
-                slot.y = INV_Y + 58;
-            }
-        }
     }
 
     private void syncWidgets() {
