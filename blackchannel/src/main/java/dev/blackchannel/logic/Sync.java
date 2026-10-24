@@ -22,6 +22,7 @@ public final class Sync {
         MinecraftServer server = player.getServer();
         int now = server.getTickCount();
         tag.putString("resultKey", profile.resultKey == null ? "" : profile.resultKey);
+        tag.putString("resultScope", profile.resultScope == null || profile.resultScope.isEmpty() ? "ops" : profile.resultScope);
         ListTag args = new ListTag();
         for (String arg : profile.resultArgs) args.add(StringTag.valueOf(arg));
         tag.put("resultArgs", args);
@@ -141,6 +142,10 @@ public final class Sync {
             tag.putInt("opticHz", profile.opticHz);
             tag.putInt("opticConf", profile.opticConf);
             tag.putString("opticBear", profile.opticBearing == null ? "" : profile.opticBearing);
+            tag.putString("opticBiome", profile.opticBiome == null ? "" : profile.opticBiome);
+            tag.putString("opticHandle", profile.opticHandle == null ? "" : profile.opticHandle);
+            tag.putString("opticDim", profile.opticDim == null ? "" : profile.opticDim);
+            tag.putInt("opticErr", profile.opticErr);
         }
         tag.put("peek", Optics.peekTag(profile));
 

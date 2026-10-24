@@ -42,7 +42,7 @@
   "screen.blackchannel.tab.bag": "BAG",
   "screen.blackchannel.tab.sell": "TRADE",
   "screen.blackchannel.btn.snap": "SNAP",
-  "screen.blackchannel.map_note": "Not a world map and not a camera. A noisy picture of the ground around the selected fix. A red dot means the carrier is in frame.",
+  "screen.blackchannel.map_note": "Ground around the selected fix. Not a world map and not a camera.",
   "screen.blackchannel.sell_note": "Drag a stack into the top slot. The price is the slider or the number, for the whole stack.",
   "screen.blackchannel.tip.trace": "Costs %s. Error: base %s, VPN ×%s, deep VPN ×%s. Miss %s / %s / %s percent. A friendly dish tightens it. A stale fix adds %s.",
   "screen.blackchannel.tip.deanon": "Costs %s. Needs a fix, a sample, or a zero-day. Shows the name, not coordinates.",
@@ -243,7 +243,7 @@
   "screen.blackchannel.area_title": "Fix area",
   "screen.blackchannel.bag_title": "Bag slice",
   "screen.blackchannel.peek_hidden": "Interference. The item is hidden.",
-  "screen.blackchannel.no_shot": "No picture",
+  "screen.blackchannel.no_shot": "No shot. Pick a fix, then SNAP.",
   "screen.blackchannel.inv_label": "Your inventory",
   "screen.blackchannel.slot_held": "IN TRADE",
   "screen.blackchannel.price_label": "PRICE",
@@ -257,5 +257,14 @@
   "screen.blackchannel.market.vendor": "shop",
   "screen.blackchannel.market.intel": "fix",
   "screen.blackchannel.market.no_bounty": "No bounties right now.",
-  "screen.blackchannel.market.bounty_note": "Turn a bounty in with a signal sample in hand, not a button."
+  "screen.blackchannel.market.bounty_note": "Turn a bounty in with a signal sample in hand, not a button.",
+  "screen.blackchannel.area_need": "Pick a row on TRACE, then SNAP. The frame is ground around the radio fix, not the body and not a world map.",
+  "screen.blackchannel.area_pick": "Next shot is fix %s ±%s. The frame center is that fix, already wrong. Do not stand on the center looking for the body.",
+  "screen.blackchannel.area_about": "Frame around fix %s ±%s. One cell is 4 blocks, the frame is about 64. Top is north. The center is not the body.",
+  "screen.blackchannel.area_legend": "Color is the block surface. Black is a hole, no cell. A red dot means the carrier may have been in that cell.",
+  "screen.blackchannel.area_dot": "Red dot is in frame. It is a coarse cell, not body coordinates. Read the ground color around it.",
+  "screen.blackchannel.area_bear": "Carrier is not in frame. Bearing from the center: %s. VPN can flip it.",
+  "screen.blackchannel.area_ground": "Not in frame: they left, changed dimension, or are more than 32 blocks from the center.",
+  "screen.blackchannel.area_biome": "Biome at center: %s",
+  "screen.blackchannel.area_north": "N"
 }

@@ -8,7 +8,9 @@ import dev.blackchannel.registry.ModContent;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
+import net.minecraft.client.gui.screens.Screen;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.util.FormattedCharSequence;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.world.entity.player.Inventory;
@@ -81,8 +83,11 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         else drawGear(g, x, y);
         if (tab != 2) g.fill(x + 6, y + imageHeight - 22, x + imageWidth - 6, y + imageHeight - 6, 0xFF0C1210);
         for (var renderable : renderables) renderable.render(g, mx, my, pt);
-        if (!hoverStack.isEmpty() && !hoverLines.isEmpty()) g.renderTooltip(font, hoverLines, mx, my);
-        else Ui.tips(g, font, hits, mx, my);
+        if (!hoverStack.isEmpty() && !hoverLines.isEmpty()) {
+            List<FormattedCharSequence> lines = new ArrayList<>();
+            for (Component line : hoverLines) lines.addAll(font.split(line, 220));
+            if (!lines.isEmpty()) g.renderTooltip(font, lines, mx, my);
+        } else Ui.tips(g, font, hits, mx, my);
     }
 
     private void drawChat(GuiGraphics g, int x, int y) {
@@ -106,7 +111,8 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             Ui.button(g, font, hits, hx, hy, 80, 11, contact, contact.equals(dmTarget), "pick-dm", contact);
             hy += 12;
         }
-        g.drawString(font, Ui.t("screen.blackchannel.send_hint"), x + 8, y + imageHeight - 32, Ui.MUTED, false);
+        String chatNote = ClientState.resultFor("chat");
+        g.drawString(font, Ui.trim(font, chatNote.isEmpty() ? Ui.t("screen.blackchannel.send_hint") : chatNote, imageWidth - 16), x + 8, y + imageHeight - 32, chatNote.isEmpty() ? Ui.MUTED : Ui.AMBER, false);
     }
 
     private void drawRadar(GuiGraphics g, int x, int y) {
@@ -273,7 +279,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     private void armTip(ItemStack stack, int price, String seller, String extra) {
         hoverStack = stack == null ? ItemStack.EMPTY : stack;
         hoverLines.clear();
-        if (minecraft != null && hoverStack != null && !hoverStack.isEmpty()) hoverLines.addAll(getTooltipFromItem(hoverStack));
+        if (minecraft != null && hoverStack != null && !hoverStack.isEmpty()) hoverLines.addAll(Screen.getTooltipFromItem(minecraft, hoverStack));
         hoverLines.add(Component.literal("#" + price).withStyle(ChatFormatting.GOLD));
         if (seller != null && !seller.isEmpty()) hoverLines.add(Component.literal(seller).withStyle(ChatFormatting.GRAY));
         if (extra != null && !extra.isEmpty()) hoverLines.add(Component.literal(extra).withStyle(ChatFormatting.DARK_AQUA));
@@ -302,7 +308,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             Ui.button(g, font, hits, x + 214, y + 186, 22, 11, ">", marketPage + 1 < pages, "mpage", "1");
             resultW = 170;
         }
-        g.drawString(font, Ui.trim(font, ClientState.resultLine(), resultW), x + 8, y + 187, Ui.AMBER, false);
+        g.drawString(font, Ui.trim(font, ClientState.resultFor("market"), resultW), x + 8, y + 187, Ui.AMBER, false);
         g.fill(x + 6, y + 200, x + imageWidth - 6, y + 224, 0xFF101614);
         g.fill(x + 6, y + 200, x + imageWidth - 6, y + 201, Ui.EDGE_DIM);
         if (stack == null || stack.isEmpty()) {
@@ -337,7 +343,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             g.drawString(font, Ui.trim(font, row.handle() + " = " + row.name(), 220), x + 8, ly, Ui.BLUE, false);
             ly += 10;
         }
-        g.drawString(font, Ui.trim(font, ClientState.resultLine(), imageWidth - 16), x + 8, y + imageHeight - 36, Ui.AMBER, false);
+        g.drawString(font, Ui.trim(font, ClientState.resultFor("gear"), imageWidth - 16), x + 8, y + imageHeight - 36, Ui.AMBER, false);
     }
 
     @Override
