@@ -36,7 +36,8 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue CRYPTO_PER_MIN;
     public static final ForgeConfigSpec.IntValue RACK_MINT_RANGE;
     public static final ForgeConfigSpec.IntValue TRACE_BASE;
-    public static final ForgeConfigSpec.IntValue TRACE_VPN;
+    public static final ForgeConfigSpec.DoubleValue TRACE_VPN_MUL;
+    public static final ForgeConfigSpec.DoubleValue TRACE_VPN_DEEP;
     public static final ForgeConfigSpec.IntValue TRACE_STALE;
     public static final ForgeConfigSpec.IntValue TRACE_FAIL;
     public static final ForgeConfigSpec.IntValue TRACE_FAIL_VPN;
@@ -71,9 +72,10 @@ public final class Config {
         BOMB_ENABLED = b.define("bombEnabled", true);
         BOMB_CD = b.defineInRange("bombCooldownSeconds", 75, 0, 3600);
         TRACE_CD = b.defineInRange("traceCooldownSeconds", 40, 0, 3600);
-        b.comment("Погрешность TRACE. Ключ traceScatter, не старый traceBaseError: тот файл больше не читается, чтобы дефолт 500 доехал до уже созданных конфигов. 500 — намёк на биом. Своя тарелка ужимает число. Старая отметка добавляет traceStaleError.");
+        b.comment("Погрешность TRACE. Ключ traceScatter, не старый traceBaseError: тот файл больше не читается, чтобы дефолт 500 доехал до уже созданных конфигов. 500 — намёк на биом. Обычный VPN умножает базу на traceVpnMul, глубокий на traceVpnDeep. Старый ключ traceVpnError больше не читается. Своя тарелка ужимает число. Старая отметка добавляет traceStaleError.");
         TRACE_BASE = b.defineInRange("traceScatter", 500, 0, 2000);
-        TRACE_VPN = b.defineInRange("traceVpnError", 50, 0, 2000);
+        TRACE_VPN_MUL = b.defineInRange("traceVpnMul", 1.5D, 1.0D, 8.0D);
+        TRACE_VPN_DEEP = b.defineInRange("traceVpnDeepMul", 2.0D, 1.0D, 8.0D);
         TRACE_STALE = b.defineInRange("traceStaleError", 40, 0, 2000);
         TRACE_FAIL = b.defineInRange("traceFailPercent", 5, 0, 100);
         TRACE_FAIL_VPN = b.defineInRange("traceFailVpnPercent", 12, 0, 100);

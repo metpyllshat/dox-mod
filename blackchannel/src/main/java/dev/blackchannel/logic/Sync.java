@@ -195,7 +195,8 @@ public final class Sync {
     private static void putCfg(CompoundTag tag) {
         CompoundTag cfg = new CompoundTag();
         cfg.putInt("traceBase", Config.TRACE_BASE.get());
-        cfg.putInt("traceVpn", Config.TRACE_VPN.get());
+        cfg.putInt("traceVpnMul", (int) Math.round(Config.TRACE_VPN_MUL.get() * 100.0));
+        cfg.putInt("traceVpnDeep", (int) Math.round(Config.TRACE_VPN_DEEP.get() * 100.0));
         cfg.putInt("traceStale", Config.TRACE_STALE.get());
         cfg.putInt("traceFail", Config.TRACE_FAIL.get());
         cfg.putInt("traceFailVpn", Config.TRACE_FAIL_VPN.get());

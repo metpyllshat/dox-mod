@@ -172,12 +172,36 @@ public final class Optics {
                 if (target.vpn > 0 && count > 1) count = Math.max(1, count + random.nextInt(3) - 1);
                 tag.putString("id", ForgeRegistries.ITEMS.getKey(stack.getItem()).toString());
                 tag.putInt("n", count);
+                tag.put("s", shownTag(stack, count));
             }
             profile.peek.add(tag);
         }
         if (target.ids) Ops.alert(online, player, "blackchannel.chat.ids_trace");
         Ops.result(player, profile, "blackchannel.result.peek_ok", target.handle, String.valueOf(hiddenCount), String.valueOf(dist));
         ModNetwork.syncFull(player);
+    }
+
+    private static CompoundTag shownTag(ItemStack stack, int count) {
+        ItemStack shown = new ItemStack(stack.getItem(), Math.max(1, count));
+        if (stack.isDamageableItem()) shown.setDamageValue(stack.getDamageValue());
+        CompoundTag src = stack.getTag();
+        if (src != null) {
+            CompoundTag dst = shown.getOrCreateTag();
+            copyKey(src, dst, "Enchantments");
+            copyKey(src, dst, "StoredEnchantments");
+            copyKey(src, dst, "display");
+            copyKey(src, dst, "Potion");
+            copyKey(src, dst, "CustomPotionEffects");
+            copyKey(src, dst, "CustomPotionColor");
+            copyKey(src, dst, "Trim");
+            copyKey(src, dst, "AttributeModifiers");
+            if (src.getBoolean("Unbreakable")) dst.putBoolean("Unbreakable", true);
+        }
+        return shown.save(new CompoundTag());
+    }
+
+    private static void copyKey(CompoundTag src, CompoundTag dst, String key) {
+        if (src.contains(key)) dst.put(key, src.get(key).copy());
     }
 
     private static ItemStack slot(ServerPlayer player, int index) {

@@ -34,29 +34,46 @@ public final class Menus {
 
     public static class LaptopMenu extends AbstractContainerMenu {
         public static final int INV_X = 8;
-        public static final int INV_Y = 166;
-        public static final int SALE_X = 186;
-        public static final int SALE_Y = 184;
+        public static final int INV_Y = 130;
+        public static final int SALE_X = 8;
+        public static final int SALE_Y = 84;
 
         public final SimpleContainer sale = new SimpleContainer(1);
+        public boolean showSlots;
+        private final boolean client;
 
         public LaptopMenu(int id, Inventory inv) {
             super(ModContent.LAPTOP_MENU.get(), id);
+            this.client = inv.player.level().isClientSide;
             addSlot(new Slot(sale, 0, SALE_X, SALE_Y) {
                 @Override
                 public boolean mayPlace(ItemStack stack) {
                     return !stack.isEmpty() && !Devices.isDevice(stack);
                 }
+
+                @Override
+                public boolean isActive() {
+                    return !client || showSlots;
+                }
             });
             for (int row = 0; row < 3; row++) {
                 for (int col = 0; col < 9; col++) {
-                    addSlot(new Slot(inv, col + row * 9 + 9, INV_X + col * 18, INV_Y + row * 18));
+                    addSlot(playerSlot(inv, col + row * 9 + 9, INV_X + col * 18, INV_Y + row * 18));
                 }
             }
             for (int col = 0; col < 9; col++) {
-                addSlot(new Slot(inv, col, INV_X + col * 18, INV_Y + 58));
+                addSlot(playerSlot(inv, col, INV_X + col * 18, INV_Y + 58));
             }
             if (inv.player instanceof ServerPlayer sp) ModNetwork.syncFull(sp);
+        }
+
+        private Slot playerSlot(Inventory inv, int index, int x, int y) {
+            return new Slot(inv, index, x, y) {
+                @Override
+                public boolean isActive() {
+                    return !client || showSlots;
+                }
+            };
         }
 
         @Override

@@ -71,7 +71,7 @@ public final class ClientHooks {
             for (ClientState.Blip blip : ClientState.blips) {
                 Ui.blip(g, cx, cy, 26, ClientState.radarR, blip.dx(), blip.dz(), Ui.blipColor(blip.kind()));
             }
-            if (mc.player != null) Ui.selfArrow(g, cx, cy, mc.player.getYRot(), 6);
+            if (mc.player != null) Ui.selfArrow(g, cx, cy, mc.player.getYRot());
         }
     }
 }

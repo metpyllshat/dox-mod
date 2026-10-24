@@ -102,29 +102,45 @@ public final class Ui {
         return lines;
     }
 
-    public static void selfArrow(GuiGraphics g, int cx, int cy, float yaw, int length) {
+    public static void selfArrow(GuiGraphics g, int cx, int cy, float yaw) {
         double rad = Math.toRadians(yaw);
         float fx = (float) -Math.sin(rad);
         float fz = (float) Math.cos(rad);
-        float sideX = -fz;
-        float sideZ = fx;
-        int len = Math.max(4, length);
-        for (int i = 0; i <= len; i++) {
-            int px = cx + Math.round(fx * i);
-            int py = cy + Math.round(fz * i);
-            g.fill(px, py, px + 2, py + 2, TEXT);
+        float sx = -fz;
+        float sz = fx;
+        int tipX = cx + Math.round(fx * 4);
+        int tipY = cy + Math.round(fz * 4);
+        int leftX = cx + Math.round(sx * 2 - fx);
+        int leftY = cy + Math.round(sz * 2 - fz);
+        int rightX = cx + Math.round(-sx * 2 - fx);
+        int rightY = cy + Math.round(-sz * 2 - fz);
+        fillTri(g, tipX, tipY, leftX, leftY, rightX, rightY, EDGE);
+    }
+
+    private static void fillTri(GuiGraphics g, int x0, int y0, int x1, int y1, int x2, int y2, int color) {
+        int minY = Math.min(y0, Math.min(y1, y2));
+        int maxY = Math.max(y0, Math.max(y1, y2));
+        for (int y = minY; y <= maxY; y++) {
+            int left = Integer.MAX_VALUE;
+            int right = Integer.MIN_VALUE;
+            int[] a = span(y, x0, y0, x1, y1);
+            int[] b = span(y, x1, y1, x2, y2);
+            int[] c = span(y, x2, y2, x0, y0);
+            for (int[] s : new int[][]{a, b, c}) {
+                if (s == null) continue;
+                left = Math.min(left, s[0]);
+                right = Math.max(right, s[1]);
+            }
+            if (left <= right) g.fill(left, y, right + 1, y + 1, color);
         }
-        int back = len - 3;
-        int bx = cx + Math.round(fx * back);
-        int by = cy + Math.round(fz * back);
-        for (int wing = 2; wing <= 3; wing++) {
-            int lx = bx + Math.round(sideX * wing);
-            int ly = by + Math.round(sideZ * wing);
-            int rx = bx - Math.round(sideX * wing);
-            int ry = by - Math.round(sideZ * wing);
-            g.fill(lx, ly, lx + 2, ly + 2, TEXT);
-            g.fill(rx, ry, rx + 2, ry + 2, TEXT);
-        }
+    }
+
+    private static int[] span(int y, int x0, int y0, int x1, int y1) {
+        if (y < Math.min(y0, y1) || y > Math.max(y0, y1)) return null;
+        if (y0 == y1) return new int[]{Math.min(x0, x1), Math.max(x0, x1)};
+        float t = (y - y0) / (float) (y1 - y0);
+        int x = Math.round(x0 + (x1 - x0) * t);
+        return new int[]{x, x};
     }
 
     public static void blip(GuiGraphics g, int cx, int cy, int radius, int range, int dx, int dz, int color) {
