@@ -32,6 +32,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         input.setBordered(false);
         input.setTextColor(Ui.EDGE);
         addRenderableWidget(input);
+        setInitialFocus(input);
     }
 
     @Override
@@ -47,16 +48,16 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         int x = leftPos;
         int y = topPos;
         Ui.panel(g, x, y, imageWidth, imageHeight);
-        g.drawString(font, "TERMINAL  " + ClientState.handle + "  #" + ClientState.crypto, x + 8, y + 6, Ui.EDGE, false);
+        g.drawString(font, Ui.trim(font, "TERMINAL  " + ClientState.handle + "  #" + ClientState.crypto, imageWidth - 16), x + 8, y + 6, Ui.EDGE, false);
         String net = ClientState.uplink ? (ClientState.dish ? "DISH" : "RACK") : "NO UPLINK";
         g.drawString(font, net + "  CD T" + ClientState.cdT + " D" + ClientState.cdD + " S" + ClientState.cdS + " B" + ClientState.cdB, x + 8, y + 16, Ui.MUTED, false);
         int by = y + 30;
-        Ui.button(g, font, hits, x + 6, by, 58, 12, "TRACE", false, Actions.TRACE, "");
-        Ui.button(g, font, hits, x + 66, by, 58, 12, "DEANON", false, Actions.DEANON, "");
-        Ui.button(g, font, hits, x + 126, by, 50, 12, "SWAT", false, Actions.SWAT, "");
-        Ui.button(g, font, hits, x + 178, by, 50, 12, "BOMB", false, Actions.BOMB, "");
-        Ui.button(g, font, hits, x + 230, by, 40, 12, "UAV", false, Actions.UAV, "");
-        Ui.button(g, font, hits, x + 272, by, 40, 12, "WIPE", wipeArmed, Actions.WIPE, "");
+        Ui.button(g, font, hits, x + 6, by, 58, 12, "TRACE", Ui.t("screen.blackchannel.tip.trace"), false, Actions.TRACE, "");
+        Ui.button(g, font, hits, x + 66, by, 58, 12, "DEANON", Ui.t("screen.blackchannel.tip.deanon"), false, Actions.DEANON, "");
+        Ui.button(g, font, hits, x + 126, by, 50, 12, "SWAT", Ui.t("screen.blackchannel.tip.swat"), false, Actions.SWAT, "");
+        Ui.button(g, font, hits, x + 178, by, 50, 12, "BOMB", Ui.t("screen.blackchannel.tip.bomb"), false, Actions.BOMB, "");
+        Ui.button(g, font, hits, x + 230, by, 40, 12, "UAV", Ui.t("screen.blackchannel.tip.uav"), false, Actions.UAV, "");
+        Ui.button(g, font, hits, x + 272, by, 40, 12, "WIPE", Ui.t("screen.blackchannel.tip.wipe"), wipeArmed, Actions.WIPE, "");
         g.drawString(font, Ui.trim(font, ClientState.resultLine(), imageWidth - 16), x + 8, y + 46, Ui.AMBER, false);
         if (ClientState.ownStrikeT > 0) {
             g.drawString(font, "OUTBOUND T-" + (ClientState.ownStrikeT / 20), x + 8, y + 56, Ui.RED, false);
@@ -67,8 +68,9 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         for (ClientState.IntelRow row : ClientState.intel) {
             if (ly > y + 160) break;
             boolean on = row.id == selected;
-            String label = "#" + row.id + " " + row.handle + " " + row.dim + " " + row.x + " " + row.y + " " + row.z + " ±" + row.err;
-            Ui.button(g, font, hits, x + 6, ly, 200, 11, Ui.trim(font, label, 190), on, "pick", String.valueOf(row.id));
+            String label = "#" + row.id + " " + row.handle + " ±" + row.err;
+            String tip = row.handle + "  " + row.dim + "  " + row.x + " " + row.y + " " + row.z + "  ±" + row.err;
+            Ui.button(g, font, hits, x + 6, ly, 200, 11, Ui.trim(font, label, 190), tip, on, "pick", String.valueOf(row.id));
             ly += 12;
         }
         int ry = y + 68;
@@ -79,11 +81,12 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
             g.drawString(font, Ui.trim(font, row.handle() + "=" + row.name(), 96), x + 214, ry, Ui.BLUE, false);
             ry += 10;
         }
-        Ui.button(g, font, hits, x + 214, y + 140, 96, 12, "SELL INTEL", false, Actions.SELL, "");
-        Ui.button(g, font, hits, x + 214, y + 156, 96, 12, "SELL ITEM", false, "sell-item", "");
+        Ui.button(g, font, hits, x + 214, y + 140, 96, 12, "SELL INTEL", Ui.t("screen.blackchannel.tip.sell_intel"), false, Actions.SELL, "");
+        Ui.button(g, font, hits, x + 214, y + 156, 96, 12, "SELL ITEM", Ui.t("screen.blackchannel.tip.sell_item"), false, "sell-item", "");
         g.fill(x + 6, y + imageHeight - 22, x + 200, y + imageHeight - 6, 0xFF0C1210);
         g.drawString(font, "handle / $price", x + 196, y + imageHeight - 16, Ui.MUTED, false);
         for (var renderable : renderables) renderable.render(g, mx, my, pt);
+        Ui.tips(g, font, hits, mx, my);
     }
 
     @Override
@@ -136,6 +139,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
             send(Actions.TRACE, input.getValue().trim());
             return true;
         }
+        if (input != null && input.isFocused() && minecraft != null && minecraft.options.keyInventory.matches(key, scan)) return true;
         return super.keyPressed(key, scan, mods);
     }
 

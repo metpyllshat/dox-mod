@@ -172,6 +172,9 @@ public class NetData extends SavedData {
         public int lastPosTick;
         public String lastDim = "";
         public int lastX, lastY, lastZ;
+        public int mintTick;
+        public String mintDim = "";
+        public int mintX, mintY, mintZ;
         public String resultKey = "";
         public final List<String> resultArgs = new ArrayList<>();
         public int toastId;
@@ -217,6 +220,11 @@ public class NetData extends SavedData {
             tag.putInt("lpX", lastX);
             tag.putInt("lpY", lastY);
             tag.putInt("lpZ", lastZ);
+            tag.putInt("mintT", mintTick);
+            tag.putString("mintD", mintDim == null ? "" : mintDim);
+            tag.putInt("mintX", mintX);
+            tag.putInt("mintY", mintY);
+            tag.putInt("mintZ", mintZ);
             tag.putString("rk", resultKey);
             ListTag args = new ListTag();
             for (String arg : resultArgs) args.add(StringTag.valueOf(arg));
@@ -267,6 +275,11 @@ public class NetData extends SavedData {
             profile.lastX = tag.getInt("lpX");
             profile.lastY = tag.getInt("lpY");
             profile.lastZ = tag.getInt("lpZ");
+            profile.mintTick = tag.getInt("mintT");
+            profile.mintDim = tag.getString("mintD");
+            profile.mintX = tag.getInt("mintX");
+            profile.mintY = tag.getInt("mintY");
+            profile.mintZ = tag.getInt("mintZ");
             profile.resultKey = tag.getString("rk");
             ListTag args = tag.getList("ra", Tag.TAG_STRING);
             for (int i = 0; i < args.size(); i++) profile.resultArgs.add(args.getString(i));

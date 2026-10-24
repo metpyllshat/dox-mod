@@ -20,7 +20,7 @@ public final class Ui {
 
     private Ui() {}
 
-    public record Hit(int x, int y, int w, int h, String action, String arg) {}
+    public record Hit(int x, int y, int w, int h, String action, String arg, String tip) {}
 
     public static void panel(GuiGraphics g, int x, int y, int w, int h) {
         g.fill(x, y, x + w, y + h, BG);
@@ -35,10 +35,38 @@ public final class Ui {
     }
 
     public static void button(GuiGraphics g, Font font, List<Hit> hits, int x, int y, int w, int h, String label, boolean on, String action, String arg) {
+        button(g, font, hits, x, y, w, h, label, null, on, action, arg);
+    }
+
+    public static void button(GuiGraphics g, Font font, List<Hit> hits, int x, int y, int w, int h, String label, String tip, boolean on, String action, String arg) {
         g.fill(x, y, x + w, y + h, on ? 0xFF16382C : 0xFF12181C);
         g.fill(x, y, x + w, y + 1, on ? EDGE : EDGE_DIM);
         g.drawString(font, trim(font, label, w - 6), x + 3, y + 3, on ? TEXT : MUTED, false);
-        hits.add(new Hit(x, y, w, h, action, arg));
+        hits.add(new Hit(x, y, w, h, action, arg, tip));
+    }
+
+    public static void tips(GuiGraphics g, Font font, List<Hit> hits, int mx, int my) {
+        for (Hit hit : hits) {
+            if (hit.tip() == null || hit.tip().isEmpty() || !inside(mx, my, hit.x(), hit.y(), hit.w(), hit.h())) continue;
+            List<String> lines = wrap(font, hit.tip(), 200);
+            if (lines.isEmpty()) return;
+            int w = 8;
+            for (String line : lines) w = Math.max(w, font.width(line) + 8);
+            int h = lines.size() * 10 + 6;
+            int tx = mx + 8;
+            int ty = my + 8;
+            g.pose().pushPose();
+            g.pose().translate(0, 0, 400);
+            g.fill(tx, ty, tx + w, ty + h, 0xF0101418);
+            g.fill(tx, ty, tx + w, ty + 1, EDGE);
+            int ly = ty + 4;
+            for (String line : lines) {
+                g.drawString(font, line, tx + 4, ly, TEXT, false);
+                ly += 10;
+            }
+            g.pose().popPose();
+            return;
+        }
     }
 
     public static String t(String key) {

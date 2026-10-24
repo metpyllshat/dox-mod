@@ -34,6 +34,9 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue RADAR_PHONE;
     public static final ForgeConfigSpec.IntValue RADAR_LAPTOP;
     public static final ForgeConfigSpec.IntValue CRYPTO_PER_MIN;
+    public static final ForgeConfigSpec.IntValue RACK_MINT_RANGE;
+    public static final ForgeConfigSpec.IntValue TRACE_BASE;
+    public static final ForgeConfigSpec.IntValue TRACE_VPN;
     public static final ForgeConfigSpec.DoubleValue SWAT_POWER;
 
     static {
@@ -49,6 +52,9 @@ public final class Config {
         BOMB_ENABLED = b.define("bombEnabled", true);
         BOMB_CD = b.defineInRange("bombCooldownSeconds", 75, 0, 3600);
         TRACE_CD = b.defineInRange("traceCooldownSeconds", 40, 0, 3600);
+        b.comment("Погрешность TRACE: база плюс добавка за каждый уровень VPN. 8 — почти GPS. 150–250 — район. 500 — намёк на биом, базу по следу не найти. Своя тарелка всё ещё ужимает число.");
+        TRACE_BASE = b.defineInRange("traceBaseError", 8, 0, 2000);
+        TRACE_VPN = b.defineInRange("traceVpnError", 50, 0, 2000);
         DEANON_CD = b.defineInRange("deanonCooldownSeconds", 60, 0, 3600);
         INTEL_STALE = b.defineInRange("intelStaleSeconds", 240, 30, 3600);
         MEMORY = b.defineInRange("memorySeconds", 180, 10, 3600);
@@ -64,6 +70,8 @@ public final class Config {
         RADAR_PHONE = b.defineInRange("radarPhone", 52, 8, 256);
         RADAR_LAPTOP = b.defineInRange("radarLaptop", 110, 16, 512);
         CRYPTO_PER_MIN = b.defineInRange("cryptoPerMinute", 4, 0, 64);
+        b.comment("Один чекан на владельца в этом радиусе. Дальняя база чеканит отдельно. Потолок кошелька 5000.");
+        RACK_MINT_RANGE = b.defineInRange("rackMintRange", 96, 16, 512);
         b.pop();
 
         b.push("integration");

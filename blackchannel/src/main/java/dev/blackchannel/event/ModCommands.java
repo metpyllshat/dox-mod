@@ -2,7 +2,6 @@ package dev.blackchannel.event;
 
 import com.mojang.brigadier.CommandDispatcher;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.arguments.StringArgumentType;
 import dev.blackchannel.api.BlackChannelAPI;
 import dev.blackchannel.data.NetData;
 import dev.blackchannel.logic.Bridges;
@@ -38,10 +37,7 @@ public final class ModCommands {
                                         .executes(c -> give(EntityArgument.getPlayer(c, "player"), IntegerArgumentType.getInteger(c, "amount"), c.getSource())))))
                 .then(Commands.literal("reveal").requires(s -> s.hasPermission(2))
                         .then(Commands.argument("player", EntityArgument.player())
-                                .executes(c -> reveal(c.getSource(), EntityArgument.getPlayer(c, "player")))))
-                .then(Commands.literal("sethandle")
-                        .then(Commands.argument("handle", StringArgumentType.word())
-                                .executes(c -> setHandle(c.getSource(), StringArgumentType.getString(c, "handle"))))));
+                                .executes(c -> reveal(c.getSource(), EntityArgument.getPlayer(c, "player"))))));
     }
 
     private static int help(CommandSourceStack source) {
@@ -87,31 +83,6 @@ public final class ModCommands {
         NetData.get(player).setDirty();
         source.sendSuccess(() -> Component.translatable("blackchannel.cmd.give", player.getGameProfile().getName(), amount), true);
         return 1;
-    }
-
-    private static int setHandle(CommandSourceStack source, String raw) {
-        try {
-            ServerPlayer player = source.getPlayerOrException();
-            NetData data = NetData.get(player);
-            String handle = Str.norm(raw);
-            if (handle.length() < 3) {
-                source.sendFailure(Component.translatable("blackchannel.result.bad_handle"));
-                return 0;
-            }
-            NetData.Profile taken = data.byHandle(handle);
-            NetData.Profile profile = data.profile(player.getUUID());
-            if (taken != null && taken != profile) {
-                source.sendFailure(Component.translatable("blackchannel.result.bad_handle"));
-                return 0;
-            }
-            profile.handle = handle;
-            data.setDirty();
-            source.sendSuccess(() -> Component.translatable("blackchannel.cmd.handle", handle), false);
-            return 1;
-        } catch (Exception e) {
-            source.sendFailure(Component.translatable("blackchannel.cmd.no_player"));
-            return 0;
-        }
     }
 
     private static int reveal(CommandSourceStack source, ServerPlayer player) {

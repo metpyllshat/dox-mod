@@ -450,7 +450,7 @@ public final class Ops {
             if (online != null) alert(online, player, "blackchannel.chat.ids_trace");
             return;
         }
-        int err = 8 + target.vpn * 50;
+        int err = Config.TRACE_BASE.get() + target.vpn * Config.TRACE_VPN.get();
         if (SignalEnv.dishNear(player, profile, 128)) err = Math.max(3, (int) (err * 0.55));
         if (exploit) err = Math.max(2, (int) (err * 0.65));
         boolean stale = !live;
@@ -592,7 +592,7 @@ public final class Ops {
     private static void traceUav(ServerPlayer player, NetData.Profile profile) {
         if (!gate(player, profile, true, false)) return;
         if (!cd(player, profile, profile.cdTrace)) return;
-        Entity drone = Bridges.nearestDrone(player, 64);
+        Entity drone = Bridges.nearestDrone(player, 96);
         if (drone == null) {
             result(player, profile, "blackchannel.result.drone_none");
             return;
@@ -600,7 +600,7 @@ public final class Ops {
         UUID controller = Bridges.droneController(drone);
         ServerPlayer op = controller == null ? null : player.getServer().getPlayerList().getPlayer(controller);
         if (op == null) {
-            result(player, profile, "blackchannel.result.drone_none");
+            result(player, profile, "blackchannel.result.drone_blind");
             return;
         }
         if (!pay(player, profile, 3)) return;
@@ -676,6 +676,16 @@ public final class Ops {
         result(player, profile, "blackchannel.result.bought", String.valueOf(id));
     }
 
+    private static ItemStack sellable(ServerPlayer player) {
+        ItemStack off = player.getOffhandItem();
+        if (!off.isEmpty() && !Devices.isDevice(off)) return off;
+        for (int i = 0; i < 9; i++) {
+            ItemStack stack = player.getInventory().getItem(i);
+            if (!stack.isEmpty() && !Devices.isDevice(stack)) return stack;
+        }
+        return ItemStack.EMPTY;
+    }
+
     private static void sell(ServerPlayer player, NetData.Profile profile, String arg) {
         String[] parts = arg.trim().split(" ");
         if (parts.length < 2) {
@@ -690,8 +700,8 @@ public final class Ops {
         try {
             if ("item".equals(parts[0])) {
                 int price = clampPrice(Integer.parseInt(parts[1]));
-                ItemStack held = player.getMainHandItem();
-                if (held.isEmpty() || Devices.isDevice(held)) {
+                ItemStack held = sellable(player);
+                if (held.isEmpty()) {
                     result(player, profile, "blackchannel.result.no_target");
                     return;
                 }

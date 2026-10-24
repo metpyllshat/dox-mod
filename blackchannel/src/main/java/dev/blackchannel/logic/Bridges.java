@@ -157,8 +157,13 @@ public final class Bridges {
         try {
             if (getController == null) getController = drone.getClass().getMethod("getController");
             Object value = getController.invoke(drone);
+            if (value instanceof Entity entity) return entity.getUUID();
             if (value instanceof UUID uuid) return uuid;
-            if (value instanceof Optional<?> optional && optional.orElse(null) instanceof UUID uuid) return uuid;
+            if (value instanceof Optional<?> optional) {
+                Object inner = optional.orElse(null);
+                if (inner instanceof UUID uuid) return uuid;
+                if (inner instanceof Entity entity) return entity.getUUID();
+            }
         } catch (Throwable ignored) {
             getController = null;
         }

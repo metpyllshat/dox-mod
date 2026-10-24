@@ -178,6 +178,7 @@ public final class SignalEnv {
     }
 
     public static int radarRange(ServerPlayer player, NetData.Profile profile) {
+        if (Devices.battery(player) <= 0) return 0;
         int range = 0;
         if (Devices.has(player, dev.blackchannel.registry.ModContent.PHONE.get())) range = Config.RADAR_PHONE.get();
         if (Devices.has(player, dev.blackchannel.registry.ModContent.LAPTOP.get())) range = Math.max(range, Config.RADAR_LAPTOP.get());
