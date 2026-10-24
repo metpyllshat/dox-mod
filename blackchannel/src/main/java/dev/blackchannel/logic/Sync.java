@@ -82,7 +82,9 @@ public final class Sync {
             c.putInt("price", listing.price);
             c.putBoolean("intel", listing.intel);
             if (listing.intel) {
-                c.putString("desc", listing.handle + " " + Str.dimShort(listing.dim) + " " + listing.x + " " + listing.y + " " + listing.z + " ±" + listing.err);
+                c.putString("desc", listing.handle);
+                c.putString("dim", Str.dimShort(listing.dim));
+                c.putBoolean("stale", listing.stale);
             } else {
                 ItemStack stack = ItemStack.of(listing.stack);
                 c.putString("item", Bridges.itemName(stack));
@@ -248,7 +250,30 @@ public final class Sync {
         cfg.putInt("dishBonus", Config.DISH_RADAR_BONUS.get());
         cfg.putInt("structure", Config.STRUCTURE_RADAR.get());
         cfg.putInt("structurePhone", Config.STRUCTURE_PHONE.get());
+        cfg.putInt("refundVpn", half("vpn"));
+        cfg.putInt("refundDeep", half("deep"));
+        cfg.putInt("refundIds", half("ids"));
+        cfg.putInt("refundHarden", half("harden"));
         tag.put("cfg", cfg);
+        tag.put("floodLines", floodList(Config.FLOOD_LINES.get(), 24));
+        tag.put("floodImages", floodList(Config.FLOOD_IMAGES.get(), 8));
+    }
+
+    private static int half(String id) {
+        Catalog.Entry entry = Catalog.byId(id);
+        return entry == null ? 0 : entry.price() / 2;
+    }
+
+    private static ListTag floodList(java.util.List<? extends String> src, int max) {
+        ListTag list = new ListTag();
+        if (src == null) return list;
+        int n = 0;
+        for (String s : src) {
+            if (s == null || s.isBlank()) continue;
+            list.add(StringTag.valueOf(s.length() > 80 ? s.substring(0, 80) : s));
+            if (++n >= max) break;
+        }
+        return list;
     }
 
     private static void putBlips(CompoundTag tag, ServerPlayer player, NetData.Profile profile) {

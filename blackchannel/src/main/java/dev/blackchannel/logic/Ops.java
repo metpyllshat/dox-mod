@@ -90,7 +90,7 @@ public final class Ops {
         NetData data = NetData.get(player);
         NetData.Profile profile = data.profile(player.getUUID());
         int now = player.getServer().getTickCount();
-        if (profile.bombUntil > now && locks(action)) {
+        if (profile.bombUntil > now && !profile.airplane && locks(action)) {
             result(player, profile, "blackchannel.result.bomb_locked");
             return;
         }
@@ -111,6 +111,7 @@ public final class Ops {
             case Actions.BUY -> buy(player, profile, arg);
             case Actions.BUY_LIST -> buyList(player, profile, arg);
             case Actions.SELL -> sell(player, profile, arg);
+            case Actions.SELL_BUFF -> sellBuff(player, profile, arg);
             case Actions.OPTIC -> Optics.optic(player, profile, arg);
             case Actions.PEEK -> Optics.peek(player, profile, arg);
             case Actions.BOUNTY -> turnInHeld(player);
@@ -123,7 +124,6 @@ public final class Ops {
 
     public static void toggleAir(ServerPlayer player, NetData.Profile profile) {
         profile.airplane = !profile.airplane;
-        if (profile.airplane) profile.bombUntil = player.getServer().getTickCount();
         player.playNotifySound(SoundEvents.NOTE_BLOCK_BIT.value(), SoundSource.MASTER, 0.5f, profile.airplane ? 0.7f : 1.6f);
         result(player, profile, profile.airplane ? "blackchannel.result.air_on" : "blackchannel.result.air_off");
     }
@@ -358,7 +358,6 @@ public final class Ops {
             profile.welcomed = true;
             player.sendSystemMessage(Component.translatable("blackchannel.chat.welcome", profile.handle));
         }
-        if (profile.airplane && profile.bombUntil > tick) profile.bombUntil = tick;
         boolean tx = SignalEnv.transmitting(player, profile);
         if (tx) {
             profile.lastDim = Str.dim(player.level());
@@ -370,9 +369,21 @@ public final class Ops {
             SignalEnv.Link link = SignalEnv.link(player, profile);
             if (link.mode == SignalEnv.Link.Mode.SAT && tick % 1200 == 0 && profile.satCharges > 0) profile.satCharges--;
         }
-        if (profile.bombUntil > tick && tick % 40 == 0) {
-            Devices.drain(player, profile.dnd ? 1 : 3);
-            if (!profile.dnd || tick % 80 == 0) profile.toast("blackchannel.spam." + (1 + (tick / 40) % 6), "");
+        if (profile.bombUntil > tick && profile.floodPicsFor != profile.bombUntil) {
+            profile.floodPicsFor = profile.bombUntil;
+            ModNetwork.sendFlood(player);
+        }
+        if (profile.bombUntil > tick && !profile.airplane) {
+            int soundEvery = Math.max(2, Config.FLOOD_SOUND_TICKS.get());
+            int chatEvery = Math.max(5, Config.FLOOD_CHAT_TICKS.get());
+            if (profile.dnd) {
+                soundEvery *= 2;
+                chatEvery *= 2;
+            }
+            if (tick % soundEvery == 0) Flood.play(player, tick);
+            if (tick % 10 == 0) Flood.spam(player, tick, true);
+            if (tick % chatEvery == 0) Flood.spam(player, tick + 3, false);
+            if (tick % 40 == 0) Devices.drain(player, profile.dnd ? 1 : 3);
         }
         if (tick % 600 == 0 && Devices.hasLaptop(player)) sniff(player, profile);
     }
@@ -1142,6 +1153,51 @@ public final class Ops {
         return listing;
     }
 
+    private static void sellBuff(ServerPlayer player, NetData.Profile profile, String arg) {
+        int price;
+        String label;
+        if ("vpn".equals(arg)) {
+            if (profile.vpn <= 0) {
+                result(player, profile, "blackchannel.result.no_buff");
+                return;
+            }
+            boolean deep = profile.vpn >= 2;
+            price = halfCatalog(deep ? "deep" : "vpn");
+            label = deep ? "VPN2" : "VPN";
+        } else if ("ids".equals(arg)) {
+            if (!profile.ids) {
+                result(player, profile, "blackchannel.result.no_buff");
+                return;
+            }
+            price = halfCatalog("ids");
+            label = "IDS";
+        } else if ("harden".equals(arg)) {
+            if (!profile.hardened) {
+                result(player, profile, "blackchannel.result.no_buff");
+                return;
+            }
+            price = halfCatalog("harden");
+            label = "EMP";
+        } else {
+            result(player, profile, "blackchannel.result.no_buff");
+            return;
+        }
+        if (profile.crypto + price > 5000) {
+            result(player, profile, "blackchannel.result.wallet_full");
+            return;
+        }
+        if ("vpn".equals(arg)) profile.vpn = 0;
+        else if ("ids".equals(arg)) profile.ids = false;
+        else profile.hardened = false;
+        profile.crypto += price;
+        result(player, profile, "blackchannel.result.sold_buff", label, String.valueOf(price));
+    }
+
+    private static int halfCatalog(String id) {
+        Catalog.Entry entry = Catalog.byId(id);
+        return entry == null ? 0 : entry.price() / 2;
+    }
+
     private static int clampPrice(int price) {
         return Math.max(1, Math.min(5000, price));
     }
@@ -1156,6 +1212,7 @@ public final class Ops {
         if (Actions.AIR.equals(action) || Actions.DND.equals(action) || Actions.CREW.equals(action) || Actions.RADAR.equals(action)) return "gear";
         if (Actions.BUY.equals(action) || Actions.BUY_LIST.equals(action) || Actions.BOUNTY.equals(action)) return "market";
         if (Actions.SELL.equals(action)) return "sell";
+        if (Actions.SELL_BUFF.equals(action)) return "gear";
         if (Actions.OPTIC.equals(action)) return "area";
         if (Actions.PEEK.equals(action)) return "bag";
         if (Actions.HACK.equals(action) || Actions.KILL.equals(action)) return "rack";

@@ -17,6 +17,7 @@ public final class Actions {
     public static final String BUY = "buy";
     public static final String BUY_LIST = "buy_list";
     public static final String SELL = "sell";
+    public static final String SELL_BUFF = "sell_buff";
     public static final String OPTIC = "optic";
     public static final String PEEK = "peek";
     public static final String BOUNTY = "bounty";
