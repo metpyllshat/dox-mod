@@ -1,6 +1,7 @@
 package dev.blackchannel.item;
 
 import dev.blackchannel.data.NetData;
+import dev.blackchannel.logic.Actions;
 import dev.blackchannel.logic.Devices;
 import dev.blackchannel.logic.Ops;
 import dev.blackchannel.menu.Menus;
@@ -37,7 +38,7 @@ public class DeviceItem extends Item {
         if (player.isShiftKeyDown()) {
             if (!level.isClientSide && player instanceof ServerPlayer sp) {
                 NetData.Profile profile = NetData.get(sp).profile(sp.getUUID());
-                if (kind == Kind.PHONE) Ops.toggleAir(sp, profile);
+                if (kind == Kind.PHONE) Ops.action(sp, Actions.AIR, "");
                 else {
                     profile.radarHud = !profile.radarHud;
                     sp.displayClientMessage(Component.translatable(profile.radarHud ? "blackchannel.result.radar_on" : "blackchannel.result.radar_off"), true);

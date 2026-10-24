@@ -43,6 +43,10 @@ public final class Optics {
             profile.opticHz = -1;
             profile.opticConf = 0;
             profile.opticBearing = "";
+            profile.opticBiome = "";
+            profile.opticHandle = intel.handle;
+            profile.opticErr = intel.err;
+            profile.opticDim = intel.dim;
             Ops.result(player, profile, "blackchannel.result.optic_empty");
             ModNetwork.syncFull(player);
             return;
@@ -97,6 +101,10 @@ public final class Optics {
         profile.opticHx = -1;
         profile.opticHz = -1;
         profile.opticBearing = "";
+        profile.opticHandle = intel.handle;
+        profile.opticErr = intel.err;
+        profile.opticDim = intel.dim;
+        profile.opticBiome = biomeAt(level, ox, intel.y, oz);
         int conf = Math.max(0, 100 - holes * 100 / cells.length - vpn * 15 - (intel.stale ? 20 : 0));
         ServerPlayer online = target == null ? null : player.getServer().getPlayerList().getPlayer(target.id);
         boolean live = online != null && SignalEnv.transmitting(online, target) && online.level().dimension().equals(level.dimension());
@@ -202,6 +210,15 @@ public final class Optics {
 
     private static void copyKey(CompoundTag src, CompoundTag dst, String key) {
         if (src.contains(key)) dst.put(key, src.get(key).copy());
+    }
+
+    private static String biomeAt(ServerLevel level, int x, int y, int z) {
+        try {
+            int sampleY = Math.max(level.getMinBuildHeight(), y);
+            return level.getBiome(new BlockPos(x, sampleY, z)).unwrapKey().map(key -> key.location().toString()).orElse("");
+        } catch (Throwable ignored) {
+            return "";
+        }
     }
 
     private static ItemStack slot(ServerPlayer player, int index) {

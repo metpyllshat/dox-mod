@@ -72,10 +72,21 @@ public final class Ops {
         }
     }
 
+    private static final ThreadLocal<String> SCOPE = ThreadLocal.withInitial(() -> "ops");
+
     public static void action(ServerPlayer player, String action, String arg) {
         if (player == null || action == null) return;
         if (arg == null) arg = "";
         if (arg.length() > 180) arg = arg.substring(0, 180);
+        SCOPE.set(scopeFor(action));
+        try {
+            actionInner(player, action, arg);
+        } finally {
+            SCOPE.set("ops");
+        }
+    }
+
+    private static void actionInner(ServerPlayer player, String action, String arg) {
         NetData data = NetData.get(player);
         NetData.Profile profile = data.profile(player.getUUID());
         int now = player.getServer().getTickCount();
@@ -398,7 +409,8 @@ public final class Ops {
             return;
         }
         data(player).addChat(line);
-        result(player, profile, "blackchannel.result.sent");
+        profile.result("");
+        ModNetwork.syncFull(player);
     }
 
     private static void dm(ServerPlayer player, NetData.Profile profile, String arg) {
@@ -420,7 +432,8 @@ public final class Ops {
         NetData.ChatLine line = baseLine(player, profile, text);
         line.channel = dmId(profile.handle, handle);
         data(player).addChat(line);
-        result(player, profile, "blackchannel.result.sent");
+        profile.result("");
+        ModNetwork.syncFull(player);
     }
 
     private static void chan(ServerPlayer player, NetData.Profile profile, String arg) {
@@ -430,7 +443,7 @@ public final class Ops {
         } else if ("local".equals(arg) || "darknet".equals(arg)) {
             profile.channel = arg;
         }
-        result(player, profile, "blackchannel.result.sent", profile.channel);
+        profile.result("");
         ModNetwork.syncFull(player);
     }
 
@@ -1138,7 +1151,19 @@ public final class Ops {
         return null;
     }
 
+    private static String scopeFor(String action) {
+        if (Actions.SAY.equals(action) || Actions.DM.equals(action) || Actions.CHAN.equals(action)) return "chat";
+        if (Actions.AIR.equals(action) || Actions.DND.equals(action) || Actions.CREW.equals(action) || Actions.RADAR.equals(action)) return "gear";
+        if (Actions.BUY.equals(action) || Actions.BUY_LIST.equals(action) || Actions.BOUNTY.equals(action)) return "market";
+        if (Actions.SELL.equals(action)) return "sell";
+        if (Actions.OPTIC.equals(action)) return "area";
+        if (Actions.PEEK.equals(action)) return "bag";
+        if (Actions.HACK.equals(action) || Actions.KILL.equals(action)) return "rack";
+        return "ops";
+    }
+
     static void result(ServerPlayer player, NetData.Profile profile, String key, String... args) {
+        profile.resultScope = SCOPE.get();
         profile.result(key, args);
         ModNetwork.syncFull(player);
     }

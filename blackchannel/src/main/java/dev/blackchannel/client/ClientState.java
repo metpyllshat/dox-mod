@@ -19,6 +19,7 @@ public final class ClientState {
     public static String dm = "";
     public static String crew = "";
     public static String resultKey = "";
+    public static String resultScope = "ops";
     public static String[] resultArgs = new String[0];
     public static String toastKey = "";
     public static String toastArg = "";
@@ -41,14 +42,18 @@ public final class ClientState {
     public static final Map<String, Integer> cfg = new HashMap<>();
     public static byte[] optic = new byte[0];
     public static int[] opticColor = new int[0];
-    public static int opticHx = -1, opticHz = -1, opticConf;
+    public static int opticHx = -1, opticHz = -1, opticConf, opticErr;
     public static String opticBearing = "";
+    public static String opticBiome = "";
+    public static String opticHandle = "";
+    public static String opticDim = "";
 
     private ClientState() {}
 
     public static void applyFull(CompoundTag tag) {
         applyBase(tag);
         resultKey = tag.getString("resultKey");
+        resultScope = tag.contains("resultScope") ? tag.getString("resultScope") : "ops";
         ListTag args = tag.getList("resultArgs", Tag.TAG_STRING);
         resultArgs = new String[args.size()];
         for (int i = 0; i < args.size(); i++) resultArgs[i] = args.getString(i);
@@ -73,6 +78,10 @@ public final class ClientState {
         opticHz = tag.getInt("opticHz");
         opticConf = tag.getInt("opticConf");
         opticBearing = tag.getString("opticBear");
+        opticBiome = tag.getString("opticBiome");
+        opticHandle = tag.getString("opticHandle");
+        opticDim = tag.getString("opticDim");
+        opticErr = tag.getInt("opticErr");
         readPeek(tag.getList("peek", Tag.TAG_COMPOUND));
         contacts.clear();
         ListTag names = tag.getList("contacts", Tag.TAG_STRING);
@@ -140,6 +149,12 @@ public final class ClientState {
         Object[] args = new Object[resultArgs.length];
         System.arraycopy(resultArgs, 0, args, 0, resultArgs.length);
         return Component.translatable(resultKey, args).getString();
+    }
+
+    public static String resultFor(String scope) {
+        if (resultKey == null || resultKey.isEmpty() || "blackchannel.result.sent".equals(resultKey)) return "";
+        String have = resultScope == null || resultScope.isEmpty() ? "ops" : resultScope;
+        return scope.equals(have) ? resultLine() : "";
     }
 
     private static void readIntel(ListTag list) {

@@ -50,7 +50,7 @@ public class RackScreen extends AbstractContainerScreen<Menus.RackMenu> {
             g.drawString(font, Ui.trim(font, line, 200), x + 8, ly, Ui.AMBER, false);
             ly += 10;
         }
-        g.drawString(font, Ui.trim(font, ClientState.resultLine(), 200), x + 8, y + imageHeight - 14, Ui.TEXT, false);
+        g.drawString(font, Ui.trim(font, ClientState.resultFor("rack"), 200), x + 8, y + imageHeight - 14, Ui.TEXT, false);
     }
 
     @Override

@@ -171,8 +171,11 @@ public class NetData extends SavedData {
         public int cdTrace, cdDeanon, cdSwat, cdBomb, cdOptic, cdPeek;
         public byte[] optic = new byte[0];
         public int[] opticColor = new int[0];
-        public int opticHx = -1, opticHz = -1, opticConf;
+        public int opticHx = -1, opticHz = -1, opticConf, opticErr;
         public String opticBearing = "";
+        public String opticBiome = "";
+        public String opticHandle = "";
+        public String opticDim = "";
         public final List<CompoundTag> peek = new ArrayList<>();
         public int lastPosTick;
         public String lastDim = "";
@@ -181,6 +184,7 @@ public class NetData extends SavedData {
         public String mintDim = "";
         public int mintX, mintY, mintZ;
         public String resultKey = "";
+        public String resultScope = "ops";
         public final List<String> resultArgs = new ArrayList<>();
         public int toastId;
         public String toastKey = "";
@@ -233,6 +237,7 @@ public class NetData extends SavedData {
             tag.putInt("mintY", mintY);
             tag.putInt("mintZ", mintZ);
             tag.putString("rk", resultKey);
+            tag.putString("rs", resultScope == null ? "ops" : resultScope);
             ListTag args = new ListTag();
             for (String arg : resultArgs) args.add(StringTag.valueOf(arg));
             tag.put("ra", args);
@@ -290,6 +295,7 @@ public class NetData extends SavedData {
             profile.mintY = tag.getInt("mintY");
             profile.mintZ = tag.getInt("mintZ");
             profile.resultKey = tag.getString("rk");
+            profile.resultScope = tag.contains("rs") ? tag.getString("rs") : "ops";
             ListTag args = tag.getList("ra", Tag.TAG_STRING);
             for (int i = 0; i < args.size(); i++) profile.resultArgs.add(args.getString(i));
             profile.toastId = tag.getInt("toast");

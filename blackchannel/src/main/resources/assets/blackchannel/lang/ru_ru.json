@@ -42,7 +42,7 @@
   "screen.blackchannel.tab.bag": "СУМКА",
   "screen.blackchannel.tab.sell": "ТОРГ",
   "screen.blackchannel.btn.snap": "СНЯТЬ",
-  "screen.blackchannel.map_note": "Это не карта мира и не камера. Шумный снимок земли вокруг выбранного следа. Красная точка — если носитель попал в кадр.",
+  "screen.blackchannel.map_note": "Земля вокруг выбранного следа. Не карта мира и не камера.",
   "screen.blackchannel.sell_note": "Перетащи стопку в верхний слот. Цена — ползунок или число, за всю стопку.",
   "screen.blackchannel.tip.trace": "Цена %s. Погрешность: база %s, VPN ×%s, глубокий VPN ×%s. Срыв %s / %s / %s процентов. Своя тарелка сужает след. Старая отметка +%s.",
   "screen.blackchannel.tip.deanon": "Цена %s. Нужен след, образец или нулевой день. Показывает ник, не координаты.",
@@ -243,7 +243,7 @@
   "screen.blackchannel.area_title": "Район следа",
   "screen.blackchannel.bag_title": "Срез сумки",
   "screen.blackchannel.peek_hidden": "Помеха. Предмета не видно.",
-  "screen.blackchannel.no_shot": "Нет снимка",
+  "screen.blackchannel.no_shot": "Снимка нет. Выбери след и нажми СНЯТЬ.",
   "screen.blackchannel.inv_label": "Твой инвентарь",
   "screen.blackchannel.slot_held": "В ТОРГЕ",
   "screen.blackchannel.price_label": "ЦЕНА",
@@ -257,5 +257,14 @@
   "screen.blackchannel.market.vendor": "лавка",
   "screen.blackchannel.market.intel": "след",
   "screen.blackchannel.market.no_bounty": "Сейчас наград нет.",
-  "screen.blackchannel.market.bounty_note": "Награда сдаётся образцом сигнала в руке, не кнопкой."
+  "screen.blackchannel.market.bounty_note": "Награда сдаётся образцом сигнала в руке, не кнопкой.",
+  "screen.blackchannel.area_need": "Сначала выбери строку на вкладке СЛЕД, потом СНЯТЬ. Кадр — земля вокруг радиоотметки, не тело и не карта мира.",
+  "screen.blackchannel.area_pick": "Снимем отметку %s ±%s. Центр кадра — эта отметка, уже с ошибкой. Не стой на центре и не ищи там тело.",
+  "screen.blackchannel.area_about": "Кадр вокруг отметки %s ±%s. Клетка = 4 блока, весь кадр около 64. Верх — север. Центр — не тело.",
+  "screen.blackchannel.area_legend": "Цвет — верх блоков. Чёрное — дыра, клетки нет. Красная точка — носитель мог быть в этой клетке.",
+  "screen.blackchannel.area_dot": "Красная точка есть. Это грубая клетка, не координаты тела. Рядом ищи по цвету земли.",
+  "screen.blackchannel.area_bear": "Носителя в кадре нет. Пеленг от центра: %s. VPN может развернуть стрелку.",
+  "screen.blackchannel.area_ground": "В кадре его нет: ушёл, другое измерение или дальше 32 блоков от центра.",
+  "screen.blackchannel.area_biome": "Биом у центра: %s",
+  "screen.blackchannel.area_north": "С"
 }
