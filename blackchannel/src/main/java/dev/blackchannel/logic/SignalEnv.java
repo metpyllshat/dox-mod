@@ -208,7 +208,7 @@ public final class SignalEnv {
         boolean[] hit = {false};
         NodeBlockEntity.each(level, be -> {
             if (!be.powered()) return;
-            long dist = be.getBlockPos().distSqr(pos);
+            double dist = be.getBlockPos().distSqr(pos);
             if (be.kind() == NodeBlock.Kind.JAMMER && dist <= jam2) hit[0] = true;
             if (be.kind() == NodeBlock.Kind.FARADAY && dist <= cage2) hit[0] = true;
         });
@@ -372,14 +372,15 @@ public final class SignalEnv {
         });
         for (Bridges.Station station : Bridges.foreign()) {
             if (out.size() >= 48) return;
-            if (!station.dim.equals(Str.dim(level))) continue;
-            long dx = station.x - origin.getX();
-            long dz = station.z - origin.getZ();
-            int dist = (int) Math.sqrt(dx * dx + (long) (station.y - origin.getY()) * (station.y - origin.getY()) + dz * dz);
+            if (!station.dim().equals(Str.dim(level))) continue;
+            long dx = station.x() - origin.getX();
+            long dz = station.z() - origin.getZ();
+            long dy = station.y() - origin.getY();
+            int dist = (int) Math.sqrt(dx * dx + dy * dy + dz * dz);
             if (dist > range) continue;
-            BlockPos pos = new BlockPos(station.x, station.y, station.z);
-            if (!"jammer".equals(station.kind) && silenced(level, pos)) continue;
-            out.add(new Blip((int) dx, (int) dz, dist, station.kind, station.label));
+            BlockPos pos = new BlockPos(station.x(), station.y(), station.z());
+            if (!"jammer".equals(station.kind()) && silenced(level, pos)) continue;
+            out.add(new Blip((int) dx, (int) dz, dist, station.kind(), station.label()));
         }
     }
 

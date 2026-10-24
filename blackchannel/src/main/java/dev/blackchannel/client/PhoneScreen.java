@@ -100,6 +100,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         for (ClientState.Blip blip : ClientState.blips) {
             Ui.blip(g, cx, cy, 46, ClientState.radarR, blip.dx(), blip.dz(), Ui.blipColor(blip.kind()));
         }
+        if (minecraft != null && minecraft.player != null) Ui.selfArrow(g, cx, cy, minecraft.player.getYRot(), 8);
         int ly = y + 58;
         int n = 0;
         for (ClientState.Blip blip : ClientState.blips) {
