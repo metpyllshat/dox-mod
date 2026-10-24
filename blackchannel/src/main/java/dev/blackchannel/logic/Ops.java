@@ -465,7 +465,11 @@ public final class Ops {
             if (online != null) alert(online, player, "blackchannel.chat.ids_trace");
             return;
         }
-        int err = Config.TRACE_BASE.get() + target.vpn * Config.TRACE_VPN.get();
+        double mul = 1.0;
+        if (target.vpn >= 2) mul = Config.TRACE_VPN_DEEP.get();
+        else if (target.vpn == 1) mul = Config.TRACE_VPN_MUL.get();
+        int err = (int) Math.round(Config.TRACE_BASE.get() * mul);
+        if (err < 0) err = 0;
         if (SignalEnv.dishNear(player, profile, 128)) err = Math.max(3, (int) (err * 0.55));
         if (exploit) err = Math.max(2, (int) (err * 0.65));
         boolean stale = !live;

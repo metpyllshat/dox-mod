@@ -7,6 +7,7 @@ import dev.blackchannel.net.ModNetwork;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
 import net.minecraft.client.gui.screens.inventory.AbstractContainerScreen;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.world.entity.player.Inventory;
@@ -20,6 +21,18 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
+    private static final int WIDTH = 260;
+    private static final int HEIGHT = 222;
+    private static final int SALE_X = 8;
+    private static final int SALE_Y = 84;
+    private static final int INV_X = 8;
+    private static final int INV_Y = 130;
+    private static final int PRICE_X = 32;
+    private static final int PRICE_Y = 86;
+    private static final int SLIDER_X = 100;
+    private static final int SLIDER_Y = 88;
+    private static final int SLIDER_W = 148;
+
     private final List<Ui.Hit> hits = new ArrayList<>();
     private EditBox input;
     private EditBox priceBox;
@@ -28,11 +41,13 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     private int price = 24;
     private boolean wipeArmed;
     private boolean dragPrice;
+    private ItemStack hoverStack = ItemStack.EMPTY;
+    private boolean hoverHidden;
 
     public LaptopScreen(Menus.LaptopMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
-        this.imageWidth = 338;
-        this.imageHeight = 252;
+        this.imageWidth = WIDTH;
+        this.imageHeight = HEIGHT;
         this.inventoryLabelY = 10000;
         this.titleLabelY = 10000;
     }
@@ -40,16 +55,20 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     @Override
     protected void init() {
         super.init();
-        input = new EditBox(font, leftPos + 8, topPos + 148, 160, 12, Component.empty());
+        if (this.leftPos < 2) this.leftPos = 2;
+        if (this.topPos < 2) this.topPos = 2;
+        input = new EditBox(this.font, this.leftPos + 10, this.topPos + 109, WIDTH - 20, 12, Component.empty());
         input.setMaxLength(64);
         input.setBordered(false);
-        input.setTextColor(Ui.EDGE);
+        input.setTextColor(Ui.TEXT);
+        input.setHint(Component.translatable("screen.blackchannel.hint.handle"));
         addRenderableWidget(input);
-        priceBox = new EditBox(font, leftPos + 250, topPos + 168, 72, 12, Component.empty());
+        priceBox = new EditBox(this.font, this.leftPos + PRICE_X + 2, this.topPos + PRICE_Y + 2, 52, 12, Component.empty());
         priceBox.setMaxLength(4);
         priceBox.setBordered(false);
         priceBox.setTextColor(Ui.AMBER);
         priceBox.setValue(String.valueOf(price));
+        priceBox.setHint(Component.translatable("screen.blackchannel.hint.price"));
         priceBox.setFilter(text -> text.isEmpty() || text.chars().allMatch(Character::isDigit));
         addRenderableWidget(priceBox);
         setInitialFocus(input);
@@ -57,11 +76,23 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     @Override
     protected void renderBg(GuiGraphics g, float pt, int mx, int my) {
-        int x = leftPos;
-        int y = topPos;
-        Ui.panel(g, x, y, imageWidth, imageHeight);
-        for (Slot slot : menu.slots) {
-            g.fill(x + slot.x - 1, y + slot.y - 1, x + slot.x + 17, y + slot.y + 17, 0xFF0C1210);
+        int x = this.leftPos;
+        int y = this.topPos;
+        g.fill(x, y, x + WIDTH, y + HEIGHT, 0xFF101614);
+        g.fill(x, y, x + WIDTH, y + 2, Ui.EDGE);
+        g.fill(x, y + HEIGHT - 1, x + WIDTH, y + HEIGHT, Ui.EDGE_DIM);
+        g.fill(x, y, x + 1, y + HEIGHT, Ui.EDGE_DIM);
+        g.fill(x + WIDTH - 1, y, x + WIDTH, y + HEIGHT, Ui.EDGE_DIM);
+        g.fill(x + 6, y + 30, x + WIDTH - 6, y + 31, 0xFF1E4A38);
+        g.fill(x + 6, y + 48, x + WIDTH - 6, y + HEIGHT - 6, 0xFF0C1210);
+        if (page == 0) g.fill(x + 8, y + 106, x + WIDTH - 8, y + 120, 0xFF07110C);
+        if (page == 3) {
+            g.fill(x + PRICE_X, y + PRICE_Y, x + PRICE_X + 56, y + PRICE_Y + 12, 0xFF07110C);
+            for (Slot slot : this.menu.slots) {
+                if (!slot.isActive()) continue;
+                g.fill(x + slot.x - 1, y + slot.y - 1, x + slot.x + 17, y + slot.y + 17, 0xFF07110C);
+                g.fill(x + slot.x - 1, y + slot.y - 1, x + slot.x + 17, y + slot.y, Ui.EDGE_DIM);
+            }
         }
     }
 
@@ -70,107 +101,170 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
+        hoverStack = ItemStack.EMPTY;
+        hoverHidden = false;
         hits.clear();
+        layoutSlots();
+        syncWidgets();
+        renderBackground(g);
+        g.fill(0, 0, this.width, this.height, 0xC0101010);
         super.render(g, mx, my, pt);
+        int x1 = Math.max(0, this.leftPos + 1);
+        int y1 = Math.max(0, this.topPos + 1);
+        int x2 = Math.min(this.width, this.leftPos + WIDTH - 1);
+        int y2 = Math.min(this.height, this.topPos + HEIGHT - 1);
+        boolean clip = x2 > x1 && y2 > y1;
+        if (clip) g.enableScissor(x1, y1, x2, y2);
         drawChrome(g, mx, my);
-        Ui.tips(g, font, hits, mx, my);
+        if (clip) g.disableScissor();
+        if (!hoverStack.isEmpty()) g.renderTooltip(this.font, hoverStack, mx, my);
+        else if (hoverHidden) noteTip(g, Ui.t("screen.blackchannel.peek_hidden"), mx, my);
+        else Ui.tips(g, this.font, hits, mx, my);
     }
 
     private void drawChrome(GuiGraphics g, int mx, int my) {
-        int x = leftPos;
-        int y = topPos;
-        g.drawString(font, Ui.trim(font, "TERMINAL  " + ClientState.handle + "  #" + ClientState.crypto, imageWidth - 16), x + 8, y + 6, Ui.EDGE, false);
-        String net = ClientState.uplink ? (ClientState.dish ? "DISH" : "RACK") : "NO UPLINK";
-        g.drawString(font, net + "  CD T" + ClientState.cdT + " D" + ClientState.cdD + " S" + ClientState.cdS + " B" + ClientState.cdB, x + 8, y + 16, Ui.MUTED, false);
-        Ui.button(g, font, hits, x + 6, y + 28, 78, 12, Ui.t("screen.blackchannel.tab.ops"), null, page == 0, "page", "0");
-        Ui.button(g, font, hits, x + 88, y + 28, 78, 12, Ui.t("screen.blackchannel.tab.map"), tipOptic(), page == 1, "page", "1");
-        Ui.button(g, font, hits, x + 170, y + 28, 78, 12, Ui.t("screen.blackchannel.tab.bag"), tipPeek(), page == 2, "page", "2");
-        Ui.button(g, font, hits, x + 252, y + 28, 78, 12, Ui.t("screen.blackchannel.tab.sell"), Ui.t("screen.blackchannel.tip.sell_item"), page == 3, "page", "3");
+        int x = this.leftPos;
+        int y = this.topPos;
+        String handle = Ui.trim(this.font, ClientState.handle, 150);
+        String coins = "#" + ClientState.crypto;
+        g.drawString(this.font, handle, x + 8, y + 7, Ui.EDGE, false);
+        g.drawString(this.font, coins, x + WIDTH - 8 - this.font.width(coins), y + 7, Ui.AMBER, false);
+        String status = (ClientState.uplink ? (ClientState.dish ? "DISH" : "RACK") : "NO UPLINK")
+                + "  T" + ClientState.cdT + " D" + ClientState.cdD + " S" + ClientState.cdS + " B" + ClientState.cdB;
+        int statusW = WIDTH - 16;
+        if (page != 3 && !this.menu.getSlot(0).getItem().isEmpty()) {
+            String held = Ui.t("screen.blackchannel.slot_held");
+            int hw = this.font.width(held);
+            g.drawString(this.font, held, x + WIDTH - 8 - hw, y + 18, Ui.AMBER, false);
+            statusW = WIDTH - 16 - hw - 6;
+        }
+        g.drawString(this.font, Ui.trim(this.font, status, statusW), x + 8, y + 18, Ui.MUTED, false);
+        tab(g, x + 8, y + 32, 58, Ui.t("screen.blackchannel.tab.ops"), null, 0);
+        tab(g, x + 70, y + 32, 58, Ui.t("screen.blackchannel.tab.map"), Ui.t("screen.blackchannel.map_note"), 1);
+        tab(g, x + 132, y + 32, 58, Ui.t("screen.blackchannel.tab.bag"), Ui.t("screen.blackchannel.bag_note"), 2);
+        tab(g, x + 194, y + 32, 58, Ui.t("screen.blackchannel.tab.sell"), Ui.t("screen.blackchannel.tip.sell_item"), 3);
         if (page == 0) drawOps(g, x, y);
-        else if (page == 1) drawMap(g, x, y);
-        else if (page == 2) drawBag(g, x, y);
+        else if (page == 1) drawArea(g, x, y);
+        else if (page == 2) drawBag(g, x, y, mx, my);
         else drawSell(g, x, y);
-        g.drawString(font, "SLOT", x + Menus.LaptopMenu.SALE_X, y + Menus.LaptopMenu.SALE_Y - 10, Ui.MUTED, false);
+    }
+
+    private void tab(GuiGraphics g, int x, int y, int w, String label, String tip, int index) {
+        Ui.button(g, this.font, hits, x, y, w, 14, label, tip, page == index, "page", String.valueOf(index));
     }
 
     private void drawOps(GuiGraphics g, int x, int y) {
-        int by = y + 44;
-        Ui.button(g, font, hits, x + 6, by, 52, 12, "TRACE", tipTrace(), false, Actions.TRACE, "");
-        Ui.button(g, font, hits, x + 60, by, 58, 12, "DEANON", tipDeanon(), false, Actions.DEANON, "");
-        Ui.button(g, font, hits, x + 120, by, 50, 12, "SWAT", tipSwat(), false, Actions.SWAT, "");
-        Ui.button(g, font, hits, x + 172, by, 50, 12, "BOMB", tipBomb(), false, Actions.BOMB, "");
-        Ui.button(g, font, hits, x + 224, by, 40, 12, "UAV", tipUav(), false, Actions.UAV, "");
-        Ui.button(g, font, hits, x + 266, by, 64, 12, "WIPE", Ui.t("screen.blackchannel.tip.wipe"), wipeArmed, Actions.WIPE, "");
-        g.drawString(font, Ui.trim(font, ClientState.resultLine(), imageWidth - 16), x + 8, y + 60, Ui.AMBER, false);
-        int ly = y + 72;
-        g.drawString(font, "INTEL", x + 8, ly, Ui.MUTED, false);
-        ly += 10;
+        int w = 78;
+        Ui.button(g, this.font, hits, x + 8, y + 52, w, 13, "TRACE", tipTrace(), false, Actions.TRACE, "");
+        Ui.button(g, this.font, hits, x + 91, y + 52, w, 13, "DEANON", tipDeanon(), false, Actions.DEANON, "");
+        Ui.button(g, this.font, hits, x + 174, y + 52, w, 13, "WIPE", Ui.t("screen.blackchannel.tip.wipe"), wipeArmed, Actions.WIPE, "");
+        Ui.button(g, this.font, hits, x + 8, y + 68, w, 13, "SWAT", tipSwat(), false, Actions.SWAT, "");
+        Ui.button(g, this.font, hits, x + 91, y + 68, w, 13, "BOMB", tipBomb(), false, Actions.BOMB, "");
+        Ui.button(g, this.font, hits, x + 174, y + 68, w, 13, "UAV", tipUav(), false, Actions.UAV, "");
+        paragraph(g, ClientState.resultLine(), x + 8, y + 86, WIDTH - 16, Ui.AMBER, 2);
+        g.drawString(this.font, "INTEL", x + 8, y + 126, Ui.MUTED, false);
+        g.drawString(this.font, "KNOWN", x + 168, y + 126, Ui.MUTED, false);
+        int ly = y + 136;
         for (ClientState.IntelRow row : ClientState.intel) {
-            if (ly > y + 136) break;
-            boolean on = row.id == selected;
+            if (ly > y + 200) break;
             String label = "#" + row.id + " " + row.handle + " ±" + row.err;
             String tip = row.handle + "  " + row.dim + "  " + row.x + " " + row.y + " " + row.z + "  ±" + row.err;
-            Ui.button(g, font, hits, x + 6, ly, 190, 11, Ui.trim(font, label, 180), tip, on, "pick", String.valueOf(row.id));
+            Ui.button(g, this.font, hits, x + 8, ly, 152, 11, Ui.trim(this.font, label, 146), tip, row.id == selected, "pick", String.valueOf(row.id));
             ly += 12;
         }
-        int ry = y + 72;
-        g.drawString(font, "KNOWN", x + 214, ry, Ui.MUTED, false);
-        ry += 10;
+        int ry = y + 136;
         for (ClientState.DeanonRow row : ClientState.deanons) {
-            if (ry > y + 136) break;
-            g.drawString(font, Ui.trim(font, row.handle() + "=" + row.name(), 110), x + 214, ry, Ui.BLUE, false);
+            if (ry > y + 204) break;
+            g.drawString(this.font, Ui.trim(this.font, row.handle() + "=" + row.name(), 84), x + 168, ry, Ui.BLUE, false);
             ry += 10;
         }
     }
 
-    private void drawMap(GuiGraphics g, int x, int y) {
-        g.drawString(font, Ui.trim(font, ClientState.resultLine(), 250), x + 8, y + 44, Ui.AMBER, false);
+    private void drawArea(GuiGraphics g, int x, int y) {
+        g.drawString(this.font, Ui.t("screen.blackchannel.area_title"), x + 8, y + 52, Ui.TEXT, false);
+        int next = paragraph(g, Ui.t("screen.blackchannel.map_note"), x + 8, y + 64, WIDTH - 16, Ui.MUTED, 3);
         int ox = x + 8;
-        int oy = y + 56;
+        int oy = Math.max(y + 96, next + 4);
+        int cell = 6;
+        int grid = Optics.GRID * cell;
+        g.fill(ox - 1, oy - 1, ox + grid + 1, oy + grid + 1, Ui.EDGE_DIM);
         byte[] cells = ClientState.optic;
         int[] colors = ClientState.opticColor;
+        boolean any = false;
         for (int gz = 0; gz < Optics.GRID; gz++) {
             for (int gx = 0; gx < Optics.GRID; gx++) {
                 int i = gz * Optics.GRID + gx;
                 int color = 0xFF07110C;
-                if (i < colors.length && colors[i] != 0) color = 0xFF000000 | colors[i];
-                else if (i < cells.length && cells[i] != 0) color = 0xFF000000 | (80 + cells[i]) * 0x010101;
-                g.fill(ox + gx * 7, oy + gz * 7, ox + gx * 7 + 6, oy + gz * 7 + 6, color);
+                if (i < colors.length && colors[i] != 0) {
+                    color = 0xFF000000 | colors[i];
+                    any = true;
+                } else if (i < cells.length && cells[i] != 0) {
+                    color = 0xFF000000 | (80 + cells[i]) * 0x010101;
+                    any = true;
+                }
+                g.fill(ox + gx * cell, oy + gz * cell, ox + gx * cell + cell - 1, oy + gz * cell + cell - 1, color);
             }
         }
         if (ClientState.opticHx >= 0) {
-            int px = ox + ClientState.opticHx * 7;
-            int py = oy + ClientState.opticHz * 7;
-            g.fill(px, py, px + 5, py + 5, Ui.RED);
+            int px = ox + ClientState.opticHx * cell;
+            int py = oy + ClientState.opticHz * cell;
+            g.fill(px, py, px + 3, py + 3, Ui.RED);
         }
-        g.drawString(font, "CONF " + ClientState.opticConf + (ClientState.opticBearing.isEmpty() ? "" : "  " + ClientState.opticBearing), x + 130, y + 56, Ui.MUTED, false);
-        g.drawString(font, Ui.t("screen.blackchannel.map_note"), x + 130, y + 68, Ui.MUTED, false);
-        Ui.button(g, font, hits, x + 130, y + 88, 90, 12, Ui.t("screen.blackchannel.btn.snap"), tipOptic(), false, Actions.OPTIC, "");
+        if (!any) g.drawString(this.font, Ui.trim(this.font, Ui.t("screen.blackchannel.no_shot"), grid - 4), ox + 2, oy + 4, Ui.MUTED, false);
+        int rx = ox + grid + 8;
+        int rw = x + WIDTH - 8 - rx;
+        if (rw < 40) return;
+        g.drawString(this.font, Ui.trim(this.font, "CONF " + ClientState.opticConf, rw), rx, oy, Ui.MUTED, false);
+        if (!ClientState.opticBearing.isEmpty()) {
+            paragraph(g, ClientState.opticBearing, rx, oy + 12, rw, Ui.AMBER, 2);
+        }
+        paragraph(g, ClientState.resultLine(), rx, oy + 32, rw, Ui.AMBER, 3);
+        Ui.button(g, this.font, hits, rx, oy + 64, Math.min(90, rw), 13, Ui.t("screen.blackchannel.btn.snap"), tipOptic(), false, Actions.OPTIC, "");
     }
 
-    private void drawBag(GuiGraphics g, int x, int y) {
-        g.drawString(font, Ui.trim(font, ClientState.resultLine(), imageWidth - 16), x + 8, y + 44, Ui.AMBER, false);
+    private void drawBag(GuiGraphics g, int x, int y, int mx, int my) {
+        g.drawString(this.font, Ui.t("screen.blackchannel.bag_title"), x + 8, y + 52, Ui.TEXT, false);
+        paragraph(g, Ui.t("screen.blackchannel.bag_note"), x + 8, y + 64, WIDTH - 16, Ui.MUTED, 2);
         for (int i = 0; i < 36; i++) {
             int col = i % 9;
             int row = i / 9;
-            drawPeek(g, x + 8 + col * 18, y + 56 + row * 18, findPeek(i));
+            drawPeek(g, x + 8 + col * 18, y + 88 + row * 18, findPeek(i), mx, my);
         }
         for (int i = 0; i < 5; i++) {
-            drawPeek(g, x + 8 + i * 18, y + 132, findPeek(36 + i));
+            drawPeek(g, x + 8 + i * 18, y + 164, findPeek(36 + i), mx, my);
         }
-        Ui.button(g, font, hits, x + 214, y + 56, 90, 12, Ui.t("screen.blackchannel.btn.snap"), tipPeek(), false, Actions.PEEK, "");
+        Ui.button(g, this.font, hits, x + 180, y + 88, 72, 13, Ui.t("screen.blackchannel.btn.snap"), tipPeek(), false, Actions.PEEK, "");
+        g.drawString(this.font, Ui.trim(this.font, ClientState.resultLine(), WIDTH - 16), x + 8, y + 186, Ui.AMBER, false);
     }
 
-    private void drawPeek(GuiGraphics g, int sx, int sy, ClientState.PeekSlot slot) {
-        g.fill(sx, sy, sx + 16, sy + 16, slot != null && slot.hidden() ? 0xFF3A1820 : 0xFF0C1210);
-        if (slot == null || slot.id() == null || slot.id().isEmpty()) return;
+    private void drawPeek(GuiGraphics g, int sx, int sy, ClientState.PeekSlot slot, int mx, int my) {
+        boolean hidden = slot != null && slot.hidden();
+        boolean over = mx >= sx && mx < sx + 16 && my >= sy && my < sy + 16;
+        g.fill(sx, sy, sx + 16, sy + 16, hidden ? 0xFF2A1418 : 0xFF07110C);
+        if (over) g.fill(sx - 1, sy - 1, sx + 17, sy, Ui.EDGE);
+        ItemStack stack = peekStack(slot);
+        if (!stack.isEmpty()) {
+            g.renderItem(stack, sx, sy);
+            g.renderItemDecorations(this.font, stack, sx, sy);
+        }
+        if (!over) return;
+        if (stack.isEmpty()) hoverHidden = hidden;
+        else hoverStack = stack;
+    }
+
+    private ItemStack peekStack(ClientState.PeekSlot slot) {
+        if (slot == null) return ItemStack.EMPTY;
+        CompoundTag nbt = slot.nbt();
+        if (nbt != null && nbt.contains("id")) {
+            ItemStack stack = ItemStack.of(nbt);
+            if (!stack.isEmpty()) return stack;
+        }
+        if (slot.id() == null || slot.id().isEmpty()) return ItemStack.EMPTY;
         ResourceLocation id = ResourceLocation.tryParse(slot.id());
-        if (id == null) return;
+        if (id == null) return ItemStack.EMPTY;
         Item item = ForgeRegistries.ITEMS.getValue(id);
-        if (item == null || item == Items.AIR) return;
-        ItemStack stack = new ItemStack(item, Math.max(1, slot.count()));
-        g.renderItem(stack, sx, sy);
-        g.renderItemDecorations(font, stack, sx, sy);
+        if (item == null || item == Items.AIR) return ItemStack.EMPTY;
+        return new ItemStack(item, Math.max(1, slot.count()));
     }
 
     private ClientState.PeekSlot findPeek(int index) {
@@ -179,23 +273,94 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     }
 
     private void drawSell(GuiGraphics g, int x, int y) {
-        g.drawString(font, Ui.t("screen.blackchannel.sell_note"), x + 8, y + 48, Ui.MUTED, false);
-        g.drawString(font, Ui.trim(font, ClientState.resultLine(), imageWidth - 16), x + 8, y + 60, Ui.AMBER, false);
+        paragraph(g, Ui.t("screen.blackchannel.sell_note"), x + 8, y + 52, WIDTH - 16, Ui.MUTED, 2);
+        g.drawString(this.font, Ui.t("screen.blackchannel.slot_label"), x + 8, y + 74, Ui.MUTED, false);
+        g.drawString(this.font, Ui.t("screen.blackchannel.price_label"), x + PRICE_X, y + 74, Ui.MUTED, false);
         syncPriceFromBox();
-        int sx = x + 214;
-        int sy = y + 184;
-        g.fill(sx, sy, sx + 110, sy + 6, 0xFF0C1210);
-        int knob = (int) ((price - 1) / 4999f * 106);
-        g.fill(sx + knob, sy - 1, sx + knob + 4, sy + 7, Ui.EDGE);
-        Ui.button(g, font, hits, x + 214, y + 200, 110, 12, "SELL ITEM", Ui.t("screen.blackchannel.tip.sell_item"), false, "sell-item", "");
-        Ui.button(g, font, hits, x + 214, y + 216, 110, 12, "SELL INTEL", Ui.t("screen.blackchannel.tip.sell_intel"), false, Actions.SELL, "");
+        g.fill(x + SLIDER_X, y + SLIDER_Y, x + SLIDER_X + SLIDER_W, y + SLIDER_Y + 4, 0xFF07110C);
+        int knob = (int) ((price - 1) / 4999f * (SLIDER_W - 4));
+        g.fill(x + SLIDER_X + knob, y + SLIDER_Y - 2, x + SLIDER_X + knob + 4, y + SLIDER_Y + 6, Ui.EDGE);
+        Ui.button(g, this.font, hits, x + 8, y + 104, 118, 13, Ui.t("screen.blackchannel.btn.sell_item"), Ui.t("screen.blackchannel.tip.sell_item"), false, "sell-item", "");
+        Ui.button(g, this.font, hits, x + 132, y + 104, 118, 13, Ui.t("screen.blackchannel.btn.sell_intel"), Ui.t("screen.blackchannel.tip.sell_intel"), false, Actions.SELL, "");
+        g.drawString(this.font, Ui.t("screen.blackchannel.inv_label"), x + 8, y + 120, Ui.MUTED, false);
+        g.drawString(this.font, Ui.trim(this.font, ClientState.resultLine(), WIDTH - 16), x + 8, y + 208, Ui.AMBER, false);
+    }
+
+    private int paragraph(GuiGraphics g, String text, int x, int y, int maxW, int color, int maxLines) {
+        if (text == null || text.isEmpty() || maxW < 8) return y;
+        int n = 0;
+        for (String line : Ui.wrap(this.font, text, maxW)) {
+            if (n >= maxLines) break;
+            g.drawString(this.font, Ui.trim(this.font, line, maxW), x, y, color, false);
+            y += 10;
+            n++;
+        }
+        return y;
+    }
+
+    private void noteTip(GuiGraphics g, String text, int mx, int my) {
+        if (text == null || text.isEmpty()) return;
+        String line = Ui.trim(this.font, text, 180);
+        int w = this.font.width(line) + 8;
+        int tx = Math.min(mx + 8, Math.max(2, this.width - w - 2));
+        int ty = Math.min(my + 8, Math.max(2, this.height - 16));
+        g.pose().pushPose();
+        g.pose().translate(0, 0, 400);
+        g.fill(tx, ty, tx + w, ty + 14, 0xF0101418);
+        g.fill(tx, ty, tx + w, ty + 1, Ui.EDGE);
+        g.drawString(this.font, line, tx + 4, ty + 3, Ui.TEXT, false);
+        g.pose().popPose();
+    }
+
+    private void layoutSlots() {
+        this.menu.showSlots = page == 3;
+        for (Slot slot : this.menu.slots) {
+            if (!this.menu.showSlots) {
+                slot.x = -1000;
+                slot.y = -1000;
+                continue;
+            }
+            if (slot.index == 0) {
+                slot.x = SALE_X;
+                slot.y = SALE_Y;
+            } else if (slot.index <= 27) {
+                int i = slot.index - 1;
+                slot.x = INV_X + (i % 9) * 18;
+                slot.y = INV_Y + (i / 9) * 18;
+            } else {
+                int i = slot.index - 28;
+                slot.x = INV_X + i * 18;
+                slot.y = INV_Y + 58;
+            }
+        }
+    }
+
+    private void syncWidgets() {
+        if (input != null) {
+            input.visible = page == 0;
+            if (page != 0 && input.isFocused()) input.setFocused(false);
+        }
+        if (priceBox != null) {
+            priceBox.visible = page == 3;
+            if (page != 3 && priceBox.isFocused()) priceBox.setFocused(false);
+        }
     }
 
     private String tipTrace() {
         return ClientState.tip("screen.blackchannel.tip.trace",
-                ClientState.cfg("traceCost", 2), ClientState.cfg("traceBase", 500), ClientState.cfg("traceVpn", 50),
-                ClientState.cfg("traceFail", 5), ClientState.cfg("traceFailVpn", 12), ClientState.cfg("traceFailDeep", 35),
-                ClientState.cfg("traceStale", 40));
+                ClientState.cfg("traceCost", 2), ClientState.cfg("traceBase", 500),
+                mul(ClientState.cfg("traceVpnMul", 150)), mul(ClientState.cfg("traceVpnDeep", 200)),
+                ClientState.cfg("traceFail", 5), ClientState.cfg("traceFailVpn", 12),
+                ClientState.cfg("traceFailDeep", 35), ClientState.cfg("traceStale", 40));
+    }
+
+    private static String mul(int hundredths) {
+        int v = Math.max(0, hundredths);
+        int whole = v / 100;
+        int frac = v % 100;
+        if (frac == 0) return Integer.toString(whole);
+        if (frac % 10 == 0) return whole + "." + (frac / 10);
+        return whole + "." + (frac < 10 ? "0" : "") + frac;
     }
 
     private String tipDeanon() {
@@ -226,7 +391,8 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
-        if (page == 3 && mx >= leftPos + 214 && mx <= leftPos + 324 && my >= topPos + 180 && my <= topPos + 194) {
+        if (page == 3 && mx >= this.leftPos + SLIDER_X && mx <= this.leftPos + SLIDER_X + SLIDER_W
+                && my >= this.topPos + SLIDER_Y - 4 && my <= this.topPos + SLIDER_Y + 10) {
             dragPrice = true;
             setPriceFromMouse(mx);
             return true;
@@ -235,12 +401,14 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
             if (!Ui.inside(mx, my, hit.x(), hit.y(), hit.w(), hit.h())) continue;
             if ("page".equals(hit.action())) {
                 page = Integer.parseInt(hit.arg());
+                layoutSlots();
+                syncWidgets();
                 return true;
             }
             if ("pick".equals(hit.action())) {
                 selected = Integer.parseInt(hit.arg());
                 for (ClientState.IntelRow row : ClientState.intel) {
-                    if (row.id == selected) input.setValue(row.handle);
+                    if (row.id == selected && input != null) input.setValue(row.handle);
                 }
                 return true;
             }
@@ -282,7 +450,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     }
 
     private void setPriceFromMouse(double mx) {
-        float t = (float) ((mx - (leftPos + 214)) / 110.0);
+        float t = (float) ((mx - (this.leftPos + SLIDER_X)) / SLIDER_W);
         if (t < 0) t = 0;
         if (t > 1) t = 1;
         price = 1 + Math.round(t * 4999);
@@ -305,12 +473,12 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     @Override
     public boolean keyPressed(int key, int scan, int mods) {
-        if ((key == 257 || key == 335) && input != null && input.isFocused()) {
+        if (page == 0 && (key == 257 || key == 335) && input != null && input.isFocused()) {
             send(Actions.TRACE, input.getValue().trim());
             return true;
         }
         boolean typing = (input != null && input.isFocused()) || (priceBox != null && priceBox.isFocused());
-        if (typing && minecraft != null && minecraft.options.keyInventory.matches(key, scan)) return true;
+        if (typing && this.minecraft != null && this.minecraft.options.keyInventory.matches(key, scan)) return true;
         return super.keyPressed(key, scan, mods);
     }
 

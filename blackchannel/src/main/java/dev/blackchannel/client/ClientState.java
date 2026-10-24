@@ -225,7 +225,7 @@ public final class ClientState {
         peek.clear();
         for (int i = 0; i < list.size(); i++) {
             CompoundTag c = list.getCompound(i);
-            peek.add(new PeekSlot(c.getInt("i"), c.getString("id"), c.getInt("n"), c.getBoolean("h"), c.getBoolean("lie")));
+            peek.add(new PeekSlot(c.getInt("i"), c.getString("id"), c.getInt("n"), c.getBoolean("h"), c.getBoolean("lie"), c.getCompound("s")));
         }
     }
 
@@ -254,5 +254,5 @@ public final class ClientState {
     public record LogRow(String key, String arg, int age) {}
     public record DeanonRow(String handle, String name) {}
     public record BountyRow(String handle, int reward) {}
-    public record PeekSlot(int slot, String id, int count, boolean hidden, boolean lie) {}
+    public record PeekSlot(int slot, String id, int count, boolean hidden, boolean lie, CompoundTag nbt) {}
 }
