@@ -59,6 +59,11 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue DISH_RADAR_BONUS;
     public static final ForgeConfigSpec.IntValue STRUCTURE_RADAR;
     public static final ForgeConfigSpec.IntValue STRUCTURE_PHONE;
+    public static final ForgeConfigSpec.IntValue LOGGER_RADIUS;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_COMMON;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_UNCOMMON;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_RARE;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_DUNGEON;
     public static final ForgeConfigSpec.DoubleValue SWAT_POWER;
     public static final ForgeConfigSpec.DoubleValue FLOOD_VOLUME;
     public static final ForgeConfigSpec.IntValue FLOOD_SOUND_TICKS;
@@ -114,6 +119,8 @@ public final class Config {
         FARADAY_RANGE = b.defineInRange("faradayRange", 8, 2, 32);
         RADAR_PHONE = b.defineInRange("radarPhone", 52, 8, 256);
         RADAR_LAPTOP = b.defineInRange("radarLaptop", 110, 16, 512);
+        b.comment("Поставленный блок приманки пишет позывные в этом радиусе. Координат не даёт.");
+        LOGGER_RADIUS = b.defineInRange("loggerRadius", 50, 8, 128);
         DISH_RADAR_BONUS = b.defineInRange("dishRadarBonus", 80, 0, 512);
         b.comment("Дальность, на которой радар видит стойки, тарелки, глушилки и чужие радиоузлы. Игроков это не удлиняет.");
         STRUCTURE_RADAR = b.defineInRange("structureRadar", 360, 32, 2048);
@@ -164,6 +171,41 @@ public final class Config {
         FLOOD_VOLUME = b.defineInRange("floodSoundVolume", 0.7D, 0.0D, 1.0D);
         FLOOD_SOUND_TICKS = b.defineInRange("floodSoundTicks", 10, 2, 200);
         FLOOD_CHAT_TICKS = b.defineInRange("floodChatTicks", 15, 5, 200);
+        b.pop();
+
+        b.push("caches");
+        b.comment("Лут схронов. Строка: modid:item или modid:item*count или modid:item*min-max. Нет предмета в сборке — строка пропускается. Тёмной материи, антиматерии и стержня урана в списке нет: добавь сам, если хочешь.");
+        CACHE_COMMON = b.defineList("cacheCommon", List.of(
+                "minecraft:bread*4-8",
+                "minecraft:iron_ingot*3-8",
+                "minecraft:copper_ingot*3-8",
+                "minecraft:redstone*4-10",
+                "minecraft:coal*4-8",
+                "minecraft:gunpowder*2-5"
+        ), o -> o instanceof String);
+        CACHE_UNCOMMON = b.defineList("cacheUncommon", List.of(
+                "blackchannel:field_laptop",
+                "blackchannel:signal_scanner",
+                "blackchannel:battery_cell",
+                "blackchannel:trace_logger",
+                "electrodynamics:circuitbasic",
+                "electrodynamics:platesteel*2-4"
+        ), o -> o instanceof String);
+        CACHE_RARE = b.defineList("cacheRare", List.of(
+                "blackchannel:uplink_rack",
+                "blackchannel:sigint_dish",
+                "sbw_ew_addon:radio",
+                "sbw_ew_addon:portable_jammer",
+                "ballistix:missiletier1*1-2",
+                "ballistix:rocketlauncher"
+        ), o -> o instanceof String);
+        CACHE_DUNGEON = b.defineList("cacheDungeon", List.of(
+                "minecraft:iron_ingot*2-6",
+                "minecraft:redstone*2-8",
+                "minecraft:bread*1-4",
+                "blackchannel:battery_cell",
+                "minecraft:gunpowder*1-3"
+        ), o -> o instanceof String);
         b.pop();
 
         b.push("world");

@@ -374,8 +374,14 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         g.drawString(font, Ui.trim(font, "SAT " + ClientState.sat + "  CREW " + ClientState.crew + "  " + Ui.t("screen.blackchannel.drain") + " " + drain, 220), x + 8, y + 126, Ui.MUTED, false);
         int ly = y + 140;
         for (ClientState.DeanonRow row : ClientState.deanons) {
-            if (ly > y + 180) break;
+            if (ly > y + 188) break;
             g.drawString(font, Ui.trim(font, row.handle() + " = " + row.name(), 220), x + 8, ly, Ui.BLUE, false);
+            ly += 10;
+        }
+        for (ClientState.DeanonRow row : ClientState.heard) {
+            if (ly > y + 188) break;
+            String line = row.name() == null || row.name().isEmpty() ? row.handle() : row.handle() + " = " + row.name();
+            g.drawString(font, Ui.trim(font, line, 220), x + 8, ly, Ui.MUTED, false);
             ly += 10;
         }
         g.drawString(font, Ui.trim(font, ClientState.resultFor("gear"), imageWidth - 16), x + 8, y + imageHeight - 36, Ui.AMBER, false);

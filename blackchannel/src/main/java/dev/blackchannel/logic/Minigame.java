@@ -1,6 +1,7 @@
 package dev.blackchannel.logic;
 
 import com.mojang.brigadier.CommandDispatcher;
+import dev.blackchannel.Config;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
 import com.mojang.brigadier.arguments.StringArgumentType;
 import dev.blackchannel.BlackChannelMod;
@@ -8,6 +9,7 @@ import dev.blackchannel.block.LoggerBlockEntity;
 import dev.blackchannel.data.MatchData;
 import dev.blackchannel.data.NetData;
 import dev.blackchannel.data.TrapData;
+import dev.blackchannel.net.ModNetwork;
 import dev.blackchannel.registry.ModContent;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
@@ -299,13 +301,25 @@ public final class Minigame {
         player.displayClientMessage(Component.translatable("blackchannel.result.logger_set"), true);
     }
 
+    public static boolean scanBlock(ServerLevel level, BlockPos pos, UUID owner, List<UUID> seen) {
+        if (owner == null) return false;
+        int radius = Config.LOGGER_RADIUS.get();
+        long r2 = (long) radius * radius;
+        int before = seen.size();
+        for (ServerPlayer player : level.players()) {
+            if (player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) > r2) continue;
+            logOne(level, pos, owner, 1, seen, player, false);
+        }
+        return seen.size() != before;
+    }
+
     public static int scanLogger(ServerLevel level, BlockPos pos, UUID owner, int charges, List<UUID> seen, ServerPlayer only) {
         if (charges <= 0 || owner == null) return charges;
-        if (only != null) return logOne(level, pos, owner, charges, seen, only);
+        if (only != null) return logOne(level, pos, owner, charges, seen, only, true);
         int left = charges;
         for (ServerPlayer player : level.players()) {
             if (player.distanceToSqr(pos.getX() + 0.5, pos.getY() + 0.5, pos.getZ() + 0.5) > 12.25) continue;
-            left = logOne(level, pos, owner, left, seen, player);
+            left = logOne(level, pos, owner, left, seen, player, true);
             if (left <= 0) break;
         }
         return left;
@@ -690,7 +704,6 @@ public final class Minigame {
 
     private static int placeCaches(ServerLevel level, MatchData match) {
         int count = Mth.clamp(match.size / 120, 8, 40);
-        int nodesLeft = count >= 8 ? 2 : 1;
         int avoid = Math.min(150, Math.max(32, match.size / 8));
         RandomSource random = level.getRandom();
         Set<Long> used = new HashSet<>();
@@ -698,9 +711,7 @@ public final class Minigame {
         for (int i = 0; i < count; i++) {
             BlockPos pos = pickCache(level, match, avoid, random, used, i < 8);
             if (pos == null) continue;
-            boolean node = nodesLeft > 0 && random.nextInt(Math.max(1, count - i)) < nodesLeft;
-            if (!placeChest(level, pos, random, node)) continue;
-            if (node) nodesLeft--;
+            if (!placeChest(level, pos, random)) continue;
             placed++;
         }
         return placed;
@@ -724,12 +735,12 @@ public final class Minigame {
         return null;
     }
 
-    private static boolean placeChest(ServerLevel level, BlockPos feet, RandomSource random, boolean node) {
+    private static boolean placeChest(ServerLevel level, BlockPos feet, RandomSource random) {
         Direction facing = Direction.from2DDataValue(random.nextInt(4));
         level.setBlock(feet, Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, facing), 3);
         if (!(level.getBlockEntity(feet) instanceof ChestBlockEntity chest)) return false;
         int roll = random.nextInt(100);
-        fill(chest, random, roll < 70 ? 0 : roll < 92 ? 1 : 2, node);
+        fill(chest, random, roll < 70 ? 0 : roll < 92 ? 1 : 2);
         chest.setCustomName(Component.translatable("block.blackchannel.field_cache"));
         chest.getPersistentData().putBoolean("bcLoot", true);
         chest.setChanged();
@@ -746,62 +757,60 @@ public final class Minigame {
         box.setChanged();
     }
 
-    private static void fill(ChestBlockEntity chest, RandomSource random, int tier, boolean node) {
+    private static void fill(ChestBlockEntity chest, RandomSource random, int tier) {
         List<ItemStack> stacks = new ArrayList<>();
-        stacks.add(new ItemStack(Items.BREAD, 4 + random.nextInt(5)));
-        stacks.add(new ItemStack(Items.IRON_INGOT, 3 + random.nextInt(6)));
-        stacks.add(new ItemStack(Items.COPPER_INGOT, 3 + random.nextInt(6)));
-        stacks.add(new ItemStack(Items.REDSTONE, 4 + random.nextInt(7)));
-        stacks.add(new ItemStack(Items.COAL, 4 + random.nextInt(5)));
-        if (random.nextFloat() < 0.4f) stacks.add(new ItemStack(Items.GUNPOWDER, 2 + random.nextInt(4)));
-        if (random.nextFloat() < 0.3f) stacks.add(new ItemStack(ModContent.CELL.get()));
-        if (tier >= 1) {
-            if (random.nextFloat() < 0.4f) stacks.add(new ItemStack(ModContent.LAPTOP.get()));
-            if (random.nextFloat() < 0.5f) stacks.add(new ItemStack(ModContent.SCANNER.get()));
-            stacks.add(opt("electrodynamics", "circuitbasic", 1));
-            stacks.add(opt("electrodynamics", "platesteel", 2 + random.nextInt(3)));
-            if (random.nextFloat() < 0.4f) stacks.add(new ItemStack(ModContent.LOGGER_ITEM.get()));
-        }
-        if (tier >= 2) {
-            if (random.nextFloat() < 0.6f) stacks.add(new ItemStack(ModContent.RACK_ITEM.get()));
-            if (random.nextFloat() < 0.4f) stacks.add(new ItemStack(ModContent.DISH_ITEM.get()));
-            stacks.add(opt("sbw_ew_addon", "radio", 1));
-            stacks.add(opt("sbw_ew_addon", "portable_jammer", 1));
-            stacks.add(opt("ballistix", "missiletier1", 1 + random.nextInt(2)));
-            if (random.nextFloat() < 0.3f) stacks.add(opt("ballistix", "rocketlauncher", 1));
-            stacks.add(new ItemStack(ModContent.LOGGER_ITEM.get()));
-        }
-        if (node) stacks.add(endgame(random));
+        addConfigured(stacks, Config.CACHE_COMMON.get(), random);
+        if (tier >= 1) addConfigured(stacks, Config.CACHE_UNCOMMON.get(), random);
+        if (tier >= 2) addConfigured(stacks, Config.CACHE_RARE.get(), random);
         addStacks(chest, stacks);
     }
 
     private static List<ItemStack> dungeonStacks(RandomSource random) {
         List<ItemStack> stacks = new ArrayList<>();
-        stacks.add(new ItemStack(random.nextBoolean() ? Items.IRON_INGOT : Items.COPPER_INGOT, 2 + random.nextInt(5)));
-        stacks.add(new ItemStack(Items.REDSTONE, 2 + random.nextInt(7)));
-        stacks.add(new ItemStack(Items.BREAD, 1 + random.nextInt(4)));
-        if (random.nextFloat() < 0.3f) stacks.add(new ItemStack(ModContent.CELL.get()));
-        if (random.nextFloat() < 0.3f) stacks.add(new ItemStack(Items.GUNPOWDER, 1 + random.nextInt(3)));
+        addConfigured(stacks, Config.CACHE_DUNGEON.get(), random);
         return stacks;
     }
 
-    private static ItemStack endgame(RandomSource random) {
-        String[] paths = {"fuelheuo2", "cellantimattersmall", "celldarkmatter"};
-        List<ItemStack> found = new ArrayList<>();
-        for (String path : paths) {
-            ItemStack stack = opt("nuclearscience", path, 1);
-            if (!stack.isEmpty()) found.add(stack);
+    private static void addConfigured(List<ItemStack> into, List<? extends String> lines, RandomSource random) {
+        if (lines == null) return;
+        for (String line : lines) {
+            ItemStack stack = fromSpec(line, random);
+            if (!stack.isEmpty()) into.add(stack);
         }
-        if (found.isEmpty()) return ItemStack.EMPTY;
-        return found.get(random.nextInt(found.size()));
     }
 
-    private static ItemStack opt(String ns, String path, int count) {
-        ResourceLocation id = new ResourceLocation(ns, path);
-        if (!ForgeRegistries.ITEMS.containsKey(id)) return ItemStack.EMPTY;
+    private static ItemStack fromSpec(String raw, RandomSource random) {
+        if (raw == null) return ItemStack.EMPTY;
+        String spec = raw.trim();
+        if (spec.isEmpty()) return ItemStack.EMPTY;
+        int count = 1;
+        int star = spec.indexOf('*');
+        if (star >= 0) {
+            String num = spec.substring(star + 1).trim();
+            spec = spec.substring(0, star).trim();
+            try {
+                int dash = num.indexOf('-');
+                if (dash >= 0) {
+                    int min = Integer.parseInt(num.substring(0, dash).trim());
+                    int max = Integer.parseInt(num.substring(dash + 1).trim());
+                    if (max < min) {
+                        int swap = min;
+                        min = max;
+                        max = swap;
+                    }
+                    count = min + (max == min ? 0 : random.nextInt(max - min + 1));
+                } else {
+                    count = Integer.parseInt(num);
+                }
+            } catch (NumberFormatException e) {
+                return ItemStack.EMPTY;
+            }
+        }
+        ResourceLocation id = ResourceLocation.tryParse(spec);
+        if (id == null || !ForgeRegistries.ITEMS.containsKey(id)) return ItemStack.EMPTY;
         Item item = ForgeRegistries.ITEMS.getValue(id);
         if (item == null || item == Items.AIR || count <= 0) return ItemStack.EMPTY;
-        return new ItemStack(item, count);
+        return new ItemStack(item, Math.min(64, count));
     }
 
     private static void addStacks(RandomizableContainerBlockEntity box, List<ItemStack> stacks) {
@@ -815,19 +824,23 @@ public final class Minigame {
         }
     }
 
-    private static int logOne(ServerLevel level, BlockPos pos, UUID owner, int charges, List<UUID> seen, ServerPlayer player) {
-        if (charges <= 0 || player.getUUID().equals(owner) || seen.contains(player.getUUID())) return charges;
+    private static int logOne(ServerLevel level, BlockPos pos, UUID owner, int charges, List<UUID> seen, ServerPlayer player, boolean consume) {
+        if (player.getUUID().equals(owner) || seen.contains(player.getUUID())) return charges;
+        if (consume && charges <= 0) return charges;
         NetData data = NetData.get(level.getServer());
         NetData.Profile self = data.profile(owner);
         NetData.Profile other = data.profile(player.getUUID());
         if (other.lastName == null || other.lastName.isEmpty()) other.lastName = player.getGameProfile().getName();
         if (self.crew != null && !self.crew.isEmpty() && self.crew.equals(other.crew)) return charges;
         seen.add(player.getUUID());
-        int left = charges - 1;
-        Ops.noteFix(level.getServer(), owner, other.handle, other.lastName, Str.dim(level), pos.getX(), pos.getY(), pos.getZ(), 32, true, "blackchannel.log.logger");
+        int left = consume ? charges - 1 : charges;
+        String shown = other.vpn > 0 ? "" : other.lastName;
+        boolean fresh = Ops.noteHeard(self, other.handle, shown, false);
+        data.setDirty();
         ServerPlayer ownerPlayer = level.getServer().getPlayerList().getPlayer(owner);
-        if (ownerPlayer != null) {
-            ownerPlayer.sendSystemMessage(Component.translatable("blackchannel.chat.logger_hit", other.handle, other.lastName));
+        if (fresh && ownerPlayer != null) {
+            ownerPlayer.sendSystemMessage(Component.translatable(shown.isEmpty() ? "blackchannel.result.net_handle" : "blackchannel.result.net_named", other.handle, shown));
+            ModNetwork.syncFull(ownerPlayer);
         }
         if (other.ids) {
             player.sendSystemMessage(Component.translatable("blackchannel.chat.ids_logger", bearing(player, pos)));

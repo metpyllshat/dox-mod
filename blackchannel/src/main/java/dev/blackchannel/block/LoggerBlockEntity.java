@@ -27,11 +27,7 @@ public class LoggerBlockEntity extends BlockEntity {
 
     public static void serverTick(Level level, BlockPos pos, BlockState state, LoggerBlockEntity be) {
         if (level.isClientSide || !(level instanceof ServerLevel server) || level.getGameTime() % 20L != 0) return;
-        int next = Minigame.scanLogger(server, pos, be.owner, be.charges, be.seen, null);
-        if (next != be.charges) {
-            be.charges = next;
-            be.setChanged();
-        }
+        if (Minigame.scanBlock(server, pos, be.owner, be.seen)) be.setChanged();
     }
 
     @Override
