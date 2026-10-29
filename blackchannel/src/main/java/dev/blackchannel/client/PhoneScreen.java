@@ -370,7 +370,8 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         buffRow(g, x, y + 82, ClientState.vpn >= 2 ? Ui.t("screen.blackchannel.buff.vpn2") : Ui.t("screen.blackchannel.buff.vpn"), ClientState.vpn > 0, ClientState.vpn >= 2 ? "refundDeep" : "refundVpn", ClientState.vpn >= 2 ? 24 : 14, "vpn");
         buffRow(g, x, y + 96, Ui.t("screen.blackchannel.buff.ids"), ClientState.ids, "refundIds", 12, "ids");
         buffRow(g, x, y + 110, Ui.t("screen.blackchannel.buff.harden"), ClientState.hard, "refundHarden", 11, "harden");
-        g.drawString(font, "SAT " + ClientState.sat + "  CREW " + ClientState.crew, x + 8, y + 126, Ui.MUTED, false);
+        int drain = 1 + (ClientState.vpn > 0 ? 1 : 0) + (ClientState.ids ? 1 : 0) + (ClientState.hard ? 1 : 0);
+        g.drawString(font, Ui.trim(font, "SAT " + ClientState.sat + "  CREW " + ClientState.crew + "  " + Ui.t("screen.blackchannel.drain") + " " + drain, 220), x + 8, y + 126, Ui.MUTED, false);
         int ly = y + 140;
         for (ClientState.DeanonRow row : ClientState.deanons) {
             if (ly > y + 180) break;

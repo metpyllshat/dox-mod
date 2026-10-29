@@ -6,6 +6,7 @@ import dev.blackchannel.api.BlackChannelAPI;
 import dev.blackchannel.data.NetData;
 import dev.blackchannel.logic.Bridges;
 import dev.blackchannel.logic.Devices;
+import dev.blackchannel.logic.Minigame;
 import dev.blackchannel.logic.SignalEnv;
 import dev.blackchannel.logic.Str;
 import net.minecraft.commands.CommandSourceStack;
@@ -20,6 +21,7 @@ public final class ModCommands {
     private ModCommands() {}
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
+        Minigame.register(dispatcher);
         dispatcher.register(Commands.literal("bc")
                 .then(Commands.literal("help").executes(c -> help(c.getSource())))
                 .then(Commands.literal("status").executes(c -> status(c.getSource())))
