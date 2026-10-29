@@ -234,6 +234,83 @@ public final class Ops {
         data.setDirty();
     }
 
+    public static void bodyRead(ServerPlayer reader, ServerPlayer target) {
+        if (reader == target) return;
+        if (reader.distanceToSqr(target) > 25.0) {
+            reader.displayClientMessage(Component.translatable("blackchannel.result.body_far"), true);
+            return;
+        }
+        if (!reader.getAbilities().instabuild && Devices.battery(reader) < 8) {
+            reader.displayClientMessage(Component.translatable("blackchannel.result.no_battery"), true);
+            return;
+        }
+        Devices.drain(reader, 8);
+        learn(reader, target, true);
+    }
+
+    public static void learnHit(ServerPlayer victim, ServerPlayer attacker) {
+        if (victim == null || attacker == null || victim == attacker) return;
+        if (!Devices.has(victim, ModContent.PHONE.get())) return;
+        learn(victim, attacker, false);
+    }
+
+    public static void fileTag(ServerPlayer player, ItemStack stack) {
+        if (stack == null || !stack.hasTag() || !stack.getTag().contains("Handle")) return;
+        if (!Devices.has(player, ModContent.PHONE.get())) {
+            player.displayClientMessage(Component.translatable("blackchannel.result.tag_need_phone"), true);
+            return;
+        }
+        CompoundTag tag = stack.getTag();
+        String handle = tag.getString("Handle");
+        String name = tag.getString("Name");
+        NetData data = NetData.get(player);
+        NetData.Profile profile = data.profile(player.getUUID());
+        addIntel(profile, handle, tag.getString("Dim"), tag.getInt("X"), tag.getInt("Y"), tag.getInt("Z"), 80, player.getServer().getTickCount(), true);
+        rememberName(profile, handle, name);
+        profile.log("blackchannel.log.tag", handle, player.getServer().getTickCount());
+        if (!player.getAbilities().instabuild) stack.shrink(1);
+        data.setDirty();
+        player.displayClientMessage(Component.translatable("blackchannel.result.tag_ok", handle, name.isEmpty() ? "?" : name), true);
+        ModNetwork.syncFull(player);
+    }
+
+    public static void noteFix(MinecraftServer server, UUID owner, String handle, String name, String dim, int x, int y, int z, int err, boolean stale, String logKey) {
+        if (server == null || owner == null || handle == null || handle.isEmpty()) return;
+        NetData data = NetData.get(server);
+        NetData.Profile profile = data.profile(owner);
+        addIntel(profile, handle, dim, x, y, z, err, server.getTickCount(), stale);
+        rememberName(profile, handle, name);
+        profile.log(logKey, handle, server.getTickCount());
+        data.setDirty();
+        ServerPlayer online = server.getPlayerList().getPlayer(owner);
+        if (online != null) ModNetwork.syncFull(online);
+    }
+
+    private static void learn(ServerPlayer reader, ServerPlayer target, boolean alwaysTell) {
+        NetData data = NetData.get(reader);
+        NetData.Profile self = data.profile(reader.getUUID());
+        NetData.Profile other = data.profile(target.getUUID());
+        if (other.lastName == null || other.lastName.isEmpty()) other.lastName = target.getGameProfile().getName();
+        boolean known = self.deanons.containsKey(other.handle);
+        if (!alwaysTell && known) return;
+        remember(self, other);
+        self.log("blackchannel.log.body", other.handle, reader.getServer().getTickCount());
+        data.setDirty();
+        if (alwaysTell || !known) {
+            reader.displayClientMessage(Component.translatable("blackchannel.result.body_ok", other.handle, other.lastName), true);
+            ModNetwork.syncFull(reader);
+        }
+    }
+
+    private static void rememberName(NetData.Profile profile, String handle, String name) {
+        if (handle == null || handle.isEmpty() || name == null || name.isEmpty()) return;
+        profile.deanons.put(handle, name);
+        while (profile.deanons.size() > 24) {
+            String first = profile.deanons.keySet().iterator().next();
+            profile.deanons.remove(first);
+        }
+    }
+
     public static void install(ServerPlayer player, ToolItem.Kind kind, ItemStack stack) {
         NetData data = NetData.get(player);
         NetData.Profile profile = data.profile(player.getUUID());
@@ -365,7 +442,8 @@ public final class Ops {
             profile.lastY = player.blockPosition().getY();
             profile.lastZ = player.blockPosition().getZ();
             profile.lastPosTick = tick;
-            if (tick % 300 == 0) Devices.drain(player, 1);
+            int chips = (profile.vpn > 0 ? 1 : 0) + (profile.ids ? 1 : 0) + (profile.hardened ? 1 : 0);
+            if (tick % 300 == 0) Devices.drain(player, 1 + chips);
             SignalEnv.Link link = SignalEnv.link(player, profile);
             if (link.mode == SignalEnv.Link.Mode.SAT && tick % 1200 == 0 && profile.satCharges > 0) profile.satCharges--;
         }

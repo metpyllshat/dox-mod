@@ -6,6 +6,7 @@ import dev.blackchannel.api.BlackChannelAPI;
 import dev.blackchannel.block.NodeBlockEntity;
 import dev.blackchannel.logic.Bridges;
 import dev.blackchannel.logic.Devices;
+import dev.blackchannel.logic.Minigame;
 import dev.blackchannel.logic.Ops;
 import dev.blackchannel.registry.ModContent;
 import net.minecraft.core.BlockPos;
@@ -14,12 +15,20 @@ import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
+import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.RegisterCommandsEvent;
 import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
+import net.minecraftforge.event.entity.living.LivingDeathEvent;
+import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
+import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.event.level.ExplosionEvent;
+import net.minecraftforge.event.server.ServerStartedEvent;
 import net.minecraftforge.event.server.ServerStoppingEvent;
 import net.minecraftforge.eventbus.api.SubscribeEvent;
 import net.minecraftforge.fml.common.Mod;
@@ -37,6 +46,7 @@ public final class GameEvents {
         var server = ServerLifecycleHooks.getCurrentServer();
         if (server == null) return;
         Ops.tick(server);
+        Minigame.tick(server);
     }
 
     @SubscribeEvent
@@ -74,5 +84,52 @@ public final class GameEvents {
     @SubscribeEvent
     public static void commands(RegisterCommandsEvent event) {
         ModCommands.register(event.getDispatcher());
+    }
+
+    @SubscribeEvent
+    public static void started(ServerStartedEvent event) {
+        Minigame.onServerStarted(event.getServer());
+    }
+
+    @SubscribeEvent
+    public static void hurt(LivingHurtEvent event) {
+        Minigame.onHurt(event);
+    }
+
+    @SubscribeEvent
+    public static void attack(AttackEntityEvent event) {
+        Minigame.onAttack(event);
+    }
+
+    @SubscribeEvent
+    public static void death(LivingDeathEvent event) {
+        Minigame.onDeath(event);
+    }
+
+    @SubscribeEvent
+    public static void respawn(PlayerEvent.PlayerRespawnEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) Minigame.onRespawn(player);
+    }
+
+    @SubscribeEvent
+    public static void login(PlayerEvent.PlayerLoggedInEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) Minigame.onLogin(player);
+    }
+
+    @SubscribeEvent
+    public static void useBlock(PlayerInteractEvent.RightClickBlock event) {
+        Minigame.onUseBlock(event);
+    }
+
+    @SubscribeEvent
+    public static void broken(BlockEvent.BreakEvent event) {
+        Minigame.onBreak(event);
+    }
+
+    @SubscribeEvent
+    public static void chunk(ChunkEvent.Load event) {
+        if (!(event.getLevel() instanceof ServerLevel level)) return;
+        if (!(event.getChunk() instanceof LevelChunk chunk)) return;
+        Minigame.onChunk(level, chunk);
     }
 }

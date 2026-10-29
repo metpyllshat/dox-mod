@@ -3,7 +3,11 @@ package dev.blackchannel.registry;
 import dev.blackchannel.BlackChannelMod;
 import dev.blackchannel.block.NodeBlock;
 import dev.blackchannel.block.NodeBlockEntity;
+import dev.blackchannel.block.LoggerBlock;
+import dev.blackchannel.block.LoggerBlockEntity;
 import dev.blackchannel.item.DeviceItem;
+import dev.blackchannel.item.LoggerItem;
+import dev.blackchannel.item.TagItem;
 import dev.blackchannel.item.ToolItem;
 import dev.blackchannel.item.TrackerItem;
 import dev.blackchannel.menu.Menus;
@@ -37,10 +41,13 @@ public final class ModContent {
     public static final RegistryObject<Block> JAMMER = BLOCKS.register("signal_jammer", () -> new NodeBlock(NodeBlock.Kind.JAMMER, MapColor.COLOR_RED));
     public static final RegistryObject<Block> BEACON = BLOCKS.register("team_beacon", () -> new NodeBlock(NodeBlock.Kind.BEACON, MapColor.COLOR_GREEN));
     public static final RegistryObject<Block> DECOY = BLOCKS.register("decoy_beacon", () -> new NodeBlock(NodeBlock.Kind.DECOY, MapColor.COLOR_ORANGE));
+    public static final RegistryObject<Block> LOGGER = BLOCKS.register("trace_logger", LoggerBlock::new);
 
     public static final RegistryObject<BlockEntityType<NodeBlockEntity>> NODE = BLOCK_ENTITIES.register("node",
             () -> BlockEntityType.Builder.of(NodeBlockEntity::new,
                     RACK.get(), DISH.get(), FARADAY.get(), JAMMER.get(), BEACON.get(), DECOY.get()).build(null));
+    public static final RegistryObject<BlockEntityType<LoggerBlockEntity>> LOGGER_BE = BLOCK_ENTITIES.register("trace_logger",
+            () -> BlockEntityType.Builder.of(LoggerBlockEntity::new, LOGGER.get()).build(null));
 
     public static final RegistryObject<Item> RACK_ITEM = blockItem(RACK);
     public static final RegistryObject<Item> DISH_ITEM = blockItem(DISH);
@@ -48,6 +55,10 @@ public final class ModContent {
     public static final RegistryObject<Item> JAMMER_ITEM = blockItem(JAMMER);
     public static final RegistryObject<Item> BEACON_ITEM = blockItem(BEACON);
     public static final RegistryObject<Item> DECOY_ITEM = blockItem(DECOY);
+    public static final RegistryObject<Item> LOGGER_ITEM = ITEMS.register("trace_logger",
+            () -> new LoggerItem(LOGGER.get(), new Item.Properties().stacksTo(16)));
+    public static final RegistryObject<Item> TAG = ITEMS.register("dog_tag",
+            () -> new TagItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON)));
 
     public static final RegistryObject<Item> PHONE = ITEMS.register("burner_phone",
             () -> new DeviceItem(DeviceItem.Kind.PHONE, new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON)));

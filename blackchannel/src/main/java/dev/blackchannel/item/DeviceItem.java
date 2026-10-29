@@ -59,10 +59,11 @@ public class DeviceItem extends Item {
 
     @Override
     public InteractionResult interactLivingEntity(ItemStack stack, Player player, LivingEntity target, InteractionHand hand) {
-        if (kind != Kind.LAPTOP || levelMissing(player) || !(target instanceof ServerPlayer victim) || !(player instanceof ServerPlayer sp)) {
+        if (levelMissing(player) || !(target instanceof ServerPlayer victim) || !(player instanceof ServerPlayer sp)) {
             return InteractionResult.PASS;
         }
-        Ops.identify(sp, victim);
+        if (kind == Kind.LAPTOP) Ops.identify(sp, victim);
+        else Ops.bodyRead(sp, victim);
         return InteractionResult.SUCCESS;
     }
 
