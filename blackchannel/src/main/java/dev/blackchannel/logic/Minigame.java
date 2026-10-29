@@ -749,7 +749,10 @@ public final class Minigame {
 
     private static void injectDungeon(RandomizableContainerBlockEntity box, RandomSource random) {
         if (box.getPersistentData().getBoolean("bcLoot")) return;
-        ResourceLocation table = box.getLootTable();
+        // 1.20.1 не отдаёт id таблицы методом. Он лежит в теге, пока сундук не открыли.
+        CompoundTag saved = box.saveWithoutMetadata();
+        if (!saved.contains("LootTable", 8)) return;
+        ResourceLocation table = ResourceLocation.tryParse(saved.getString("LootTable"));
         if (table == null || !"minecraft".equals(table.getNamespace()) || !STRUCTURES.contains(table.getPath())) return;
         box.unpackLootTable(null);
         addStacks(box, dungeonStacks(random));
