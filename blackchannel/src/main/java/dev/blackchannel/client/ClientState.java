@@ -38,6 +38,7 @@ public final class ClientState {
     public static final List<BountyRow> bounties = new ArrayList<>();
     public static final List<LogRow> logs = new ArrayList<>();
     public static final List<DeanonRow> deanons = new ArrayList<>();
+    public static final List<DeanonRow> heard = new ArrayList<>();
     public static final List<String> floodLines = new ArrayList<>();
     public static final List<String> floodImages = new ArrayList<>();
     public static final List<PeekSlot> peek = new ArrayList<>();
@@ -73,6 +74,7 @@ public final class ClientState {
         readTracks(tag.getList("trackers", Tag.TAG_COMPOUND));
         readLogs(tag.getList("logs", Tag.TAG_COMPOUND));
         readDean(tag.getList("deanons", Tag.TAG_COMPOUND));
+        readHeard(tag.getList("heard", Tag.TAG_COMPOUND));
         readBounties(tag.getList("bounties", Tag.TAG_COMPOUND));
         optic = tag.contains("optic") ? tag.getByteArray("optic") : new byte[0];
         opticColor = tag.contains("opticC") ? tag.getIntArray("opticC") : new int[0];
@@ -235,6 +237,14 @@ public final class ClientState {
         for (int i = 0; i < list.size(); i++) {
             CompoundTag c = list.getCompound(i);
             deanons.add(new DeanonRow(c.getString("h"), c.getString("n")));
+        }
+    }
+
+    private static void readHeard(ListTag list) {
+        heard.clear();
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag c = list.getCompound(i);
+            heard.add(new DeanonRow(c.getString("h"), c.getString("n")));
         }
     }
 

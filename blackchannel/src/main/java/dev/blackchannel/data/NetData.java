@@ -196,6 +196,7 @@ public class NetData extends SavedData {
         public int intelSeq = 1;
         public final List<Intel> intel = new ArrayList<>();
         public final Map<String, String> deanons = new LinkedHashMap<>();
+        public final Map<String, String> heard = new LinkedHashMap<>();
         public final List<Bug> bugs = new ArrayList<>();
         public final List<LogLine> logs = new ArrayList<>();
 
@@ -253,6 +254,9 @@ public class NetData extends SavedData {
             CompoundTag dean = new CompoundTag();
             for (Map.Entry<String, String> e : deanons.entrySet()) dean.putString(e.getKey(), e.getValue());
             tag.put("dean", dean);
+            CompoundTag heard = new CompoundTag();
+            for (Map.Entry<String, String> e : this.heard.entrySet()) heard.putString(e.getKey(), e.getValue() == null ? "" : e.getValue());
+            tag.put("heard", heard);
             ListTag bugs = new ListTag();
             for (Bug bug : this.bugs) bugs.add(bug.save());
             tag.put("bugs", bugs);
@@ -308,6 +312,8 @@ public class NetData extends SavedData {
             for (int i = 0; i < intel.size(); i++) profile.intel.add(Intel.load(intel.getCompound(i)));
             CompoundTag dean = tag.getCompound("dean");
             for (String key : dean.getAllKeys()) profile.deanons.put(key, dean.getString(key));
+            CompoundTag heard = tag.getCompound("heard");
+            for (String key : heard.getAllKeys()) profile.heard.put(key, heard.getString(key));
             ListTag bugs = tag.getList("bugs", Tag.TAG_COMPOUND);
             for (int i = 0; i < bugs.size(); i++) profile.bugs.add(Bug.load(bugs.getCompound(i)));
             ListTag logs = tag.getList("logs", Tag.TAG_COMPOUND);

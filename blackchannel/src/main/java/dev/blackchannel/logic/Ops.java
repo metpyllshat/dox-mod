@@ -265,13 +265,51 @@ public final class Ops {
         String name = tag.getString("Name");
         NetData data = NetData.get(player);
         NetData.Profile profile = data.profile(player.getUUID());
-        addIntel(profile, handle, tag.getString("Dim"), tag.getInt("X"), tag.getInt("Y"), tag.getInt("Z"), 80, player.getServer().getTickCount(), true);
+        noteHeard(profile, handle, name, true);
         rememberName(profile, handle, name);
         profile.log("blackchannel.log.tag", handle, player.getServer().getTickCount());
         if (!player.getAbilities().instabuild) stack.shrink(1);
         data.setDirty();
         player.displayClientMessage(Component.translatable("blackchannel.result.tag_ok", handle, name.isEmpty() ? "?" : name), true);
         ModNetwork.syncFull(player);
+    }
+
+    public static void hearRadar(ServerPlayer viewer, NetData.Profile self) {
+        int range = SignalEnv.radarRange(viewer, self);
+        if (range <= 0 || self.airplane || SignalEnv.emp(self, viewer.getServer())) return;
+        ServerLevel level = viewer.serverLevel();
+        if (SignalEnv.jammed(level, viewer.blockPosition()) || SignalEnv.faraday(level, viewer.blockPosition())) return;
+        long r2 = (long) range * range;
+        NetData data = NetData.get(viewer);
+        boolean any = false;
+        for (ServerPlayer other : level.players()) {
+            if (other == viewer) continue;
+            NetData.Profile op = data.profile(other.getUUID());
+            if (!SignalEnv.transmitting(other, op)) continue;
+            if (viewer.distanceToSqr(other) > r2) continue;
+            String name = op.vpn > 0 ? "" : op.lastName;
+            if (!noteHeard(self, op.handle, name, false)) continue;
+            any = true;
+            viewer.displayClientMessage(Component.translatable(name.isEmpty() ? "blackchannel.result.net_handle" : "blackchannel.result.net_named", op.handle, name), true);
+        }
+        if (any) {
+            data.setDirty();
+            ModNetwork.syncFull(viewer);
+        }
+    }
+
+    public static boolean noteHeard(NetData.Profile self, String handle, String name, boolean revealName) {
+        if (self == null || handle == null || handle.isEmpty() || self.deanons.containsKey(handle)) return false;
+        String shown = revealName && name != null ? name : (name == null ? "" : name);
+        if (!revealName && (name == null || name.isEmpty())) shown = "";
+        String prev = self.heard.get(handle);
+        if (prev != null && (shown.isEmpty() || shown.equals(prev))) return false;
+        self.heard.put(handle, shown);
+        while (self.heard.size() > 24) {
+            String first = self.heard.keySet().iterator().next();
+            self.heard.remove(first);
+        }
+        return prev == null;
     }
 
     public static void noteFix(MinecraftServer server, UUID owner, String handle, String name, String dim, int x, int y, int z, int err, boolean stale, String logKey) {
@@ -447,6 +485,7 @@ public final class Ops {
             SignalEnv.Link link = SignalEnv.link(player, profile);
             if (link.mode == SignalEnv.Link.Mode.SAT && tick % 1200 == 0 && profile.satCharges > 0) profile.satCharges--;
         }
+        if (tick % 20 == 0) hearRadar(player, profile);
         if (profile.bombUntil > tick && profile.floodPicsFor != profile.bombUntil) {
             profile.floodPicsFor = profile.bombUntil;
             ModNetwork.sendFlood(player);

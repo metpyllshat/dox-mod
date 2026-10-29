@@ -57,6 +57,14 @@ public final class Sync {
             dean.add(c);
         });
         tag.put("deanons", dean);
+        ListTag heard = new ListTag();
+        profile.heard.forEach((handle, name) -> {
+            CompoundTag c = new CompoundTag();
+            c.putString("h", handle);
+            c.putString("n", name == null ? "" : name);
+            heard.add(c);
+        });
+        tag.put("heard", heard);
 
         ListTag chat = new ListTag();
         String want = chatChannel(profile);

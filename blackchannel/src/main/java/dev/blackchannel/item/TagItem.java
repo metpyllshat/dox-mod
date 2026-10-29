@@ -35,7 +35,5 @@ public class TagItem extends Item {
         String handle = stack.getTag().getString("Handle");
         String name = stack.getTag().getString("Name");
         tooltip.add(Component.literal(handle + " = " + (name.isEmpty() ? "?" : name)).withStyle(ChatFormatting.GRAY));
-        tooltip.add(Component.literal(stack.getTag().getInt("X") + " " + stack.getTag().getInt("Y") + " " + stack.getTag().getInt("Z"))
-                .withStyle(ChatFormatting.DARK_GRAY));
     }
 }
