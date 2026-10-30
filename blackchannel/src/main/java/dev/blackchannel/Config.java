@@ -77,8 +77,7 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue SCORE_BEACON;
     public static final ForgeConfigSpec.IntValue REVIVE_STAND_SECONDS;
     public static final ForgeConfigSpec.IntValue DOWNED_DURATION_TICKS;
-    public static final ForgeConfigSpec.IntValue PEACEFUL_MINUTES;
-    public static final ForgeConfigSpec.IntValue PVP_FREE_MINUTES;
+    public static final ForgeConfigSpec.IntValue PVP_FREE_SECONDS;
     public static final ForgeConfigSpec.IntValue CACHE_COMMON_CHANCE;
     public static final ForgeConfigSpec.IntValue CACHE_UNCOMMON_CHANCE;
     public static final ForgeConfigSpec.IntValue CACHE_RARE_CHANCE;
@@ -230,10 +229,8 @@ public final class Config {
         b.push("match");
         b.comment("Матч идёт matchDuration минут, потом finalDuration минут — кровати и маяки отключены, смерть перманентная. Победитель — команда с максимумом очков.");
         MATCH_DURATION_MINUTES = b.defineInRange("matchDurationMinutes", 30, 5, 120);
-        b.comment("Мирный режим в начале матча: игроки вообще не получают урон (ни от игроков, ни от мобов, ни от падения). 0 — выключено.");
-        PEACEFUL_MINUTES = b.defineInRange("peacefulMinutes", 5, 0, 120);
-        b.comment("Отсутствие PvP: игроки не могут ранить друг друга, но мобы, падение и лава бьют как обычно. Отсчёт идёт от старта матча. 0 — PvP сразу. Если pvpFree меньше peaceful, всё равно действует более длинный запрет.");
-        PVP_FREE_MINUTES = b.defineInRange("pvpFreeMinutes", 5, 0, 120);
+        b.comment("Отсутствие PvP в начале матча, в секундах: игроки не могут ранить друг друга, удар даже не проходит. Мобы, падение, огонь и лава бьют как обычно. Отсчёт от старта матча, 0 — PvP сразу.");
+        PVP_FREE_SECONDS = b.defineInRange("pvpFreeSeconds", 90, 0, 7200);
         FINAL_DURATION_MINUTES = b.defineInRange("finalDurationMinutes", 10, 1, 30);
         SCORE_KILL = b.defineInRange("scoreKill", 1, 0, 100);
         SCORE_BED = b.defineInRange("scoreBed", 2, 0, 100);

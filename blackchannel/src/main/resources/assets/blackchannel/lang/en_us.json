@@ -275,7 +275,7 @@
   "blackchannel.minigame.on": "live",
   "blackchannel.minigame.off": "off",
   "blackchannel.minigame.help": "/minigame center, center x y z, size 2500, team (team menu), start, stop, status. size is wall to wall. Pick a team in the menu before the start. The border does not shrink.",
-  "blackchannel.minigame.status": "Match: %s. Center %s. Size %s. Base gap %s. Your code %s. Peaceful for %s s, no PvP for %s s.",
+  "blackchannel.minigame.status": "Match: %s. Center %s. Size %s. Base gap %s. Your code %s. No PvP for %s s.",
   "blackchannel.minigame.need_player": "Player only.",
   "blackchannel.minigame.crew_set": "Team: %s. Pick it in /minigame team menu.",
   "blackchannel.minigame.already": "Match already running.",
@@ -343,10 +343,10 @@
   "screen.blackchannel.team.note": "Pick a team before the match starts. Click a row.",
   "screen.blackchannel.team.current": "picked",
   "screen.blackchannel.team.close": "CLOSE",
-  "blackchannel.minigame.peaceful": "Peaceful: %s min. No damage from anyone.",
-  "blackchannel.minigame.pvp_free": "PvP is off for another %s min.",
+  "blackchannel.minigame.pvp_free": "For the first %s seconds players cannot hurt each other. Fire, falling, mobs and lava still hurt.",
   "blackchannel.minigame.downed_help": "You cannot move or act. Wait for help or %s s.",
   "blackchannel.minigame.downed_seconds": "Respawn in %s s. Point: %s.",
   "blackchannel.minigame.kill_assist": "+%s points for the finish.",
-  "blackchannel.minigame.beacon_cleared": "Team beacons removed."
+  "blackchannel.minigame.beacon_cleared": "Team beacons removed.",
+  "blackchannel.minigame.pvp_off": "PvP is off for another %s s."
 }
