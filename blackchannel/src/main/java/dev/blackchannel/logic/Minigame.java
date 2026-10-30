@@ -164,8 +164,22 @@ public final class Minigame {
         if (dirty) data.setDirty();
     }
 
+    private static long beaconCoordsAnnounced = 0;
+
     private static void tickMatch(MinecraftServer server, MatchData match, ServerLevel level) {
         long now = level.getGameTime();
+        // Координаты маяков через 1.5 часа (108000 тиков от начала матча)
+        long matchStart = match.matchEndTick - Config.MATCH_DURATION_MINUTES.get() * 60L * 20L;
+        if (beaconCoordsAnnounced == 0 && now >= matchStart + 108000L) {
+            beaconCoordsAnnounced = 1;
+            for (Map.Entry<String, BlockPos> entry : match.teamBeacons.entrySet()) {
+                String code = entry.getKey();
+                BlockPos pos = entry.getValue();
+                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                    player.sendSystemMessage(Component.literal("[" + code + "] Маяк: " + pos.getX() + " " + pos.getY() + " " + pos.getZ()));
+                }
+            }
+        }
         // Проверка окончания матча
         if (match.finalActive && now >= match.finalEndTick) {
             endMatch(server, match);
@@ -294,21 +308,26 @@ public final class Minigame {
         BlockPos beaconPos = match.getBeacon(crew);
         boolean hasRespawn = false;
         BlockPos respawnPos = null;
+        int downedTicks = Config.DOWNED_DURATION_TICKS.get();
         ServerLevel matchLevel = Ops.levelOf(victim.getServer(), match.dim);
+        // Сначала проверяем кровать (5 сек = 100 тиков)
         if (!finalActive && bedPos != null && matchLevel != null) {
             if (matchLevel.dimension() == victim.level().dimension() && match.inside(bedPos)) {
                 if (matchLevel.getBlockState(bedPos).getBlock() instanceof BedBlock) {
                     hasRespawn = true;
                     respawnPos = bedPos;
+                    downedTicks = 100; // 5 секунд
                 }
             }
         }
+        // Если нет кровати, проверяем маяк отряда (10 сек = 200 тиков)
         if (!hasRespawn && !finalActive && beaconPos != null && matchLevel != null) {
             if (matchLevel.dimension() == victim.level().dimension() && match.inside(beaconPos)) {
                 Block b = matchLevel.getBlockState(beaconPos).getBlock();
                 if (b == ModContent.BEACON.get()) {
                     hasRespawn = true;
                     respawnPos = beaconPos;
+                    downedTicks = 200; // 10 секунд
                 }
             }
         }
@@ -326,12 +345,12 @@ public final class Minigame {
             match.down(victim.getUUID(), ds);
             victim.setHealth(20f);
             victim.setPose(Pose.SLEEPING);
-            victim.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, Config.DOWNED_DURATION_TICKS.get() + 40, 1, false, false));
-            victim.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, Config.DOWNED_DURATION_TICKS.get() + 40, 1, false, false));
-            victim.sendSystemMessage(Component.translatable("blackchannel.minigame.downed", Config.DOWNED_DURATION_TICKS.get() / 20));
+            victim.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, downedTicks + 40, 1, false, false));
+            victim.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, downedTicks + 40, 1, false, false));
+            victim.sendSystemMessage(Component.translatable("blackchannel.minigame.downed", downedTicks / 20));
             victim.getServer().getPlayerList().broadcastSystemMessage(
                     Component.translatable("blackchannel.minigame.downed_announce",
-                            victim.getGameProfile().getName(), Config.DOWNED_DURATION_TICKS.get() / 20), false);
+                            victim.getGameProfile().getName(), downedTicks / 20), false);
         } else {
             // Permanent dead
             match.permanentDead.add(victim.getUUID());
@@ -399,8 +418,11 @@ public final class Minigame {
             long now = victim.serverLevel().getGameTime();
             boolean grace = now < match.graceUntil;
             boolean wall = shielded(victim) || shielded(attacker);
+            // Первые 15 минут (18000 тиков) — нет PvP
+            long matchStart = match.matchEndTick - Config.MATCH_DURATION_MINUTES.get() * 60L * 20L;
+            boolean earlyGame = now < matchStart + 18000L;
             if (shielded(attacker)) PROTECT.remove(attacker.getUUID());
-            if (grace || wall) {
+            if (grace || wall || earlyGame) {
                 event.setCanceled(true);
                 return;
             }
@@ -833,6 +855,10 @@ public final class Minigame {
             match.teamScores.put(code, 0);
             match.teamColorIdx.put(code, colorIdx);
             float yaw = yawToward(spot[0], spot[1], match.centerX, match.centerZ);
+            // Ставим маяк отряда в центре базы
+            BlockPos beaconPos = new BlockPos(spot[0], match.centerY + 1, spot[1]);
+            level.setBlock(beaconPos, ModContent.BEACON.get().defaultBlockState(), 3);
+            match.setBeacon(code, beaconPos);
             for (ServerPlayer player : groups.get(key)) {
                 BlockPos feet = scatter(level, spot[0], spot[1], player.getRandom());
                 MatchData.Drop drop = MatchData.Drop.at(feet.getX(), feet.getY(), feet.getZ(), yaw);
@@ -857,6 +883,7 @@ public final class Minigame {
         match.active = true;
         match.setDirty();
         applyTeamNametags(server, match);
+        beaconCoordsAnnounced = 0;
         source.sendSuccess(() -> Component.translatable("blackchannel.minigame.started", groups.size(), gap), true);
         if (cramped) source.sendSuccess(() -> Component.translatable("blackchannel.minigame.cramped", gap), true);
         announceMatchStart(server, match);
@@ -925,7 +952,7 @@ public final class Minigame {
             PlayerTeam team = scoreboard.getPlayersTeam(player.getGameProfile().getName());
             if (team != null && team.getName().startsWith("bc_")) {
                 scoreboard.removePlayerFromTeam(player.getGameProfile().getName(), team);
-                scoreboard.removePlayerTeam(team.getName());
+                scoreboard.removePlayerTeam(team);
             }
         }
     }
@@ -965,6 +992,11 @@ public final class Minigame {
         give(player, new ItemStack(ModContent.CELL.get()));
         if (!Devices.has(player, ModContent.MANUAL.get())) give(player, new ItemStack(ModContent.MANUAL.get()));
         give(player, new ItemStack(Items.RED_BED));
+        give(player, new ItemStack(Items.STONE_SHOVEL));
+        give(player, new ItemStack(Items.STONE_HOE));
+        give(player, new ItemStack(Items.STONE_AXE));
+        give(player, new ItemStack(Items.IRON_PICKAXE));
+        give(player, new ItemStack(Items.BREAD, 2));
         match.kitted.put(player.getUUID(), true);
     }
 

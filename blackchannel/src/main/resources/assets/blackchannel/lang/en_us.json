@@ -148,7 +148,7 @@
   "blackchannel.result.need_slot": "Put an item in the sale slot.",
   "blackchannel.blip.player": "player",
   "blackchannel.blip.friend": "friend",
-  "blackchannel.blip.beacon": "beacon",
+  "blackchannel.blip.beacon": "Beacon",
   "blackchannel.blip.decoy": "decoy",
   "blackchannel.blip.drone": "drone",
   "blackchannel.blip.rack": "rack",
@@ -337,5 +337,6 @@
   "blackchannel.hud.pts": "pts",
   "blackchannel.minigame.revive_stand": "Stand and revive for %s seconds. Don't move!",
   "blackchannel.minigame.revive_stand_target": "%s is reviving you. Stand for %s sec.",
-  "blackchannel.minigame.revive_already": "This player was already revived this match."
+  "blackchannel.minigame.revive_already": "This player was already revived this match.",
+  "blackchannel.minigame.beacon_auto": "Team beacon '%s' placed automatically."
 }
