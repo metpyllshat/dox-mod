@@ -288,6 +288,29 @@ public final class Sync {
             c.putString("label", blip.label);
             blips.add(c);
         }
+        // Добавляем маяки других команд на радар
+        MatchData match = MatchData.get(player.getServer());
+        if (match.active) {
+            String playerCrew = match.playerCrew.getOrDefault(player.getUUID(), "");
+            for (Map.Entry<String, BlockPos> entry : match.teamBeacons.entrySet()) {
+                String crew = entry.getKey();
+                if (crew.equals(playerCrew)) continue; // Свой маяк не показываем
+                BlockPos beaconPos = entry.getValue();
+                if (!Str.dim(player.level()).equals(match.dim)) continue;
+                long dx = player.blockPosition().getX() - beaconPos.getX();
+                long dz = player.blockPosition().getZ() - beaconPos.getZ();
+                int dist = (int) Math.sqrt(dx * dx + dz * dz);
+                if (dist <= Config.STRUCTURE_RADAR.get()) {
+                    CompoundTag c = new CompoundTag();
+                    c.putInt("dx", (int) dx);
+                    c.putInt("dz", (int) dz);
+                    c.putInt("dist", dist);
+                    c.putString("kind", "beacon");
+                    c.putString("label", crew);
+                    blips.add(c);
+                }
+            }
+        }
         tag.put("blips", blips);
     }
 

@@ -142,7 +142,7 @@
   "blackchannel.result.drone_none": "В радиусе поиска нет дрона.",
   "blackchannel.blip.player": "игрок",
   "blackchannel.blip.friend": "свой",
-  "blackchannel.blip.beacon": "маяк",
+  "blackchannel.blip.beacon": "Маяк",
   "blackchannel.blip.decoy": "ложь",
   "blackchannel.blip.drone": "дрон",
   "blackchannel.blip.rack": "стойка",
@@ -337,5 +337,6 @@
   "blackchannel.hud.pts": "очк",
   "blackchannel.minigame.revive_stand": "Стоите и воскрешаете %s сек. Не отходите!",
   "blackchannel.minigame.revive_stand_target": "%s воскрешает вас. Стоите %s сек.",
-  "blackchannel.minigame.revive_already": "Этот игрок уже был воскрешён в этом матче."
+  "blackchannel.minigame.revive_already": "Этот игрок уже был воскрешён в этом матче.",
+  "blackchannel.minigame.beacon_auto": "Маяк отряда '%s' установлен автоматически."
 }
