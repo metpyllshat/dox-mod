@@ -81,53 +81,5 @@ public final class ClientHooks {
             }
             if (mc.player != null) Ui.selfArrow(g, cx, cy, mc.player.getYRot());
         }
-        // Match HUD (справа по центру)
-        if (ClientState.matchActive && !ClientState.matchEnded) drawMatchHud(g, mc, w, h);
-    }
-
-    private static void drawMatchHud(GuiGraphics g, Minecraft mc, int w, int h) {
-        int x = w - 140;
-        int y = h / 2 - 60;
-        int bg = 0xE0000000;
-        int panelHeight = 20 + ClientState.teamScores.size() * 14;
-        g.fill(x - 4, y - 4, x + 136, y + panelHeight, bg);
-        g.fill(x - 4, y - 4, x + 136, y - 3, 0xFF3DFF9A);
-        // Время
-        int minutes = ClientState.matchTimeLeftSeconds / 60;
-        int seconds = ClientState.matchTimeLeftSeconds % 60;
-        String time = String.format("%d:%02d", minutes, seconds);
-        String timeLabel = ClientState.matchFinalActive ? "FINAL " + time : time;
-        g.drawString(mc.font, timeLabel, x + 2, y + 2, Ui.AMBER, false);
-        // Живые
-        g.drawString(mc.font, "Alive: " + ClientState.aliveCount, x + 2, y + 14, Ui.TEXT, false);
-        // Статус
-        String status = ClientState.selfStatus;
-        if (status != null && !status.isEmpty()) {
-            String statusText;
-            int statusColor = Ui.TEXT;
-            switch (status) {
-                case "downed" -> { statusText = "Downed: " + ClientState.selfDownedSeconds + "s"; statusColor = Ui.RED; }
-                case "dead" -> { statusText = "Dead"; statusColor = 0x555555; }
-                case "final" -> { statusText = "Final"; statusColor = Ui.AMBER; }
-                default -> { statusText = "Alive"; statusColor = Ui.TEXT; }
-            }
-            g.drawString(mc.font, statusText, x + 2, y + 26, statusColor, false);
-        }
-        // Команды
-        int ly = y + 42;
-        g.fill(x - 4, ly - 2, x + 136, ly - 1, 0xFF3DFF9A);
-        net.minecraft.ChatFormatting[] CF = net.minecraft.ChatFormatting.values();
-        for (Map.Entry<String, ClientState.TeamScore> entry : ClientState.teamScores.entrySet()) {
-            ClientState.TeamScore ts = entry.getValue();
-            String line = ts.code + ": " + ts.score + "pts (" + ts.alive + "/" + ts.total + ")";
-            int color = 0xFFFFFF;
-            int cfIdx = ts.colorIdx % 26;
-            if (cfIdx >= 0 && cfIdx < CF.length) {
-                Integer c = CF[cfIdx].getColor();
-                if (c != null) color = c;
-            }
-            g.drawString(mc.font, line, x + 2, ly, color, false);
-            ly += 14;
-        }
     }
 }

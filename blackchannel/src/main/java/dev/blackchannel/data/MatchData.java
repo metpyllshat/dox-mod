@@ -5,6 +5,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.saveddata.SavedData;
 
 import java.util.ArrayList;
@@ -195,6 +196,17 @@ public class MatchData extends SavedData {
     public int getScore(String crew) {
         if (crew == null || crew.isEmpty()) return 0;
         return teamScores.getOrDefault(crew, 0);
+    }
+
+    public int getAliveCount(MinecraftServer server) {
+        int alive = 0;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            UUID id = player.getUUID();
+            if (!permanentDead.contains(id) && !downedPlayers.containsKey(id)) {
+                alive++;
+            }
+        }
+        return alive;
     }
 
     public void addScore(String crew, int delta) {

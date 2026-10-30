@@ -49,8 +49,10 @@ import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
+import net.minecraft.world.scores.Objective;
 import net.minecraft.world.scores.PlayerTeam;
 import net.minecraft.world.scores.Scoreboard;
+import net.minecraft.world.scores.criteria.ObjectiveCriteria;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
 import net.minecraftforge.event.entity.living.LivingEvent;
@@ -165,9 +167,70 @@ public final class Minigame {
     }
 
     private static long beaconCoordsAnnounced = 0;
+    private static final String SCOREBOARD_OBJECTIVE = "bc_match";
+    private static final String SCOREBOARD_DISPLAY = "blackchannel";
+
+    private static void initScoreboard(MinecraftServer server, MatchData match) {
+        Scoreboard scoreboard = server.overworld().getScoreboard();
+        Objective existing = scoreboard.getObjective(SCOREBOARD_OBJECTIVE);
+        if (existing != null) scoreboard.removeObjective(existing);
+        Objective obj = scoreboard.addObjective(SCOREBOARD_OBJECTIVE, ObjectiveCriteria.DUMMY, 
+                Component.literal("BlackChannel Match"), ObjectiveCriteria.RenderType.INTEGER);
+        obj.setDisplaySlot(0); // Sidebar
+    }
+
+    private static void updateScoreboard(MinecraftServer server, MatchData match, ServerLevel level) {
+        Scoreboard scoreboard = server.overworld().getScoreboard();
+        Objective obj = scoreboard.getObjective(SCOREBOARD_OBJECTIVE);
+        if (obj == null) return;
+
+        // Удаляем все старые записи
+        scoreboard.listPlayerNames().forEach(name -> {
+            if (name.startsWith("bc_")) {
+                scoreboard.resetPlayerScore(name, obj);
+            }
+        });
+
+        // Время
+        long endTick = match.finalActive ? match.finalEndTick : match.matchEndTick;
+        long now = level.getGameTime();
+        int timeLeftSec = (int) Math.max(0, (endTick - now) / 20L);
+        String timeStr = String.format("bc_time_%d:%02d", timeLeftSec / 60, timeLeftSec % 60);
+        scoreboard.getOrCreatePlayerScore(timeStr, obj).setScore(1);
+
+        // Живые
+        String aliveStr = "bc_alive_" + match.aliveCount;
+        scoreboard.getOrCreatePlayerScore(aliveStr, obj).setScore(2);
+
+        // Команды (в обратном порядке чтобы были сверху)
+        int rank = 3;
+        for (String code : match.teamScores.keySet()) {
+            int score = match.teamScores.get(code);
+            String teamStr = "bc_team_" + code + "_" + score;
+            scoreboard.getOrCreatePlayerScore(teamStr, obj).setScore(rank++);
+        }
+    }
+
+    private static void clearScoreboard(MinecraftServer server) {
+        Scoreboard scoreboard = server.overworld().getScoreboard();
+        Objective obj = scoreboard.getObjective(SCOREBOARD_OBJECTIVE);
+        if (obj != null) {
+            scoreboard.listPlayerNames().forEach(name -> {
+                if (name.startsWith("bc_")) {
+                    scoreboard.resetPlayerScore(name, obj);
+                }
+            });
+            scoreboard.removeObjective(obj);
+        }
+    }
 
     private static void tickMatch(MinecraftServer server, MatchData match, ServerLevel level) {
         long now = level.getGameTime();
+        // Обновляем scoreboard каждую секунду (20 тиков)
+        if (now % 20 == 0) {
+            match.aliveCount = match.getAliveCount(server);
+            updateScoreboard(server, match, level);
+        }
         // Координаты маяков через 1.5 часа (108000 тиков от начала матча)
         long matchStart = match.matchEndTick - Config.MATCH_DURATION_MINUTES.get() * 60L * 20L;
         if (beaconCoordsAnnounced == 0 && now >= matchStart + 108000L) {
@@ -224,6 +287,7 @@ public final class Minigame {
             restoreKeep(level, match);
         }
         removeTeamNametags(server);
+        clearScoreboard(server);
         // Определяем победителя
         String winner = null;
         int maxScore = -1;
@@ -328,16 +392,17 @@ public final class Minigame {
                 int half = match.size / 2;
                 boolean insideXZ = Math.abs(beaconPos.getX() - match.centerX) <= half && 
                                    Math.abs(beaconPos.getZ() - match.centerZ) <= half;
-                if (insideXZ) {
-                    Block b = matchLevel.getBlockState(beaconPos).getBlock();
-                    if (b == ModContent.BEACON.get()) {
-                        hasRespawn = true;
-                        respawnPos = beaconPos;
-                        downedTicks = 200; // 10 секунд
-                    }
+                Block b = matchLevel.getBlockState(beaconPos).getBlock();
+                boolean beaconExists = (b == ModContent.BEACON.get());
+                victim.sendSystemMessage(Component.literal("DEBUG: beacon=" + beaconPos + " inside=" + insideXZ + " exists=" + beaconExists));
+                if (insideXZ && beaconExists) {
+                    hasRespawn = true;
+                    respawnPos = beaconPos;
+                    downedTicks = 200; // 10 секунд
                 }
             }
         }
+        victim.sendSystemMessage(Component.literal("DEBUG: hasRespawn=" + hasRespawn + " crew=" + crew + " beaconPos=" + beaconPos));
         if (hasRespawn && respawnPos != null) {
             // Downed состояние
             MatchData.DownedState ds = new MatchData.DownedState();
@@ -480,8 +545,11 @@ public final class Minigame {
                 BlockPos beaconPos = match.getBeacon(match.playerCrew.getOrDefault(player.getUUID(), ""));
                 ServerLevel level = Ops.levelOf(player.getServer(), match.dim);
                 BlockPos respawnPos = bedPos != null ? bedPos : beaconPos;
-                if (respawnPos != null && level != null && match.inside(respawnPos)) {
-                    place(player, level, respawnPos, player.getYRot());
+                if (respawnPos != null && level != null) {
+                    // Телепортируем рядом с кроватью/маяком
+                    BlockPos spawnPos = respawnPos.above();
+                    player.teleportTo(level, spawnPos.getX() + 0.5, spawnPos.getY(), spawnPos.getZ() + 0.5, player.getYRot(), player.getXRot());
+                    player.setDeltaMovement(net.minecraft.world.phys.Vec3.ZERO);
                 } else {
                     assign(player, match, true);
                 }
@@ -894,6 +962,7 @@ public final class Minigame {
         match.active = true;
         match.setDirty();
         applyTeamNametags(server, match);
+        initScoreboard(server, match);
         beaconCoordsAnnounced = 0;
         source.sendSuccess(() -> Component.translatable("blackchannel.minigame.started", groups.size(), gap), true);
         if (cramped) source.sendSuccess(() -> Component.translatable("blackchannel.minigame.cramped", gap), true);
