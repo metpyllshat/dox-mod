@@ -100,7 +100,7 @@ public final class Ops {
             case Actions.AIR -> toggleAir(player, profile);
             case Actions.DND -> { profile.dnd = !profile.dnd; result(player, profile, profile.dnd ? "blackchannel.result.dnd_on" : "blackchannel.result.dnd_off"); }
             case Actions.RADAR -> { profile.radarHud = !profile.radarHud; result(player, profile, profile.radarHud ? "blackchannel.result.radar_on" : "blackchannel.result.radar_off"); }
-            case Actions.CREW -> { profile.crew = Str.crew(arg); result(player, profile, "blackchannel.result.crew_set", profile.crew.isEmpty() ? "-" : profile.crew); }
+            case Actions.TEAM -> Minigame.setTeam(player, arg);
             case Actions.TRACE -> trace(player, profile, arg);
             case Actions.DEANON -> deanon(player, profile, arg);
             case Actions.SWAT -> swat(player, profile, arg);
@@ -1142,7 +1142,7 @@ public final class Ops {
     }
 
     private static boolean locks(String action) {
-        return !Actions.AIR.equals(action) && !Actions.DND.equals(action) && !Actions.KILL.equals(action);
+        return !Actions.AIR.equals(action) && !Actions.DND.equals(action) && !Actions.KILL.equals(action) && !Actions.TEAM.equals(action);
     }
 
     private static boolean near(ServerPlayer player, NetData.Strike strike, int radius) {
@@ -1265,7 +1265,7 @@ public final class Ops {
 
     private static String scopeFor(String action) {
         if (Actions.SAY.equals(action) || Actions.DM.equals(action) || Actions.CHAN.equals(action)) return "chat";
-        if (Actions.AIR.equals(action) || Actions.DND.equals(action) || Actions.CREW.equals(action) || Actions.RADAR.equals(action)) return "gear";
+        if (Actions.AIR.equals(action) || Actions.DND.equals(action) || Actions.TEAM.equals(action) || Actions.RADAR.equals(action)) return "gear";
         if (Actions.BUY.equals(action) || Actions.BUY_LIST.equals(action)) return "market";
         if (Actions.SELL.equals(action)) return "sell";
         if (Actions.SELL_BUFF.equals(action)) return "gear";

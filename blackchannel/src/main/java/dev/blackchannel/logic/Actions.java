@@ -7,7 +7,7 @@ public final class Actions {
     public static final String AIR = "air";
     public static final String DND = "dnd";
     public static final String RADAR = "radar";
-    public static final String CREW = "crew";
+    public static final String TEAM = "team";
     public static final String TRACE = "trace";
     public static final String DEANON = "deanon";
     public static final String SWAT = "swat";

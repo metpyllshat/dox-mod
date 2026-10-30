@@ -30,9 +30,20 @@ public class NodeBlock extends BaseEntityBlock {
     public final Kind kind;
 
     public NodeBlock(Kind kind, MapColor color) {
-        super(Properties.of().mapColor(color).strength(3.5f, 8f).sound(net.minecraft.world.level.block.SoundType.METAL)
-                .pushReaction(net.minecraft.world.level.material.PushReaction.BLOCK));
+        super(properties(kind, color));
         this.kind = kind;
+    }
+
+    private static Properties properties(Kind kind, MapColor color) {
+        Properties props = Properties.of().mapColor(color).sound(net.minecraft.world.level.block.SoundType.METAL)
+                .pushReaction(net.minecraft.world.level.material.PushReaction.BLOCK);
+        if (kind == Kind.BEACON) {
+            // Маяк отряда — главная цель: долго ломается и держит взрыв
+            props.strength(60f, 1800f).requiresCorrectToolForDrops();
+        } else {
+            props.strength(3.5f, 8f);
+        }
+        return props;
     }
 
     @Override

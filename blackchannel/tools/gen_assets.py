@@ -170,8 +170,8 @@ def recipes():
         "T": "minecraft:redstone_torch", "R": "minecraft:redstone",
         "I": "minecraft:iron_ingot", "C": "minecraft:copper_ingot",
     }, "blackchannel:signal_jammer", unlock="minecraft:redstone_torch")
-    shaped("team_beacon", [" E ", "RIR", " E "], {
-        "E": "minecraft:emerald", "R": "minecraft:redstone", "I": "minecraft:iron_ingot",
+    shaped("team_beacon", ["IRI", "RER", "IRI"], {
+        "I": "minecraft:iron_ingot", "R": "minecraft:redstone", "E": "minecraft:emerald",
     }, "blackchannel:team_beacon", unlock="minecraft:emerald")
     shaped("decoy_beacon", [" G ", "RIR", " G "], {
         "G": "minecraft:gold_ingot", "R": "minecraft:redstone", "I": "minecraft:iron_ingot",
