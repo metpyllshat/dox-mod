@@ -46,7 +46,7 @@ public class ToolItem extends Item {
                 if (!player.isShiftKeyDown()) sp.displayClientMessage(Component.translatable("blackchannel.hint.sim_sneak"), true);
                 else Ops.wipeFromSim(sp);
             }
-            case SAMPLE -> Ops.turnIn(sp, stack);
+            case SAMPLE -> sp.displayClientMessage(Component.translatable("blackchannel.hint.passive"), true);
             case SAT, VPN, VPN2, IDS, HARDEN, CELL -> Ops.install(sp, kind, stack);
             default -> sp.displayClientMessage(Component.translatable("blackchannel.hint.passive"), true);
         }

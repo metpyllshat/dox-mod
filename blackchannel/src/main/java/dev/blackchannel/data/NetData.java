@@ -23,12 +23,9 @@ public class NetData extends SavedData {
     public final List<Listing> listings = new ArrayList<>();
     public final List<Strike> strikes = new ArrayList<>();
     public final List<BlockBug> blockBugs = new ArrayList<>();
-    public final List<Bounty> bounties = new ArrayList<>();
     public int listingSeq = 1;
     public int strikeSeq = 1;
-    public int bountySeq = 1;
     public long nextRumorTick;
-    public long nextBountyTick;
 
     public static NetData get(MinecraftServer server) {
         return server.overworld().getDataStorage().computeIfAbsent(NetData::load, NetData::new, "blackchannel");
@@ -52,16 +49,11 @@ public class NetData extends SavedData {
         for (int i = 0; i < strikes.size(); i++) data.strikes.add(Strike.load(strikes.getCompound(i)));
         ListTag bugs = tag.getList("blockBugs", Tag.TAG_COMPOUND);
         for (int i = 0; i < bugs.size(); i++) data.blockBugs.add(BlockBug.load(bugs.getCompound(i)));
-        ListTag bounties = tag.getList("bounties", Tag.TAG_COMPOUND);
-        for (int i = 0; i < bounties.size(); i++) data.bounties.add(Bounty.load(bounties.getCompound(i)));
         data.listingSeq = tag.getInt("listingSeq");
         data.strikeSeq = tag.getInt("strikeSeq");
-        data.bountySeq = tag.getInt("bountySeq");
         data.nextRumorTick = tag.getLong("nextRumor");
-        data.nextBountyTick = tag.getLong("nextBounty");
         if (data.listingSeq < 1) data.listingSeq = 1;
         if (data.strikeSeq < 1) data.strikeSeq = 1;
-        if (data.bountySeq < 1) data.bountySeq = 1;
         return data;
     }
 
@@ -80,14 +72,9 @@ public class NetData extends SavedData {
         ListTag bugs = new ListTag();
         for (BlockBug bug : blockBugs) bugs.add(bug.save());
         tag.put("blockBugs", bugs);
-        ListTag bounties = new ListTag();
-        for (Bounty bounty : this.bounties) bounties.add(bounty.save());
-        tag.put("bounties", bounties);
         tag.putInt("listingSeq", listingSeq);
         tag.putInt("strikeSeq", strikeSeq);
-        tag.putInt("bountySeq", bountySeq);
         tag.putLong("nextRumor", nextRumorTick);
-        tag.putLong("nextBounty", nextBountyTick);
         return tag;
     }
 
@@ -132,7 +119,6 @@ public class NetData extends SavedData {
     public void prune(long tick) {
         strikes.removeIf(s -> s.ticksLeft < -200);
         blockBugs.removeIf(b -> b.expireTick < tick);
-        bounties.removeIf(b -> b.expireTick < tick);
         for (Profile profile : profiles.values()) {
             profile.bugs.removeIf(b -> b.expireTick < tick);
             while (profile.intel.size() > 12) profile.intel.remove(0);
@@ -581,31 +567,6 @@ public class NetData extends SavedData {
             strike.ticksLeft = tag.getInt("l");
             strike.warned = tag.getBoolean("w");
             return strike;
-        }
-    }
-
-    public static final class Bounty {
-        public int id;
-        public String handle = "";
-        public int reward;
-        public long expireTick;
-
-        public CompoundTag save() {
-            CompoundTag tag = new CompoundTag();
-            tag.putInt("id", id);
-            tag.putString("h", handle);
-            tag.putInt("r", reward);
-            tag.putLong("e", expireTick);
-            return tag;
-        }
-
-        public static Bounty load(CompoundTag tag) {
-            Bounty bounty = new Bounty();
-            bounty.id = tag.getInt("id");
-            bounty.handle = tag.getString("h");
-            bounty.reward = tag.getInt("r");
-            bounty.expireTick = tag.getLong("e");
-            return bounty;
         }
     }
 }

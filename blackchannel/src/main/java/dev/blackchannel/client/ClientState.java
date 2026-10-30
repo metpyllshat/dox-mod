@@ -35,13 +35,30 @@ public final class ClientState {
     public static final List<ListingRow> listings = new ArrayList<>();
     public static final List<TrackRow> trackers = new ArrayList<>();
     public static final List<String> contacts = new ArrayList<>();
-    public static final List<BountyRow> bounties = new ArrayList<>();
     public static final List<LogRow> logs = new ArrayList<>();
     public static final List<DeanonRow> deanons = new ArrayList<>();
     public static final List<DeanonRow> heard = new ArrayList<>();
     public static final List<String> floodLines = new ArrayList<>();
     public static final List<String> floodImages = new ArrayList<>();
     public static final List<PeekSlot> peek = new ArrayList<>();
+
+    // Match HUD state
+    public static int matchTimeLeftSeconds;
+    public static boolean matchFinalActive;
+    public static final Map<String, TeamScore> teamScores = new java.util.LinkedHashMap<>();
+    public static int aliveCount;
+    public static String selfStatus = "";
+    public static int selfDownedSeconds;
+    public static boolean matchActive;
+    public static final List<String> selfCrew = new ArrayList<>();
+
+    public static final class TeamScore {
+        public String code;
+        public int score;
+        public int colorIdx;
+        public int alive;
+        public int total;
+    }
     public static final Map<String, Integer> cfg = new HashMap<>();
     public static byte[] optic = new byte[0];
     public static int[] opticColor = new int[0];
@@ -75,7 +92,6 @@ public final class ClientState {
         readLogs(tag.getList("logs", Tag.TAG_COMPOUND));
         readDean(tag.getList("deanons", Tag.TAG_COMPOUND));
         readHeard(tag.getList("heard", Tag.TAG_COMPOUND));
-        readBounties(tag.getList("bounties", Tag.TAG_COMPOUND));
         optic = tag.contains("optic") ? tag.getByteArray("optic") : new byte[0];
         opticColor = tag.contains("opticC") ? tag.getIntArray("opticC") : new int[0];
         opticHx = tag.contains("opticHx") ? tag.getInt("opticHx") : -1;
@@ -90,6 +106,33 @@ public final class ClientState {
         contacts.clear();
         ListTag names = tag.getList("contacts", Tag.TAG_STRING);
         for (int i = 0; i < names.size(); i++) contacts.add(names.getString(i));
+        readMatchState(tag.getCompound("match"));
+    }
+
+    private static void readMatchState(CompoundTag m) {
+        if (m == null || m.isEmpty()) {
+            matchActive = false;
+            teamScores.clear();
+            return;
+        }
+        matchActive = m.getBoolean("on");
+        matchFinalActive = m.getBoolean("final");
+        matchTimeLeftSeconds = m.getInt("timeLeft");
+        aliveCount = m.getInt("alive");
+        selfStatus = m.getString("selfStatus");
+        selfDownedSeconds = m.getInt("selfDowned");
+        teamScores.clear();
+        ListTag teams = m.getList("teams", Tag.TAG_COMPOUND);
+        for (int i = 0; i < teams.size(); i++) {
+            CompoundTag t = teams.getCompound(i);
+            TeamScore ts = new TeamScore();
+            ts.code = t.getString("code");
+            ts.score = t.getInt("score");
+            ts.colorIdx = t.getInt("colorIdx");
+            ts.alive = t.getInt("alive");
+            ts.total = t.getInt("total");
+            teamScores.put(ts.code, ts);
+        }
     }
 
     public static void applyStatus(CompoundTag tag) {
@@ -268,14 +311,6 @@ public final class ClientState {
         }
     }
 
-    private static void readBounties(ListTag list) {
-        bounties.clear();
-        for (int i = 0; i < list.size(); i++) {
-            CompoundTag c = list.getCompound(i);
-            bounties.add(new BountyRow(c.getString("h"), c.getInt("reward")));
-        }
-    }
-
     public static final class IntelRow {
         public int id, x, y, z, err, age;
         public String handle = "", dim = "";
@@ -293,6 +328,5 @@ public final class ClientState {
     public record TrackRow(String label, String dim, int x, int y, int z, boolean live) {}
     public record LogRow(String key, String arg, int age) {}
     public record DeanonRow(String handle, String name) {}
-    public record BountyRow(String handle, int reward) {}
     public record PeekSlot(int slot, String id, int count, boolean hidden, boolean lie, CompoundTag nbt) {}
 }
