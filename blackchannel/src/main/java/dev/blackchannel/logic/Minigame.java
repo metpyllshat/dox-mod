@@ -223,15 +223,14 @@ public final class Minigame {
             return;
         }
         obj.setDisplayName(titleFor(server, match, server.overworld().getGameTime()));
-        for (String name : lineNames) scoreboard.resetPlayerScore(name, obj);
-        lineNames.clear();
         List<Map.Entry<String, Integer>> rows = new ArrayList<>(match.teamScores.entrySet());
         rows.sort((a, b) -> Integer.compare(b.getValue(), a.getValue()));
+        Set<String> keep = new HashSet<>();
         int index = 0;
         for (Map.Entry<String, Integer> row : rows) {
             String code = row.getKey();
             String label = teamLabel(server, code);
-            if (label.isEmpty()) continue;
+            if (label.isEmpty() || !keep.add(label)) continue;
             scoreboard.getOrCreatePlayerScore(label, obj).setScore(row.getValue());
             PlayerTeam team = index < lineTeams.length ? lineTeams[index] : null;
             // Не трогаем настоящих игроков: у них своя команда для ника
@@ -240,9 +239,13 @@ public final class Minigame {
                 team.setColor(out ? ChatFormatting.DARK_GRAY : scoreColor(match, code));
                 scoreboard.addPlayerToTeam(label, team);
             }
-            lineNames.add(label);
             index++;
         }
+        for (String old : lineNames) {
+            if (!keep.contains(old)) scoreboard.resetPlayerScore(old, obj);
+        }
+        lineNames.clear();
+        lineNames.addAll(keep);
     }
 
     private static ChatFormatting scoreColor(MatchData match, String code) {
