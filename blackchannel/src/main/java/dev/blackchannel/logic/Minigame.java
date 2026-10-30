@@ -186,7 +186,7 @@ public final class Minigame {
                 if (player != null) {
                     match.permanentDead.add(id);
                     match.clearDowned(id);
-                    player.changeGameMode(net.minecraft.world.level.GameType.SPECTATOR);
+                    player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
                     player.sendSystemMessage(Component.translatable("blackchannel.minigame.permanent_dead"));
                     String crew = match.playerCrew.getOrDefault(id, "");
                     checkTeamElimination(match, crew);
@@ -222,7 +222,7 @@ public final class Minigame {
         int finalMax = maxScore;
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             player.sendSystemMessage(Component.translatable("blackchannel.minigame.match_end", finalWinner, finalMax));
-            player.changeGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+            player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
         }
         match.setDirty();
     }
@@ -323,7 +323,7 @@ public final class Minigame {
                 ds.killerHandle = kp.handle == null ? "" : kp.handle;
                 ds.killerCrew = match.playerCrew.getOrDefault(killer.getUUID(), "");
             }
-            match.downed(victim.getUUID(), ds);
+            match.down(victim.getUUID(), ds);
             victim.setHealth(20f);
             victim.setPose(Pose.SLEEPING);
             victim.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, Config.DOWNED_DURATION_TICKS.get() + 40, 1, false, false));
@@ -340,7 +340,7 @@ public final class Minigame {
             victim.getServer().getPlayerList().broadcastSystemMessage(
                     Component.translatable("blackchannel.minigame.permanent_dead_announce", victim.getGameProfile().getName()), false);
             // Перевод в наблюдатели
-            victim.changeGameMode(net.minecraft.world.level.GameType.SPECTATOR);
+            victim.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
             checkTeamElimination(match, crew);
         }
         match.setDirty();
@@ -427,7 +427,7 @@ public final class Minigame {
             match.clearDowned(player.getUUID());
             player.setPose(Pose.STANDING);
             player.noPhysics = false;
-            player.changeGameMode(net.minecraft.world.level.GameType.SPECTATOR);
+            player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
             player.sendSystemMessage(Component.translatable("blackchannel.minigame.permanent_dead"));
             String crew = match.playerCrew.getOrDefault(player.getUUID(), "");
             checkTeamElimination(match, crew);
@@ -477,7 +477,7 @@ public final class Minigame {
         if (!match.active) return;
         // Если permanently dead — сразу в наблюдатели
         if (match.permanentDead.contains(player.getUUID())) {
-            player.changeGameMode(net.minecraft.world.level.GameType.SPECTATOR);
+            player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
             return;
         }
         // Обычный респаун — в начальную точку (игрок умер и нет кровати/маяка)
@@ -496,7 +496,7 @@ public final class Minigame {
         MatchData match = MatchData.get(player.getServer());
         if (!match.active) return;
         if (match.permanentDead.contains(player.getUUID())) {
-            player.changeGameMode(net.minecraft.world.level.GameType.SPECTATOR);
+            player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
             return;
         }
         if (!match.drops.containsKey(player.getUUID())) assign(player, match, true);
@@ -911,9 +911,10 @@ public final class Minigame {
             ChatFormatting color = TEAM_COLORS.get(colorIdx % TEAM_COLORS.size());
             Scoreboard scoreboard = server.overworld().getScoreboard();
             String teamName = "bc_" + Math.abs(player.getUUID().hashCode()) % 100000;
-            PlayerTeam team = scoreboard.addNewTeam(teamName);
+            PlayerTeam team = new PlayerTeam(scoreboard, teamName);
             team.setNameTagVisibility(PlayerTeam.Visibility.ALWAYS);
             team.setColor(color);
+            scoreboard.addPlayerTeam(team);
             scoreboard.addPlayerToTeam(player.getGameProfile().getName(), team);
         }
     }
@@ -925,7 +926,7 @@ public final class Minigame {
             PlayerTeam team = scoreboard.getPlayersTeam(player.getGameProfile().getName());
             if (team != null && team.getName().startsWith("bc_")) {
                 scoreboard.removePlayerFromTeam(player.getGameProfile().getName(), team);
-                scoreboard.removeTeam(team);
+                scoreboard.removePlayerTeam(team);
             }
         }
     }
