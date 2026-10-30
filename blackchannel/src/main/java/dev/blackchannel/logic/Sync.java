@@ -2,6 +2,7 @@ package dev.blackchannel.logic;
 
 import dev.blackchannel.Config;
 import dev.blackchannel.block.NodeBlockEntity;
+import dev.blackchannel.data.MatchData;
 import dev.blackchannel.data.NetData;
 import dev.blackchannel.menu.Menus;
 import dev.blackchannel.registry.ModContent;
@@ -136,15 +137,6 @@ public final class Sync {
             }
         }
         tag.put("contacts", contacts);
-
-        ListTag bounties = new ListTag();
-        for (NetData.Bounty bounty : data.bounties) {
-            CompoundTag c = new CompoundTag();
-            c.putString("h", bounty.handle);
-            c.putInt("reward", bounty.reward);
-            bounties.add(c);
-        }
-        tag.put("bounties", bounties);
         if (profile.optic != null && profile.optic.length == Optics.GRID * Optics.GRID) {
             tag.putByteArray("optic", profile.optic);
             if (profile.opticColor != null && profile.opticColor.length == profile.optic.length) tag.putIntArray("opticC", profile.opticColor);
@@ -163,6 +155,7 @@ public final class Sync {
             tag.putInt("rackCharge", be.charge);
             tag.putBoolean("rackHackable", be.owner != null && !be.owner.equals(player.getUUID()));
         }
+        putMatchState(tag, player, profile, now);
         return tag;
     }
 
@@ -355,5 +348,51 @@ public final class Sync {
         double dx = player.getX() - strike.x;
         double dz = player.getZ() - strike.z;
         return Math.sqrt(dx * dx + dz * dz);
+    }
+
+    private static void putMatchState(CompoundTag tag, ServerPlayer player, NetData.Profile profile, int now) {
+        MatchData match = MatchData.get(player.getServer());
+        if (!match.active) {
+            tag.put("match", new CompoundTag());
+            return;
+        }
+        long matchTime = player.getServer().overworld().getGameTime();
+        long endTick = match.finalActive ? match.finalEndTick : match.matchEndTick;
+        int timeLeftSec = (int) Math.max(0, (endTick - matchTime) / 20L);
+        CompoundTag m = new CompoundTag();
+        m.putBoolean("on", true);
+        m.putBoolean("final", match.finalActive);
+        m.putInt("timeLeft", timeLeftSec);
+        m.putString("selfStatus", Minigame.selfStatusFor(player, match));
+        m.putInt("selfDowned", Minigame.selfDownedSeconds(player, match));
+
+        // Team scores & alive
+        java.util.Map<String, Integer> teamTotal = new java.util.HashMap<>();
+        java.util.Map<String, Integer> teamAlive = new java.util.HashMap<>();
+        int aliveCount = 0;
+        for (ServerPlayer p : player.getServer().getPlayerList().getPlayers()) {
+            String code = NetData.get(p).profile(p.getUUID()).crew;
+            if (code == null || code.isEmpty()) code = "solo:" + p.getUUID();
+            teamTotal.merge(code, 1, Integer::sum);
+            boolean dead = match.permanentDead.contains(p.getUUID());
+            boolean downed = match.downedPlayers.containsKey(p.getUUID());
+            if (!dead && !downed) {
+                teamAlive.merge(code, 1, Integer::sum);
+                aliveCount++;
+            }
+        }
+        m.putInt("alive", aliveCount);
+        ListTag teams = new ListTag();
+        for (String code : match.teamScores.keySet()) {
+            CompoundTag t = new CompoundTag();
+            t.putString("code", code);
+            t.putInt("score", match.teamScores.getOrDefault(code, 0));
+            t.putInt("colorIdx", match.teamColorIdx.getOrDefault(code, 11));
+            t.putInt("alive", teamAlive.getOrDefault(code, 0));
+            t.putInt("total", teamTotal.getOrDefault(code, 0));
+            teams.add(t);
+        }
+        m.put("teams", teams);
+        tag.put("match", m);
     }
 }

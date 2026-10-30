@@ -60,7 +60,6 @@ public final class Ops {
         }
         data.prune(tick);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) tickPlayer(server, data, player, tick);
-        tickBounties(server, data, tick);
         tickRumor(server, data, tick);
         data.setDirty();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -114,7 +113,6 @@ public final class Ops {
             case Actions.SELL_BUFF -> sellBuff(player, profile, arg);
             case Actions.OPTIC -> Optics.optic(player, profile, arg);
             case Actions.PEEK -> Optics.peek(player, profile, arg);
-            case Actions.BOUNTY -> turnInHeld(player);
             case Actions.HACK -> hack(player, profile);
             case Actions.KILL -> killSwitch(player, rackPos(player));
             default -> { }
@@ -399,42 +397,6 @@ public final class Ops {
         profile.crypto -= n;
         give(player, new ItemStack(ModContent.HASH.get(), n));
         result(player, profile, "blackchannel.result.withdraw", String.valueOf(n));
-    }
-
-    public static void turnInHeld(ServerPlayer player) {
-        ItemStack stack = player.getMainHandItem();
-        if (!stack.is(ModContent.SAMPLE.get())) stack = findSample(player, null);
-        if (stack.isEmpty()) {
-            result(player, NetData.get(player).profile(player.getUUID()), "blackchannel.result.no_target");
-            return;
-        }
-        turnIn(player, stack);
-    }
-
-    public static void turnIn(ServerPlayer player, ItemStack stack) {
-        NetData data = NetData.get(player);
-        NetData.Profile profile = data.profile(player.getUUID());
-        if (Devices.sampleEncrypted(stack)) {
-            result(player, profile, "blackchannel.result.sample_encrypted");
-            return;
-        }
-        String handle = Devices.sampleHandle(stack);
-        NetData.Bounty bounty = null;
-        for (NetData.Bounty row : data.bounties) if (row.handle.equals(handle)) bounty = row;
-        if (bounty == null) {
-            result(player, profile, "blackchannel.result.no_target");
-            return;
-        }
-        stack.shrink(1);
-        profile.crypto = Math.min(5000, profile.crypto + bounty.reward);
-        data.bounties.remove(bounty);
-        result(player, profile, "blackchannel.result.bounty_ok", handle, String.valueOf(bounty.reward));
-        NetData.Profile target = data.byHandle(handle);
-        if (target != null && player.getRandom().nextFloat() < 0.55f) {
-            ServerPlayer online = player.getServer().getPlayerList().getPlayer(target.id);
-            if (online != null) online.sendSystemMessage(Component.translatable("blackchannel.chat.bounty", handle));
-        }
-        data.setDirty();
     }
 
     public static void killSwitch(ServerPlayer player, BlockPos pos) {
@@ -989,29 +951,6 @@ public final class Ops {
         return n;
     }
 
-    private static void tickBounties(MinecraftServer server, NetData data, int tick) {
-        if (!Config.BOUNTY_ENABLED.get()) return;
-        if (data.nextBountyTick == 0) data.nextBountyTick = tick + 20 * 60 * 6;
-        if (tick < data.nextBountyTick || data.bounties.size() >= 2) return;
-        data.nextBountyTick = tick + 20L * 60 * 8;
-        ServerPlayer pick = null;
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            NetData.Profile profile = data.profile(player.getUUID());
-            if (SignalEnv.transmitting(player, profile) && (pick == null || player.getRandom().nextBoolean())) pick = player;
-        }
-        if (pick == null || server.getPlayerList().getPlayerCount() < 2) return;
-        NetData.Profile profile = data.profile(pick.getUUID());
-        NetData.Bounty bounty = new NetData.Bounty();
-        bounty.id = data.bountySeq++;
-        bounty.handle = profile.handle;
-        bounty.reward = 16 + profile.vpn * 10;
-        bounty.expireTick = tick + 20L * 60 * 10;
-        data.bounties.add(bounty);
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            if (Devices.hasDevice(player)) player.sendSystemMessage(Component.translatable("blackchannel.chat.bounty_new", profile.handle, bounty.reward));
-        }
-    }
-
     private static void tickRumor(MinecraftServer server, NetData data, int tick) {
         if (!Config.RUMOR_ENABLED.get()) return;
         if (data.nextRumorTick == 0) data.nextRumorTick = tick + 20 * 60 * 8;
@@ -1327,7 +1266,7 @@ public final class Ops {
     private static String scopeFor(String action) {
         if (Actions.SAY.equals(action) || Actions.DM.equals(action) || Actions.CHAN.equals(action)) return "chat";
         if (Actions.AIR.equals(action) || Actions.DND.equals(action) || Actions.CREW.equals(action) || Actions.RADAR.equals(action)) return "gear";
-        if (Actions.BUY.equals(action) || Actions.BUY_LIST.equals(action) || Actions.BOUNTY.equals(action)) return "market";
+        if (Actions.BUY.equals(action) || Actions.BUY_LIST.equals(action)) return "market";
         if (Actions.SELL.equals(action)) return "sell";
         if (Actions.SELL_BUFF.equals(action)) return "gear";
         if (Actions.OPTIC.equals(action)) return "area";

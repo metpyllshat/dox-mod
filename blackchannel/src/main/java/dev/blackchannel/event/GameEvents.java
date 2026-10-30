@@ -22,10 +22,12 @@ import net.minecraftforge.event.TickEvent;
 import net.minecraftforge.event.entity.EntityJoinLevelEvent;
 import net.minecraftforge.event.entity.living.LivingDeathEvent;
 import net.minecraftforge.event.entity.living.LivingHurtEvent;
+import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.level.BlockEvent;
+import net.minecraftforge.event.level.BlockEvent.EntityPlaceEvent;
 import net.minecraftforge.event.level.ChunkEvent;
 import net.minecraftforge.event.level.ExplosionEvent;
 import net.minecraftforge.event.server.ServerStartedEvent;
@@ -122,8 +124,23 @@ public final class GameEvents {
     }
 
     @SubscribeEvent
+    public static void interactEntity(PlayerInteractEvent.EntityInteract event) {
+        Minigame.onInteractEntity(event);
+    }
+
+    @SubscribeEvent
     public static void broken(BlockEvent.BreakEvent event) {
         Minigame.onBreak(event);
+    }
+
+    @SubscribeEvent
+    public static void placed(EntityPlaceEvent event) {
+        Minigame.onPlace(event);
+    }
+
+    @SubscribeEvent
+    public static void livingTick(LivingEvent.LivingTickEvent event) {
+        Minigame.onLivingTick(event);
     }
 
     @SubscribeEvent

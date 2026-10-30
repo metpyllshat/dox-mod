@@ -149,11 +149,11 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     private void drawMarket(GuiGraphics g, int x, int y, int mx, int my) {
         Ui.button(g, font, hits, x + 6, y + 44, 74, 14, Ui.t("screen.blackchannel.market.shop"), marketTab == 0, "mkt", "0");
         Ui.button(g, font, hits, x + 84, y + 44, 74, 14, Ui.t("screen.blackchannel.market.board"), marketTab == 1, "mkt", "1");
-        Ui.button(g, font, hits, x + 162, y + 44, 78, 14, Ui.t("screen.blackchannel.market.bounty"), marketTab == 2, "mkt", "2");
+        Ui.button(g, font, hits, x + 162, y + 44, 78, 14, Ui.t("screen.blackchannel.market.auction"), marketTab == 2, "mkt", "2");
         g.fill(x + 8, y + 60, x + imageWidth - 8, y + 186, 0xFF07110C);
         if (marketTab == 0) drawShop(g, x, y, mx, my);
         else if (marketTab == 1) drawBoard(g, x, y, mx, my);
-        else drawBounties(g, x, y);
+        else drawAuction(g, x, y, mx, my);
     }
 
     private void drawShop(GuiGraphics g, int x, int y, int mx, int my) {
@@ -185,7 +185,8 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     }
 
     private void drawBoard(GuiGraphics g, int x, int y, int mx, int my) {
-        var rows = ClientState.listings;
+        // Только intel-лоты (следы)
+        var rows = intelListings();
         int pages = Math.max(1, (rows.size() + 17) / 18);
         if (marketPage >= pages) marketPage = pages - 1;
         if (marketPage < 0) marketPage = 0;
@@ -215,38 +216,73 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             if (lot(g, sx, sy, stack, row.price, on, mx, my)) {
                 hits.add(new Ui.Hit(sx, sy, 36, 38, "lpick", String.valueOf(row.id), null));
                 armTip(stack, row.price, row.seller, null);
-                if (row.intel) armSecret(row);
+                armSecret(row);
             }
         }
         if (picked == null) drawMarketFoot(g, x, y, ItemStack.EMPTY, null, "", 0, null, "", pages);
         else {
             ItemStack stack = listingStack(picked);
             String name = stack.isEmpty() ? picked.desc : stack.getHoverName().getString();
-            if (!picked.intel && stack.getCount() > 1) name = name + " x" + stack.getCount();
-            drawMarketFoot(g, x, y, stack, name, picked.seller, picked.price, Actions.BUY_LIST, String.valueOf(picked.id), pages, picked.intel ? secret(picked) : null);
+            drawMarketFoot(g, x, y, stack, name, picked.seller, picked.price, Actions.BUY_LIST, String.valueOf(picked.id), pages, secret(picked));
         }
     }
 
-    private void drawBounties(GuiGraphics g, int x, int y) {
-        if (ClientState.bounties.isEmpty()) {
-            int ly = y + 90;
-            for (String line : Ui.wrap(font, Ui.t("screen.blackchannel.market.no_bounty"), imageWidth - 28)) {
+    private java.util.List<ClientState.ListingRow> intelListings() {
+        java.util.List<ClientState.ListingRow> out = new java.util.ArrayList<>();
+        for (ClientState.ListingRow row : ClientState.listings) {
+            if (row.intel) out.add(row);
+        }
+        return out;
+    }
+
+    private java.util.List<ClientState.ListingRow> itemListings() {
+        java.util.List<ClientState.ListingRow> out = new java.util.ArrayList<>();
+        for (ClientState.ListingRow row : ClientState.listings) {
+            if (!row.intel) out.add(row);
+        }
+        return out;
+    }
+
+    private void drawAuction(GuiGraphics g, int x, int y, int mx, int my) {
+        var rows = itemListings();
+        int pages = Math.max(1, (rows.size() + 17) / 18);
+        if (marketPage >= pages) marketPage = pages - 1;
+        if (marketPage < 0) marketPage = 0;
+        if (rows.isEmpty()) {
+            int ly = y + 96;
+            for (String line : Ui.wrap(font, Ui.t("screen.blackchannel.market.empty_items"), imageWidth - 28)) {
                 g.drawString(font, line, x + 14, ly, Ui.MUTED, false);
                 ly += 10;
             }
+            drawMarketFoot(g, x, y, ItemStack.EMPTY, "", "", 0, null, "", 1);
+            return;
         }
-        int ly = y + 70;
-        ItemStack coin = new ItemStack(ModContent.HASH.get());
-        for (ClientState.BountyRow bounty : ClientState.bounties) {
-            if (ly > y + 160) break;
-            g.fill(x + 14, ly, x + imageWidth - 14, ly + 28, 0xFF101614);
-            g.fill(x + 14, ly, x + imageWidth - 14, ly + 1, Ui.AMBER);
-            g.renderItem(coin, x + 18, ly + 6);
-            g.drawString(font, Ui.trim(font, "@" + bounty.handle(), 150), x + 40, ly + 6, Ui.TEXT, false);
-            g.drawString(font, "#" + bounty.reward(), x + 40, ly + 16, Ui.AMBER, false);
-            ly += 32;
+        int start = marketPage * 18;
+        ClientState.ListingRow picked = null;
+        for (int i = 0; i < 18; i++) {
+            int sx = lotX(x, i % 6);
+            int sy = lotY(y, i / 6);
+            int idx = start + i;
+            if (idx >= rows.size()) {
+                emptyLot(g, sx, sy);
+                continue;
+            }
+            ClientState.ListingRow row = rows.get(idx);
+            ItemStack stack = listingStack(row);
+            boolean on = row.id == listPick;
+            if (on) picked = row;
+            if (lot(g, sx, sy, stack, row.price, on, mx, my)) {
+                hits.add(new Ui.Hit(sx, sy, 36, 38, "lpick", String.valueOf(row.id), null));
+                armTip(stack, row.price, row.seller, null);
+            }
         }
-        drawMarketFoot(g, x, y, ItemStack.EMPTY, Ui.t("screen.blackchannel.market.bounty_note"), "", 0, null, "", 1);
+        if (picked == null) drawMarketFoot(g, x, y, ItemStack.EMPTY, null, "", 0, null, "", pages);
+        else {
+            ItemStack stack = listingStack(picked);
+            String name = stack.isEmpty() ? picked.desc : stack.getHoverName().getString();
+            if (stack.getCount() > 1) name = name + " x" + stack.getCount();
+            drawMarketFoot(g, x, y, stack, name, picked.seller, picked.price, Actions.BUY_LIST, String.valueOf(picked.id), pages);
+        }
     }
 
     private int lotX(int x, int col) {

@@ -12,7 +12,6 @@ public final class Config {
     public static final ForgeConfigSpec.BooleanValue SWAT_FIRE;
     public static final ForgeConfigSpec.BooleanValue BOMB_ENABLED;
     public static final ForgeConfigSpec.BooleanValue RUMOR_ENABLED;
-    public static final ForgeConfigSpec.BooleanValue BOUNTY_ENABLED;
     public static final ForgeConfigSpec.BooleanValue HOOK_EMP;
     public static final ForgeConfigSpec.BooleanValue HOOK_JAMMER;
     public static final ForgeConfigSpec.BooleanValue HOOK_DRONE;
@@ -71,6 +70,13 @@ public final class Config {
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> FLOOD_LINES;
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> FLOOD_SOUNDS;
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> FLOOD_IMAGES;
+    public static final ForgeConfigSpec.IntValue MATCH_DURATION_MINUTES;
+    public static final ForgeConfigSpec.IntValue FINAL_DURATION_MINUTES;
+    public static final ForgeConfigSpec.IntValue SCORE_KILL;
+    public static final ForgeConfigSpec.IntValue SCORE_BED;
+    public static final ForgeConfigSpec.IntValue SCORE_BEACON;
+    public static final ForgeConfigSpec.IntValue REVIVE_STAND_SECONDS;
+    public static final ForgeConfigSpec.IntValue DOWNED_DURATION_TICKS;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -210,7 +216,17 @@ public final class Config {
 
         b.push("world");
         RUMOR_ENABLED = b.define("rumors", false);
-        BOUNTY_ENABLED = b.define("bounties", true);
+        b.pop();
+
+        b.push("match");
+        b.comment("Матч идёт matchDuration минут, потом finalDuration минут — кровати и маяки отключены, смерть перманентная. Победитель — команда с максимумом очков.");
+        MATCH_DURATION_MINUTES = b.defineInRange("matchDurationMinutes", 30, 5, 120);
+        FINAL_DURATION_MINUTES = b.defineInRange("finalDurationMinutes", 10, 1, 30);
+        SCORE_KILL = b.defineInRange("scoreKill", 1, 0, 100);
+        SCORE_BED = b.defineInRange("scoreBed", 2, 0, 100);
+        SCORE_BEACON = b.defineInRange("scoreBeacon", 2, 0, 100);
+        REVIVE_STAND_SECONDS = b.defineInRange("reviveStandSeconds", 5, 1, 30);
+        DOWNED_DURATION_TICKS = b.defineInRange("downedDurationTicks", 200, 40, 1200);
         b.pop();
 
         SPEC = b.build();
