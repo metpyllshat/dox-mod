@@ -275,7 +275,7 @@
   "blackchannel.minigame.on": "идёт",
   "blackchannel.minigame.off": "нет",
   "blackchannel.minigame.help": "/minigame center, center x y z, size 2500, team (меню команд), start, stop, status. size — от стены до стены. Команда выбирается в меню до старта. Граница не сужается.",
-  "blackchannel.minigame.status": "Катка: %s. Центр %s. Размер %s. Разрыв отрядов %s. Твой код %s. Мирный режим ещё %s с, без PvP %s с.",
+  "blackchannel.minigame.status": "Катка: %s. Центр %s. Размер %s. Разрыв отрядов %s. Твой код %s. Без PvP ещё %s с.",
   "blackchannel.minigame.need_player": "Только игрок.",
   "blackchannel.minigame.crew_set": "Команда: %s. Выбор — в меню /minigame team.",
   "blackchannel.minigame.already": "Матч уже идёт.",
@@ -343,10 +343,10 @@
   "screen.blackchannel.team.note": "Команда выбирается до старта матча. Нажми на строку.",
   "screen.blackchannel.team.current": "выбрана",
   "screen.blackchannel.team.close": "ЗАКРЫТЬ",
-  "blackchannel.minigame.peaceful": "Мирный режим: %s мин. Урона нет ни от кого.",
-  "blackchannel.minigame.pvp_free": "PvP отключён ещё %s мин.",
+  "blackchannel.minigame.pvp_free": "Первые %s секунд игроки не могут ранить друг друга. Огонь, падение, мобы и лава бьют как обычно.",
   "blackchannel.minigame.downed_help": "Нельзя ходить и что-то делать. Ждите помощь или %s сек.",
   "blackchannel.minigame.downed_seconds": "Возврат через %s сек. Точка: %s.",
   "blackchannel.minigame.kill_assist": "+%s очков за добивание.",
-  "blackchannel.minigame.beacon_cleared": "Маяки отряда убраны."
+  "blackchannel.minigame.beacon_cleared": "Маяки отряда убраны.",
+  "blackchannel.minigame.pvp_off": "PvP отключён ещё %s с."
 }

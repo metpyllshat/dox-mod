@@ -43,6 +43,7 @@ import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
 import net.minecraft.world.level.border.WorldBorder;
+import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
 import net.minecraft.world.phys.Vec3;
@@ -66,6 +67,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.CompletableFuture;
 
 public final class Minigame {
     private static final Map<UUID, Long> PROTECT = new HashMap<>();
@@ -73,8 +75,31 @@ public final class Minigame {
     /** Кто последним ударил игрока: нужно, чтобы засчитать очко, если тот умер от падения. */
     private static final Map<UUID, LastHit> LAST_HIT = new HashMap<>();
     private static final long KILL_CREDIT_TICKS = 600L;
+    /** Не спамим сообщением «PvP отключён» на каждый удар. */
+    private static final Map<UUID, Long> PVP_WARN = new HashMap<>();
 
     private record LastHit(UUID attacker, long tick) {}
+
+    /** База, которую ещё предстоит поставить в мир (маяк + высадка игроков). */
+    private record PendingBase(String crew, int x, int z, float yaw, List<UUID> players) {}
+
+    /** Очередь высадки: одна база за тик, чтобы не грузить десятки чанков разом. */
+    private static final List<PendingBase> DEPLOY = new ArrayList<>();
+
+    private static final int CHUNK_READY = 1;
+    private static final int CHUNK_WAIT = 0;
+    private static final int CHUNK_FAIL = -1;
+    private static final long CHUNK_WAIT_LIMIT = 200L;
+    private static CompletableFuture<?> CHUNK_WAIT_FUTURE;
+    private static int chunkWaitX = Integer.MIN_VALUE;
+    private static int chunkWaitZ = Integer.MIN_VALUE;
+    private static long chunkWaitSince;
+    private static int chunkWaitMisses;
+    /** Паузы между генерациями: сервер успевает доделать свет и сущности чанка. */
+    private static long nextDeployTick;
+    private static long nextCacheTick;
+    private static final int DEPLOY_GAP_TICKS = 10;
+    private static final int CACHE_GAP_TICKS = 4;
 
     private static final List<ChatFormatting> TEAM_COLORS = List.of(
             ChatFormatting.RED, ChatFormatting.GREEN, ChatFormatting.YELLOW,
@@ -312,6 +337,11 @@ public final class Minigame {
             }
             match.setDirty();
         }
+        // Высадка идёт первой: пока базы не расставлены, схроны не трогаем
+        if (!DEPLOY.isEmpty()) {
+            deployStep(server, match, level);
+            return;
+        }
         // Разбиваем placeCaches на тики (cacheTick хранит индекс следующего схрона)
         if (match.cacheTick < match.cacheTotal) {
             placeCacheStep(server, match, level);
@@ -355,6 +385,11 @@ public final class Minigame {
         clearScoreboard(server);
         REVIVE.clear();
         LAST_HIT.clear();
+        DEPLOY.clear();
+        resetChunkWait();
+        PVP_WARN.clear();
+        nextDeployTick = 0;
+        nextCacheTick = 0;
         match.downedPlayers.clear();
         String winner;
         if (survivor != null) {
@@ -390,31 +425,129 @@ public final class Minigame {
         match.setDirty();
     }
 
-    private static final int CACHES_PER_TICK = 1;
-
     private static void placeCacheStep(MinecraftServer server, MatchData match, ServerLevel level) {
-        int steps = Math.min(CACHES_PER_TICK, match.cacheTotal - match.cacheTick);
-        RandomSource random = level.getRandom();
-        int size = Math.max(0, match.cachePositions.length);
-        for (int i = 0; i < steps; i++) {
-            if (match.cacheTick >= match.cacheTotal) break;
-            int index = match.cacheTick++;
-            if (index < 0 || index >= size) continue;
-            BlockPos cand = match.cachePositions[index];
-            if (cand == null) continue;
-            // Один чанк за тик: большой мир не вешает сервер
-            level.getChunk(cand.getX() >> 4, cand.getZ() >> 4);
+        if (match.cacheTick >= match.cacheTotal) return;
+        if (level.getGameTime() < nextCacheTick) return;
+        int index = match.cacheTick;
+        if (index < 0 || index >= match.cachePositions.length) {
+            match.cacheTick = match.cacheTotal;
+            announceCaches(server, match);
+            return;
+        }
+        BlockPos cand = match.cachePositions[index];
+        if (cand == null) {
+            match.cacheTick++;
+            match.setDirty();
+            return;
+        }
+        // Чанк грузится в фоне: тик сервера не стоит, генерация идёт в рабочих потоках
+        int status = chunkStatus(level, cand.getX() >> 4, cand.getZ() >> 4);
+        if (status == CHUNK_WAIT) return;
+        nextCacheTick = level.getGameTime() + CACHE_GAP_TICKS;
+        match.cacheTick++;
+        match.setDirty();
+        if (status == CHUNK_READY) {
             int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cand.getX(), cand.getZ());
             BlockPos feet = new BlockPos(cand.getX(), y, cand.getZ());
-            if (!match.inside(feet) || !standable(level, feet)) continue;
-            placeChest(level, feet, random);
+            if (match.inside(feet) && standable(level, feet)) placeChest(level, feet, level.getRandom());
         }
-        if (match.cacheTick >= match.cacheTotal) {
-            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                player.sendSystemMessage(Component.translatable("blackchannel.minigame.caches_done", match.cacheTotal));
+        if (match.cacheTick >= match.cacheTotal) announceCaches(server, match);
+    }
+
+    private static void announceCaches(MinecraftServer server, MatchData match) {
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            player.sendSystemMessage(Component.translatable("blackchannel.minigame.caches_done", match.cacheTotal));
+        }
+    }
+
+    /**
+     * Статус чанка: готов, ещё грузится или загрузка не удалась.
+     * Незагруженный чанк запрашивается асинхронно, поэтому большой радиус не вешает сервер.
+     */
+    private static int chunkStatus(ServerLevel level, int cx, int cz) {
+        if (level.getChunkSource().getChunkNow(cx, cz) != null) {
+            chunkWaitMisses = 0;
+            return CHUNK_READY;
+        }
+        long now = level.getGameTime();
+        if (CHUNK_WAIT_FUTURE == null || chunkWaitX != cx || chunkWaitZ != cz) {
+            CHUNK_WAIT_FUTURE = level.getChunkSource().getChunkFuture(cx, cz, ChunkStatus.FULL, true);
+            chunkWaitX = cx;
+            chunkWaitZ = cz;
+            chunkWaitSince = now;
+            return CHUNK_WAIT;
+        }
+        if (!CHUNK_WAIT_FUTURE.isDone()) {
+            if (now - chunkWaitSince <= CHUNK_WAIT_LIMIT) return CHUNK_WAIT;
+            resetChunkWait();
+            if (++chunkWaitMisses >= 3) {
+                chunkWaitMisses = 0;
+                return CHUNK_FAIL;
             }
+            return CHUNK_WAIT;
+        }
+        CHUNK_WAIT_FUTURE = null;
+        if (level.getChunkSource().getChunkNow(cx, cz) != null) {
+            chunkWaitMisses = 0;
+            return CHUNK_READY;
+        }
+        if (++chunkWaitMisses >= 3) {
+            chunkWaitMisses = 0;
+            return CHUNK_FAIL;
+        }
+        return CHUNK_WAIT;
+    }
+
+    private static void resetChunkWait() {
+        CHUNK_WAIT_FUTURE = null;
+        chunkWaitX = Integer.MIN_VALUE;
+        chunkWaitZ = Integer.MIN_VALUE;
+        chunkWaitMisses = 0;
+    }
+
+    /** Одна база за тик: поставить маяк и высадить её игроков. */
+    private static void deployStep(MinecraftServer server, MatchData match, ServerLevel level) {
+        if (level.getGameTime() < nextDeployTick) return;
+        PendingBase base = DEPLOY.get(0);
+        int status = chunkStatus(level, base.x() >> 4, base.z() >> 4);
+        if (status == CHUNK_WAIT) return;
+        // Крайний случай (генерация не удалась за 10 с): догружаем одну базу синхронно,
+        // иначе игроки останутся на старом месте
+        if (status == CHUNK_FAIL) level.getChunk(base.x() >> 4, base.z() >> 4);
+        BlockPos feet = loadedGround(level, base.x(), base.z(), level.getRandom());
+        level.setBlock(feet, ModContent.BEACON.get().defaultBlockState(), 3);
+        match.setBeacon(base.crew(), feet);
+        for (UUID id : base.players()) {
+            ServerPlayer player = server.getPlayerList().getPlayer(id);
+            if (player == null) continue;
+            BlockPos spot = loadedGround(level, feet.getX(), feet.getZ(), player.getRandom());
+            match.drops.put(id, MatchData.Drop.at(spot.getX(), spot.getY(), spot.getZ(), base.yaw()));
+            player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+            player.setForcedPose(null);
+            player.setPose(Pose.STANDING);
+            place(player, level, spot, base.yaw());
+            kit(player, match);
         }
         match.setDirty();
+        DEPLOY.remove(0);
+        nextDeployTick = level.getGameTime() + DEPLOY_GAP_TICKS;
+    }
+
+    /** Земля в уже загруженном чанке: перебираем точки, не выходя за загруженные чанки. */
+    private static BlockPos loadedGround(ServerLevel level, int x, int z, RandomSource random) {
+        BlockPos fallback = null;
+        for (int attempt = 0; attempt < 16; attempt++) {
+            int sx = x + (attempt == 0 ? 0 : random.nextInt(13) - 6);
+            int sz = z + (attempt == 0 ? 0 : random.nextInt(13) - 6);
+            if (level.getChunkSource().getChunkNow(sx >> 4, sz >> 4) == null) continue;
+            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, sx, sz);
+            BlockPos feet = new BlockPos(sx, y, sz);
+            if (fallback == null) fallback = feet;
+            if (standable(level, feet)) return feet;
+        }
+        if (fallback != null) return fallback;
+        int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+        return new BlockPos(x, y, z);
     }
 
     public static void onServerStarted(MinecraftServer server) {
@@ -609,20 +742,14 @@ public final class Minigame {
         }
         long now = victim.serverLevel().getGameTime();
         ServerPlayer attacker = event.getSource().getEntity() instanceof ServerPlayer sp && sp != victim ? sp : null;
-        if (attacker != null) LAST_HIT.put(victim.getUUID(), new LastHit(attacker.getUUID(), now));
-
-        // Мирный режим: урона нет ни от кого, включая мобов, падение и лаву
-        if (now < match.graceUntil) {
-            event.setCanceled(true);
-            return;
-        }
+        // Урон не от игрока (мобы, падение, огонь, лава) проходит всегда
         if (attacker == null) return;
-
-        // Отсутствие PvP в начале матча
-        if (now < match.pvpFreeUntil) {
+        // Отсутствие PvP в начале матча: игрок по игроку не проходит вообще
+        if (pvpBlocked(match, now)) {
             event.setCanceled(true);
             return;
         }
+        LAST_HIT.put(victim.getUUID(), new LastHit(attacker.getUUID(), now));
         boolean wall = shielded(victim) || shielded(attacker);
         if (shielded(attacker)) PROTECT.remove(attacker.getUUID());
         if (wall) {
@@ -737,9 +864,31 @@ public final class Minigame {
             return;
         }
         if (!(event.getTarget() instanceof ServerPlayer)) return;
+        MatchData match = MatchData.get(attacker.getServer());
+        long now = attacker.serverLevel().getGameTime();
+        // Замах по игроку не проходит вовсе: ни урона, ни отбрасывания
+        if (pvpBlocked(match, now)) {
+            event.setCanceled(true);
+            warnPvpOff(attacker, match, now);
+            return;
+        }
         if (!shielded(attacker)) return;
         PROTECT.remove(attacker.getUUID());
         event.setCanceled(true);
+    }
+
+    /** PvP запрещён в начале матча. */
+    private static boolean pvpBlocked(MatchData match, long now) {
+        return match.active && now < match.pvpFreeUntil;
+    }
+
+    /** Короткое сообщение, чтобы игрок понимал, почему удар не проходит. */
+    private static void warnPvpOff(ServerPlayer player, MatchData match, long now) {
+        Long last = PVP_WARN.get(player.getUUID());
+        if (last != null && now - last < 40L) return;
+        PVP_WARN.put(player.getUUID(), now);
+        long left = Math.max(0L, (match.pvpFreeUntil - now) / 20L);
+        player.displayClientMessage(Component.translatable("blackchannel.minigame.pvp_off", left), true);
     }
 
     public static void onRespawn(ServerPlayer player) {
@@ -1042,22 +1191,18 @@ public final class Minigame {
             String code = NetData.get(player).profile(player.getUUID()).crew;
             crew = code == null || code.isEmpty() ? "-" : code;
         }
-        long peaceful = 0;
         long pvpFree = 0;
         ServerLevel level = Ops.levelOf(source.getServer(), match.dim);
         if (match.active && level != null) {
-            long now = level.getGameTime();
-            peaceful = Math.max(0, (match.graceUntil - now) / 20L);
-            pvpFree = Math.max(0, (match.pvpFreeUntil - now) / 20L);
+            pvpFree = Math.max(0, (match.pvpFreeUntil - level.getGameTime()) / 20L);
         }
         int gap = match.baseGap();
         String center = match.centerSet ? match.centerX + " " + match.centerY + " " + match.centerZ : "-";
         String crewShown = crew;
         String state = match.active ? "on" : "off";
-        long peacefulLeft = peaceful;
         long pvpLeft = pvpFree;
         source.sendSuccess(() -> Component.translatable("blackchannel.minigame.status",
-                Component.translatable("blackchannel.minigame." + state), center, match.size, gap, crewShown, peacefulLeft, pvpLeft), false);
+                Component.translatable("blackchannel.minigame." + state), center, match.size, gap, crewShown, pvpLeft), false);
         return 1;
     }
 
@@ -1186,46 +1331,42 @@ public final class Minigame {
         LAST_HIT.clear();
         List<String> keys = new ArrayList<>(groups.keySet());
         List<int[]> spots = anchorsFor(match, keys.size(), gap);
+        DEPLOY.clear();
+        resetChunkWait();
+        PVP_WARN.clear();
+        nextDeployTick = 0;
+        nextCacheTick = 0;
+        // Генерацию чанков, постановку маяка и телепорт раскладываем по тикам:
+        // десятки чанков в одном тике на обычном мире вешают сервер на минуты.
         for (int i = 0; i < keys.size(); i++) {
             int[] spot = spots.get(i);
             String key = keys.get(i);
             int colorIdx = i % TEAM_COLORS.size();
             match.anchors.put(key, MatchData.Drop.at(spot[0], match.centerY, spot[1], 0));
-            ChatFormatting color = TEAM_COLORS.get(colorIdx);
             String code = key.startsWith("crew:") ? key.substring(5) : key;
             match.teamScores.put(code, 0);
             match.teamColorIdx.put(code, colorIdx);
             float yaw = yawToward(spot[0], spot[1], match.centerX, match.centerZ);
-            // Ставим маяк отряда в центре базы
-            BlockPos beaconPos = new BlockPos(spot[0], match.centerY + 1, spot[1]);
-            level.setBlock(beaconPos, ModContent.BEACON.get().defaultBlockState(), 3);
-            match.setBeacon(code, beaconPos);
+            List<UUID> members = new ArrayList<>();
             for (ServerPlayer player : groups.get(key)) {
-                BlockPos feet = scatter(level, spot[0], spot[1], player.getRandom());
-                MatchData.Drop drop = MatchData.Drop.at(feet.getX(), feet.getY(), feet.getZ(), yaw);
-                match.drops.put(player.getUUID(), drop);
+                members.add(player.getUUID());
                 match.playerCrew.put(player.getUUID(), code);
                 match.playerColorIdx.put(player.getUUID(), colorIdx);
-                // Все стартуют в выживании, даже если пришли из креатива или наблюдателей
+                // Все переходят в выживание сразу, даже если пришли из креатива или наблюдателей
                 player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
                 player.setForcedPose(null);
                 player.setPose(Pose.STANDING);
-                place(player, level, feet, yaw);
-                kit(player, match);
                 player.sendSystemMessage(Component.translatable("blackchannel.minigame.started_you", teamLabel(server, code), gap));
-                if (Config.PEACEFUL_MINUTES.get() > 0) {
-                    player.sendSystemMessage(Component.translatable("blackchannel.minigame.peaceful", Config.PEACEFUL_MINUTES.get()));
-                }
-                if (Config.PVP_FREE_MINUTES.get() > 0) {
-                    player.sendSystemMessage(Component.translatable("blackchannel.minigame.pvp_free", Config.PVP_FREE_MINUTES.get()));
+                if (Config.PVP_FREE_SECONDS.get() > 0) {
+                    player.sendSystemMessage(Component.translatable("blackchannel.minigame.pvp_free", Config.PVP_FREE_SECONDS.get()));
                 }
             }
+            DEPLOY.add(new PendingBase(code, spot[0], spot[1], yaw, members));
         }
         applyBorder(level, match, true);
         applyKeep(level, match, true);
         long startTick = level.getGameTime();
-        match.graceUntil = startTick + Config.PEACEFUL_MINUTES.get() * 60L * 20L;
-        match.pvpFreeUntil = startTick + Config.PVP_FREE_MINUTES.get() * 60L * 20L;
+        match.pvpFreeUntil = startTick + Config.PVP_FREE_SECONDS.get() * 20L;
         long matchDuration = Config.MATCH_DURATION_MINUTES.get() * 60L * 20L;
         long finalDuration = Config.FINAL_DURATION_MINUTES.get() * 60L * 20L;
         match.matchEndTick = startTick + matchDuration;
@@ -1253,8 +1394,12 @@ public final class Minigame {
         }
         ServerLevel level = Ops.levelOf(source.getServer(), match.dim);
         match.active = false;
-        match.graceUntil = 0;
         match.pvpFreeUntil = 0;
+        DEPLOY.clear();
+        resetChunkWait();
+        PVP_WARN.clear();
+        nextDeployTick = 0;
+        nextCacheTick = 0;
         match.matchEndTick = 0;
         match.finalEndTick = 0;
         match.finalActive = false;
@@ -1508,9 +1653,8 @@ public final class Minigame {
     }
 
     private static BlockPos findSafe(ServerLevel level, int x, int z, RandomSource random) {
-        // Сначала ищем по уже загруженным чанкам: в обычном мире генерация новых — самая тяжёлая операция,
-        // и десятки вызовов подряд вешают сервер.
-        for (int attempt = 0; attempt < 16; attempt++) {
+        // Ищем только по уже загруженным чанкам: генерация нового чанка — самая тяжёлая операция на сервере
+        for (int attempt = 0; attempt < 12; attempt++) {
             int sx = x + (attempt == 0 ? 0 : random.nextInt(25) - 12);
             int sz = z + (attempt == 0 ? 0 : random.nextInt(25) - 12);
             if (level.getChunkSource().getChunkNow(sx >> 4, sz >> 4) == null) continue;
@@ -1518,15 +1662,7 @@ public final class Minigame {
             BlockPos feet = new BlockPos(sx, y, sz);
             if (standable(level, feet)) return feet;
         }
-        // Не нашли — грузим по одной точке, но не больше восьми попыток
-        for (int attempt = 0; attempt < 8; attempt++) {
-            int sx = x + random.nextInt(25) - 12;
-            int sz = z + random.nextInt(25) - 12;
-            level.getChunk(sx >> 4, sz >> 4);
-            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, sx, sz);
-            BlockPos feet = new BlockPos(sx, y, sz);
-            if (standable(level, feet)) return feet;
-        }
+        // Точка нужна прямо сейчас: один блокирующий запрос, без перебора и каскада генераций
         level.getChunk(x >> 4, z >> 4);
         int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
         return new BlockPos(x, Math.max(level.getMinBuildHeight() + 1, y), z);

@@ -22,7 +22,6 @@ public class MatchData extends SavedData {
     public int centerZ;
     public String dim = "";
     public int size;
-    public long graceUntil;
     public long pvpFreeUntil;
     public boolean borderSaved;
     public double prevSize = 5.9999968E7;
@@ -72,7 +71,6 @@ public class MatchData extends SavedData {
         data.centerZ = tag.getInt("cz");
         data.dim = tag.getString("dim");
         data.size = tag.getInt("size");
-        data.graceUntil = tag.getLong("grace");
         data.pvpFreeUntil = tag.getLong("pvpFree");
         data.borderSaved = tag.getBoolean("borderSaved");
         data.prevSize = tag.contains("prevSize") ? tag.getDouble("prevSize") : 5.9999968E7;
@@ -125,7 +123,6 @@ public class MatchData extends SavedData {
         tag.putInt("cz", centerZ);
         tag.putString("dim", dim == null ? "" : dim);
         tag.putInt("size", size);
-        tag.putLong("grace", graceUntil);
         tag.putLong("pvpFree", pvpFreeUntil);
         tag.putBoolean("borderSaved", borderSaved);
         tag.putDouble("prevSize", prevSize);
