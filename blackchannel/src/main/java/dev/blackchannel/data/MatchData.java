@@ -209,6 +209,25 @@ public class MatchData extends SavedData {
         return alive;
     }
 
+    /** Команда ещё в игре: есть хотя бы один игрок, который не погиб окончательно. */
+    public boolean teamAlive(String crew) {
+        if (crew == null || crew.isEmpty()) return false;
+        for (Map.Entry<UUID, String> e : playerCrew.entrySet()) {
+            if (!e.getValue().equals(crew)) continue;
+            if (!permanentDead.contains(e.getKey())) return true;
+        }
+        return false;
+    }
+
+    /** Коды команд, которые ещё в игре. */
+    public Set<String> aliveTeams() {
+        Set<String> out = new HashSet<>();
+        for (String crew : teamScores.keySet()) {
+            if (teamAlive(crew)) out.add(crew);
+        }
+        return out;
+    }
+
     public void addScore(String crew, int delta) {
         if (crew == null || crew.isEmpty()) return;
         teamScores.merge(crew, delta, Integer::sum);
@@ -340,6 +359,8 @@ public class MatchData extends SavedData {
             s.killerCrew = c.getString("kc");
             s.pos = new BlockPos(c.getInt("x"), c.getInt("y"), c.getInt("z"));
             s.dim = c.getString("d");
+            s.respawnKind = c.getString("rk");
+            if (c.contains("rx")) s.respawnPos = new BlockPos(c.getInt("rx"), c.getInt("ry"), c.getInt("rz"));
             into.put(c.getUUID("id"), s);
         }
     }
@@ -357,6 +378,12 @@ public class MatchData extends SavedData {
             c.putInt("y", s.pos.getY());
             c.putInt("z", s.pos.getZ());
             c.putString("d", s.dim == null ? "" : s.dim);
+            c.putString("rk", s.respawnKind == null ? "" : s.respawnKind);
+            if (s.respawnPos != null) {
+                c.putInt("rx", s.respawnPos.getX());
+                c.putInt("ry", s.respawnPos.getY());
+                c.putInt("rz", s.respawnPos.getZ());
+            }
             out.add(c);
         }
         return out;
@@ -456,5 +483,9 @@ public class MatchData extends SavedData {
         public String killerCrew = "";
         public BlockPos pos;
         public String dim = "";
+        /** Куда игрок вернётся после ранения: кровать или маяк. */
+        public BlockPos respawnPos;
+        /** "bed" или "beacon". */
+        public String respawnKind = "";
     }
 }

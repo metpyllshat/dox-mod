@@ -42,6 +42,7 @@ public final class ClientHooks {
 
     public static void open(String id) {
         if ("manual".equals(id)) Minecraft.getInstance().setScreen(new ManualScreen());
+        if ("team".equals(id)) Minecraft.getInstance().setScreen(new TeamScreen());
     }
 
     public static void hud(RenderGuiEvent.Post event) {
