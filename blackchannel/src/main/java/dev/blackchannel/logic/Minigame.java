@@ -217,6 +217,7 @@ public final class Minigame {
     public static void endMatch(MinecraftServer server, MatchData match) {
         match.active = false;
         match.finalActive = false;
+        match.ended = true;
         ServerLevel level = Ops.levelOf(server, match.dim);
         if (level != null) {
             restoreBorder(level, match);
@@ -322,12 +323,18 @@ public final class Minigame {
         }
         // Если нет кровати, проверяем маяк отряда (10 сек = 200 тиков)
         if (!hasRespawn && !finalActive && beaconPos != null && matchLevel != null) {
-            if (matchLevel.dimension() == victim.level().dimension() && match.inside(beaconPos)) {
-                Block b = matchLevel.getBlockState(beaconPos).getBlock();
-                if (b == ModContent.BEACON.get()) {
-                    hasRespawn = true;
-                    respawnPos = beaconPos;
-                    downedTicks = 200; // 10 секунд
+            if (matchLevel.dimension() == victim.level().dimension()) {
+                // Проверяем только X и Z, игнорируем Y
+                int half = match.size / 2;
+                boolean insideXZ = Math.abs(beaconPos.getX() - match.centerX) <= half && 
+                                   Math.abs(beaconPos.getZ() - match.centerZ) <= half;
+                if (insideXZ) {
+                    Block b = matchLevel.getBlockState(beaconPos).getBlock();
+                    if (b == ModContent.BEACON.get()) {
+                        hasRespawn = true;
+                        respawnPos = beaconPos;
+                        downedTicks = 200; // 10 секунд
+                    }
                 }
             }
         }
@@ -608,12 +615,12 @@ public final class Minigame {
             BlockPos pos = event.getPos();
             UUID bedOwner = findBedOwner(match, pos);
             if (bedOwner != null) {
-                match.setBed(bedOwner, null);
                 ServerPlayer breaker = event.getPlayer() instanceof ServerPlayer sp ? sp : null;
                 if (breaker != null) {
                     String breakerCrew = match.playerCrew.getOrDefault(breaker.getUUID(), "");
                     String ownerCrew = match.playerCrew.getOrDefault(bedOwner, "");
                     if (!breakerCrew.equals(ownerCrew)) {
+                        match.setBed(bedOwner, null);
                         int pts = Config.SCORE_BED.get();
                         if (pts > 0) {
                             match.addScore(breakerCrew, pts);
@@ -627,16 +634,16 @@ public final class Minigame {
                 }
             }
         }
-        // Обработка слома маяка отряда
+        // Обработка слома маяка отряда — нельзя сломать свой маяк
         if (block == ModContent.BEACON.get() && match.active) {
             BlockPos pos = event.getPos();
             String beaconCrew = findBeaconOwner(match, pos);
             if (beaconCrew != null) {
-                match.setBeacon(beaconCrew, null);
                 ServerPlayer breaker = event.getPlayer() instanceof ServerPlayer sp ? sp : null;
                 if (breaker != null) {
                     String breakerCrew = match.playerCrew.getOrDefault(breaker.getUUID(), "");
                     if (!breakerCrew.equals(beaconCrew)) {
+                        match.setBeacon(beaconCrew, null);
                         int pts = Config.SCORE_BEACON.get();
                         if (pts > 0) {
                             match.addScore(breakerCrew, pts);
@@ -645,6 +652,10 @@ public final class Minigame {
                         level.getServer().getPlayerList().broadcastSystemMessage(
                                 Component.translatable("blackchannel.minigame.beacon_destroyed_announce",
                                         breaker.getGameProfile().getName(), beaconCrew), false);
+                    } else {
+                        // Нельзя сломать свой маяк
+                        event.setCanceled(true);
+                        breaker.sendSystemMessage(Component.translatable("blackchannel.minigame.beacon_own"));
                     }
                 }
             }

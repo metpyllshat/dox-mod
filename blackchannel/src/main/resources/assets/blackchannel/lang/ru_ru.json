@@ -338,5 +338,6 @@
   "blackchannel.minigame.revive_stand": "Стоите и воскрешаете %s сек. Не отходите!",
   "blackchannel.minigame.revive_stand_target": "%s воскрешает вас. Стоите %s сек.",
   "blackchannel.minigame.revive_already": "Этот игрок уже был воскрешён в этом матче.",
-  "blackchannel.minigame.beacon_auto": "Маяк отряда '%s' установлен автоматически."
+  "blackchannel.minigame.beacon_auto": "Маяк отряда '%s' установлен автоматически.",
+  "blackchannel.minigame.beacon_own": "Нельзя сломать свой маяк отряда!"
 }

@@ -387,6 +387,7 @@ public final class Sync {
         int timeLeftSec = (int) Math.max(0, (endTick - matchTime) / 20L);
         CompoundTag m = new CompoundTag();
         m.putBoolean("on", true);
+        m.putBoolean("ended", false);
         m.putBoolean("final", match.finalActive);
         m.putInt("timeLeft", timeLeftSec);
         m.putString("selfStatus", Minigame.selfStatusFor(player, match));
