@@ -8,10 +8,8 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.saveddata.SavedData;
 
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
-import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -25,6 +23,7 @@ public class MatchData extends SavedData {
     public String dim = "";
     public int size;
     public long graceUntil;
+    public long pvpFreeUntil;
     public boolean borderSaved;
     public double prevSize = 5.9999968E7;
     public double prevCenterX;
@@ -74,6 +73,7 @@ public class MatchData extends SavedData {
         data.dim = tag.getString("dim");
         data.size = tag.getInt("size");
         data.graceUntil = tag.getLong("grace");
+        data.pvpFreeUntil = tag.getLong("pvpFree");
         data.borderSaved = tag.getBoolean("borderSaved");
         data.prevSize = tag.contains("prevSize") ? tag.getDouble("prevSize") : 5.9999968E7;
         data.prevCenterX = tag.getDouble("prevCx");
@@ -126,6 +126,7 @@ public class MatchData extends SavedData {
         tag.putString("dim", dim == null ? "" : dim);
         tag.putInt("size", size);
         tag.putLong("grace", graceUntil);
+        tag.putLong("pvpFree", pvpFreeUntil);
         tag.putBoolean("borderSaved", borderSaved);
         tag.putDouble("prevSize", prevSize);
         tag.putDouble("prevCx", prevCenterX);

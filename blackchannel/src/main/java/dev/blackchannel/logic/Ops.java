@@ -147,8 +147,9 @@ public final class Ops {
         if (!attacker.getAbilities().instabuild) stack.shrink(1);
         float chance = other.ids || Devices.has(victim, ModContent.SCANNER.get()) ? 1f : 0.18f;
         if (attacker.getRandom().nextFloat() < chance) {
-            victim.displayClientMessage(Component.translatable("blackchannel.chat.ids_bug"), true);
-            other.log("blackchannel.chat.ids_bug", "", attacker.getServer().getTickCount());
+            String bearing = bearing(victim, attacker);
+            victim.displayClientMessage(Component.translatable("blackchannel.chat.ids_bug", bearing), true);
+            other.log("blackchannel.chat.ids_bug", bearing, attacker.getServer().getTickCount());
         }
         result(attacker, self, "blackchannel.result.plant_ok");
         data.setDirty();

@@ -5,16 +5,12 @@ import dev.blackchannel.Config;
 import dev.blackchannel.api.BlackChannelAPI;
 import dev.blackchannel.block.NodeBlockEntity;
 import dev.blackchannel.logic.Bridges;
-import dev.blackchannel.logic.Devices;
 import dev.blackchannel.logic.Minigame;
 import dev.blackchannel.logic.Ops;
-import dev.blackchannel.registry.ModContent;
 import net.minecraft.core.BlockPos;
-import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.entity.Entity;
-import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.phys.Vec3;
 import net.minecraftforge.event.RegisterCommandsEvent;
@@ -26,6 +22,8 @@ import net.minecraftforge.event.entity.living.LivingEvent;
 import net.minecraftforge.event.entity.player.AttackEntityEvent;
 import net.minecraftforge.event.entity.player.PlayerEvent;
 import net.minecraftforge.event.entity.player.PlayerInteractEvent;
+import net.minecraftforge.event.entity.item.ItemTossEvent;
+import net.minecraftforge.event.entity.living.LivingEntityUseItemEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.event.level.BlockEvent.EntityPlaceEvent;
 import net.minecraftforge.event.level.ChunkEvent;
@@ -66,16 +64,6 @@ public final class GameEvents {
         if (!exploder.getClass().getName().toLowerCase(Locale.ROOT).contains("emp")) return;
         Vec3 pos = event.getExplosion().getPosition();
         BlackChannelAPI.pulse(level, BlockPos.containing(pos.x, pos.y, pos.z), Config.EMP_RADIUS.get(), Config.EMP_SECONDS.get());
-    }
-
-    @SubscribeEvent
-    public static void crafted(PlayerEvent.ItemCraftedEvent event) {
-        if (event.getEntity().level().isClientSide()) return;
-        if (!event.getCrafting().is(ModContent.PHONE.get())) return;
-        if (!(event.getEntity() instanceof ServerPlayer player)) return;
-        if (Devices.has(player, ModContent.MANUAL.get())) return;
-        player.getInventory().add(new ItemStack(ModContent.MANUAL.get()));
-        player.sendSystemMessage(Component.translatable("blackchannel.chat.manual_given"));
     }
 
     @SubscribeEvent
@@ -124,8 +112,38 @@ public final class GameEvents {
     }
 
     @SubscribeEvent
+    public static void useItem(PlayerInteractEvent.RightClickItem event) {
+        if (event.getEntity() instanceof ServerPlayer player && Minigame.isDowned(player)) event.setCanceled(true);
+    }
+
+    @SubscribeEvent
+    public static void leftClickBlock(PlayerInteractEvent.LeftClickBlock event) {
+        if (event.getEntity() instanceof ServerPlayer player && Minigame.isDowned(player)) event.setCanceled(true);
+    }
+
+    @SubscribeEvent
+    public static void interactSpecific(PlayerInteractEvent.EntityInteractSpecific event) {
+        if (event.getEntity() instanceof ServerPlayer player && Minigame.isDowned(player)) event.setCanceled(true);
+    }
+
+    @SubscribeEvent
+    public static void toss(ItemTossEvent event) {
+        if (event.getPlayer() instanceof ServerPlayer player && Minigame.isDowned(player)) event.setCanceled(true);
+    }
+
+    @SubscribeEvent
+    public static void useStart(LivingEntityUseItemEvent.Start event) {
+        if (event.getEntity() instanceof ServerPlayer player && Minigame.isDowned(player)) event.setCanceled(true);
+    }
+
+    @SubscribeEvent
     public static void interactEntity(PlayerInteractEvent.EntityInteract event) {
         Minigame.onInteractEntity(event);
+    }
+
+    @SubscribeEvent
+    public static void sleep(net.minecraftforge.event.entity.player.PlayerSleepInBedEvent event) {
+        Minigame.onSleep(event);
     }
 
     @SubscribeEvent

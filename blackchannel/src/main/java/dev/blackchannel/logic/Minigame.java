@@ -3,7 +3,6 @@ package dev.blackchannel.logic;
 import com.mojang.brigadier.CommandDispatcher;
 import dev.blackchannel.Config;
 import com.mojang.brigadier.arguments.IntegerArgumentType;
-import com.mojang.brigadier.arguments.StringArgumentType;
 import dev.blackchannel.BlackChannelMod;
 import dev.blackchannel.block.LoggerBlockEntity;
 import dev.blackchannel.data.MatchData;
@@ -19,7 +18,6 @@ import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
-import net.minecraft.resources.ResourceKey;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -29,7 +27,6 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Pose;
-import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -37,7 +34,6 @@ import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.effect.MobEffectInstance;
 import net.minecraft.world.effect.MobEffects;
 import net.minecraft.world.level.GameRules;
-import net.minecraft.world.level.Level;
 import net.minecraft.world.level.block.BarrelBlock;
 import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
@@ -63,7 +59,6 @@ import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.registries.ForgeRegistries;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.Iterator;
@@ -75,40 +70,18 @@ import java.util.UUID;
 public final class Minigame {
     private static final Map<UUID, Long> PROTECT = new HashMap<>();
     private static final Map<UUID, Long> REVIVE = new HashMap<>();
+    /** Кто последним ударил игрока: нужно, чтобы засчитать очко, если тот умер от падения. */
+    private static final Map<UUID, LastHit> LAST_HIT = new HashMap<>();
+    private static final long KILL_CREDIT_TICKS = 600L;
+
+    private record LastHit(UUID attacker, long tick) {}
+
     private static final List<ChatFormatting> TEAM_COLORS = List.of(
             ChatFormatting.RED, ChatFormatting.GREEN, ChatFormatting.YELLOW,
             ChatFormatting.AQUA, ChatFormatting.LIGHT_PURPLE, ChatFormatting.GOLD,
             ChatFormatting.DARK_GREEN, ChatFormatting.DARK_AQUA, ChatFormatting.DARK_PURPLE,
             ChatFormatting.DARK_RED, ChatFormatting.WHITE, ChatFormatting.GRAY
     );
-    private static final Set<String> STRUCTURES = Set.of(
-            "chests/simple_dungeon",
-            "chests/abandoned_mineshaft",
-            "chests/desert_pyramid",
-            "chests/jungle_temple",
-            "chests/pillager_outpost",
-            "chests/woodland_mansion",
-            "chests/stronghold_corridor",
-            "chests/stronghold_crossing",
-            "chests/stronghold_library",
-            "chests/bastion_bridge",
-            "chests/bastion_hoglin_stable",
-            "chests/bastion_other",
-            "chests/bastion_treasure",
-            "chests/nether_bridge",
-            "chests/end_city_treasure",
-            "chests/ruined_portal",
-            "chests/shipwreck_map",
-            "chests/shipwreck_supply",
-            "chests/shipwreck_treasure",
-            "chests/buried_treasure",
-            "chests/underwater_ruin_big",
-            "chests/underwater_ruin_small",
-            "chests/ancient_city",
-            "chests/ancient_city_ice_box",
-            "chests/igloo_chest"
-    );
-
     private Minigame() {}
 
     public static void register(CommandDispatcher<CommandSourceStack> dispatcher) {
@@ -324,6 +297,14 @@ public final class Minigame {
                 if (player != null) {
                     match.permanentDead.add(id);
                     match.clearDowned(id);
+                    REVIVE.remove(id);
+                    LAST_HIT.remove(id);
+                    // Снимаем позу лежачего, иначе наблюдатель останется пластом и без физики
+                    player.setForcedPose(null);
+                    player.setPose(Pose.STANDING);
+                    player.noPhysics = false;
+                    player.removeEffect(MobEffects.BLINDNESS);
+                    player.removeEffect(MobEffects.INVISIBILITY);
                     player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
                     player.sendSystemMessage(Component.translatable("blackchannel.minigame.permanent_dead"));
                     checkTeamElimination(match, match.playerCrew.getOrDefault(id, ""));
@@ -365,11 +346,16 @@ public final class Minigame {
         match.ended = true;
         ServerLevel level = Ops.levelOf(server, match.dim);
         if (level != null) {
+            // Маяки отрядов не должны оставаться в мире после матча
+            removeBeacons(level, match);
             restoreBorder(level, match);
             restoreKeep(level, match);
         }
         removeTeamNametags(server);
         clearScoreboard(server);
+        REVIVE.clear();
+        LAST_HIT.clear();
+        match.downedPlayers.clear();
         String winner;
         if (survivor != null) {
             winner = survivor;
@@ -387,6 +373,11 @@ public final class Minigame {
         int winnerScore = winner == null || winner.isEmpty() ? 0 : match.getScore(winner);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             player.displayClientMessage(Component.empty(), true);
+            player.setForcedPose(null);
+            player.setPose(Pose.STANDING);
+            player.noPhysics = false;
+            player.removeEffect(MobEffects.BLINDNESS);
+            player.removeEffect(MobEffects.INVISIBILITY);
             player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
             if (winnerLabel.isEmpty()) {
                 player.sendSystemMessage(Component.translatable("blackchannel.minigame.match_end_none"));
@@ -399,16 +390,24 @@ public final class Minigame {
         match.setDirty();
     }
 
-    private static final int CACHES_PER_TICK = 2;
+    private static final int CACHES_PER_TICK = 1;
 
     private static void placeCacheStep(MinecraftServer server, MatchData match, ServerLevel level) {
         int steps = Math.min(CACHES_PER_TICK, match.cacheTotal - match.cacheTick);
         RandomSource random = level.getRandom();
+        int size = Math.max(0, match.cachePositions.length);
         for (int i = 0; i < steps; i++) {
             if (match.cacheTick >= match.cacheTotal) break;
-            BlockPos pos = match.cachePositions[match.cacheTick];
-            if (pos != null) placeChest(level, pos, random);
-            match.cacheTick++;
+            int index = match.cacheTick++;
+            if (index < 0 || index >= size) continue;
+            BlockPos cand = match.cachePositions[index];
+            if (cand == null) continue;
+            // Один чанк за тик: большой мир не вешает сервер
+            level.getChunk(cand.getX() >> 4, cand.getZ() >> 4);
+            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cand.getX(), cand.getZ());
+            BlockPos feet = new BlockPos(cand.getX(), y, cand.getZ());
+            if (!match.inside(feet) || !standable(level, feet)) continue;
+            placeChest(level, feet, random);
         }
         if (match.cacheTick >= match.cacheTotal) {
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
@@ -434,7 +433,7 @@ public final class Minigame {
             if (!(be instanceof RandomizableContainerBlockEntity box)) continue;
             if (!isContainer(be.getBlockState().getBlock())) continue;
             try {
-                injectDungeon(box, level.getRandom());
+                injectLoot(level, match, box);
             } catch (RuntimeException e) {
                 BlackChannelMod.LOGGER.warn("field chest skip at {}: {}", be.getBlockPos(), e.toString());
             }
@@ -455,9 +454,10 @@ public final class Minigame {
             return;
         }
         String crew = match.playerCrew.getOrDefault(victim.getUUID(), "");
-        // Определяем killer
+        // Определяем killer: прямой убийца или тот, кто последним бил (падение, лава, добивание)
         ServerPlayer killer = event.getSource().getEntity() instanceof ServerPlayer sp && sp != victim ? sp : null;
-        if (killer != null && !match.finalActive) awardKill(killer, victim, match);
+        if (killer == null) killer = lastAttacker(victim, match);
+        if (killer != null) awardKill(killer, victim, match);
 
         ServerLevel level = Ops.levelOf(victim.getServer(), match.dim);
         BlockPos respawn = null;
@@ -495,13 +495,17 @@ public final class Minigame {
         }
         match.down(victim.getUUID(), ds);
         victim.setHealth(victim.getMaxHealth());
-        victim.setPose(Pose.SLEEPING);
         victim.setDeltaMovement(Vec3.ZERO);
+        // Лежит пластом. Поза сна без кровати клиент не поворачивает (модель остаётся стоять),
+        // а поза плавания как раз кладёт модель на землю.
+        victim.setForcedPose(Pose.SWIMMING);
+        victim.setPose(Pose.SWIMMING);
         victim.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, downedTicks + 40, 1, false, false));
-        victim.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, downedTicks + 40, 1, false, false));
         victim.sendSystemMessage(Component.translatable("blackchannel.minigame.downed", downedTicks / 20));
-        victim.sendSystemMessage(Component.translatable(kind.equals("bed")
-                ? "blackchannel.minigame.downed_bed" : "blackchannel.minigame.downed_beacon"));
+        victim.sendSystemMessage(Component.translatable("blackchannel.minigame.downed_help", downedTicks / 20));
+        victim.sendSystemMessage(Component.translatable("blackchannel.minigame.downed_seconds",
+                downedTicks / 20,
+                Component.translatable(kind.equals("bed") ? "blackchannel.minigame.respawn_bed" : "blackchannel.minigame.respawn_beacon")));
         victim.getServer().getPlayerList().broadcastSystemMessage(
                 Component.translatable("blackchannel.minigame.downed_announce",
                         victim.getGameProfile().getName(), downedTicks / 20), false);
@@ -512,7 +516,7 @@ public final class Minigame {
     private static boolean bedValid(ServerLevel level, MatchData match, BlockPos pos) {
         if (level == null || pos == null) return false;
         if (!match.inside(pos)) return false;
-        if (!level.isLoaded(pos)) return false;
+        if (!level.isLoaded(pos)) level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         if (level.getBlockState(pos).getBlock() instanceof BedBlock) return true;
         for (Direction dir : Direction.Plane.HORIZONTAL) {
             if (level.getBlockState(pos.relative(dir)).getBlock() instanceof BedBlock) return true;
@@ -523,7 +527,7 @@ public final class Minigame {
     private static boolean beaconValid(ServerLevel level, MatchData match, BlockPos pos) {
         if (level == null || pos == null) return false;
         if (!match.inside(pos)) return false;
-        if (!level.isLoaded(pos)) return false;
+        if (!level.isLoaded(pos)) level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
         return level.getBlockState(pos).getBlock() == ModContent.BEACON.get();
     }
 
@@ -531,7 +535,9 @@ public final class Minigame {
         match.permanentDead.add(player.getUUID());
         match.clearDowned(player.getUUID());
         REVIVE.remove(player.getUUID());
+        LAST_HIT.remove(player.getUUID());
         player.setHealth(player.getMaxHealth());
+        player.setForcedPose(null);
         player.setPose(Pose.STANDING);
         player.noPhysics = false;
         player.removeEffect(MobEffects.BLINDNESS);
@@ -546,6 +552,7 @@ public final class Minigame {
     /** Возврат на кровать или маяк после ранения. */
     private static void respawnTo(ServerPlayer player, MatchData match, MatchData.DownedState ds) {
         ServerLevel level = Ops.levelOf(player.getServer(), match.dim);
+        player.setForcedPose(null);
         player.setPose(Pose.STANDING);
         player.noPhysics = false;
         player.removeEffect(MobEffects.BLINDNESS);
@@ -591,23 +598,36 @@ public final class Minigame {
     public static void onHurt(LivingHurtEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer victim)) return;
         MatchData match = MatchData.get(victim.getServer());
-        if (match.active && match.downedPlayers.containsKey(victim.getUUID())) {
+        if (!match.active) {
+            if (event.getSource().getEntity() instanceof ServerPlayer other && other != victim) Ops.learnHit(victim, other);
+            return;
+        }
+        // Раненый и погибший не получают урон вообще
+        if (match.downedPlayers.containsKey(victim.getUUID()) || match.permanentDead.contains(victim.getUUID())) {
             event.setCanceled(true);
             return;
         }
-        if (!(event.getSource().getEntity() instanceof ServerPlayer attacker) || attacker == victim) return;
-        if (match.active) {
-            long now = victim.serverLevel().getGameTime();
-            boolean grace = now < match.graceUntil;
-            boolean wall = shielded(victim) || shielded(attacker);
-            // Первые 15 минут (18000 тиков) — нет PvP
-            long matchStart = match.matchEndTick - Config.MATCH_DURATION_MINUTES.get() * 60L * 20L;
-            boolean earlyGame = now < matchStart + 18000L;
-            if (shielded(attacker)) PROTECT.remove(attacker.getUUID());
-            if (grace || wall || earlyGame) {
-                event.setCanceled(true);
-                return;
-            }
+        long now = victim.serverLevel().getGameTime();
+        ServerPlayer attacker = event.getSource().getEntity() instanceof ServerPlayer sp && sp != victim ? sp : null;
+        if (attacker != null) LAST_HIT.put(victim.getUUID(), new LastHit(attacker.getUUID(), now));
+
+        // Мирный режим: урона нет ни от кого, включая мобов, падение и лаву
+        if (now < match.graceUntil) {
+            event.setCanceled(true);
+            return;
+        }
+        if (attacker == null) return;
+
+        // Отсутствие PvP в начале матча
+        if (now < match.pvpFreeUntil) {
+            event.setCanceled(true);
+            return;
+        }
+        boolean wall = shielded(victim) || shielded(attacker);
+        if (shielded(attacker)) PROTECT.remove(attacker.getUUID());
+        if (wall) {
+            event.setCanceled(true);
+            return;
         }
         Ops.learnHit(victim, attacker);
     }
@@ -618,10 +638,8 @@ public final class Minigame {
         if (!match.active) return;
         MatchData.DownedState ds = match.getDowned(player.getUUID());
         if (ds == null) return;
-        // Downed игрок: SLEEPING pose, нет движения
-        player.setPose(Pose.SLEEPING);
-        player.setDeltaMovement(Vec3.ZERO);
-        player.noPhysics = true;
+        // Раненый лежит: ни ходить, ни прыгать, ни взаимодействовать
+        freezeDowned(player, ds);
         long now = player.level().getGameTime();
         ServerLevel matchLevel = Ops.levelOf(player.getServer(), match.dim);
         boolean pointOk = ds.respawnKind != null && ds.respawnKind.equals("bed")
@@ -647,7 +665,8 @@ public final class Minigame {
             REVIVE.remove(player.getUUID());
             match.clearDowned(player.getUUID());
             match.reviveUsed.add(player.getUUID());
-            respawnTo(player, match, ds);
+            // Встаёт там, где лежал, без переноса на базу
+            reviveInPlace(player);
             player.sendSystemMessage(Component.translatable("blackchannel.minigame.revived"));
             player.getServer().getPlayerList().broadcastSystemMessage(
                     Component.translatable("blackchannel.minigame.revived_announce", player.getGameProfile().getName()), false);
@@ -655,8 +674,68 @@ public final class Minigame {
         }
     }
 
+    /** Лежит на месте, не двигается и не взаимодействует с миром. */
+    private static void freezeDowned(ServerPlayer player, MatchData.DownedState ds) {
+        // ForcedPose держит позу на сервере, setPose отправляет её клиентам, чтобы игрок лежал пластом.
+        if (player.getForcedPose() != Pose.SWIMMING) player.setForcedPose(Pose.SWIMMING);
+        if (player.getPose() != Pose.SWIMMING) player.setPose(Pose.SWIMMING);
+        player.setDeltaMovement(Vec3.ZERO);
+        player.setSprinting(false);
+        player.noPhysics = true;
+        if (ds.pos == null || ds.dim == null || !ds.dim.equals(Str.dim(player.level()))) return;
+        BlockPos p = ds.pos;
+        double dx = player.getX() - (p.getX() + 0.5D);
+        double dz = player.getZ() - (p.getZ() + 0.5D);
+        double dy = player.getY() - p.getY();
+        if (dx * dx + dz * dz > 0.0016D || Math.abs(dy) > 0.5D) {
+            player.teleportTo(player.serverLevel(), p.getX() + 0.5D, p.getY(), p.getZ() + 0.5D, player.getYRot(), player.getXRot());
+            player.setDeltaMovement(Vec3.ZERO);
+            player.fallDistance = 0f;
+        }
+    }
+
+    /** Воскрешение другом: встаёт на том же месте. */
+    private static void reviveInPlace(ServerPlayer player) {
+        player.setForcedPose(null);
+        player.setPose(Pose.STANDING);
+        player.noPhysics = false;
+        player.removeEffect(MobEffects.BLINDNESS);
+        player.removeEffect(MobEffects.INVISIBILITY);
+        player.setHealth(player.getMaxHealth());
+        player.getFoodData().setFoodLevel(20);
+        player.getFoodData().setSaturation(5.0f);
+        player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+        player.setDeltaMovement(Vec3.ZERO);
+        protect(player, player.level().getGameTime() + 100L);
+    }
+
+    /** Игрок сейчас лежит раненым. */
+    public static boolean isDowned(ServerPlayer player) {
+        if (player == null || player.getServer() == null) return false;
+        MatchData match = MatchData.get(player.getServer());
+        return match.active && match.downedPlayers.containsKey(player.getUUID());
+    }
+
+    private static ServerPlayer lastAttacker(ServerPlayer victim, MatchData match) {
+        LastHit hit = LAST_HIT.get(victim.getUUID());
+        if (hit == null) return null;
+        long now = victim.level().getGameTime();
+        if (now - hit.tick() > KILL_CREDIT_TICKS) {
+            LAST_HIT.remove(victim.getUUID());
+            return null;
+        }
+        ServerPlayer attacker = victim.getServer().getPlayerList().getPlayer(hit.attacker());
+        if (attacker == null || attacker == victim) return null;
+        if (!match.playerCrew.containsKey(attacker.getUUID())) return null;
+        return attacker;
+    }
+
     public static void onAttack(AttackEntityEvent event) {
         if (!(event.getEntity() instanceof ServerPlayer attacker)) return;
+        if (isDowned(attacker)) {
+            event.setCanceled(true);
+            return;
+        }
         if (!(event.getTarget() instanceof ServerPlayer)) return;
         if (!shielded(attacker)) return;
         PROTECT.remove(attacker.getUUID());
@@ -665,16 +744,27 @@ public final class Minigame {
 
     public static void onRespawn(ServerPlayer player) {
         MatchData match = MatchData.get(player.getServer());
+        player.setForcedPose(null);
+        player.setPose(Pose.STANDING);
         if (!match.active) return;
         // Если permanently dead — сразу в наблюдатели
         if (match.permanentDead.contains(player.getUUID())) {
             player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
             return;
         }
-        // Обычный респаун — в начальную точку (игрок умер и нет кровати/маяка)
         protect(player, player.serverLevel().getGameTime() + 160L);
-        MatchData.Drop drop = match.drops.get(player.getUUID());
         ServerLevel level = Ops.levelOf(player.getServer(), match.dim);
+        // Своя кровать важнее точки сбора: игрок возрождается у себя на базе
+        BlockPos bed = match.getBed(player.getUUID());
+        if (level != null && bedValid(level, match, bed)) {
+            BlockPos feet = findSafe(level, bed.getX(), bed.getZ(), player.getRandom());
+            place(player, level, feet, player.getYRot());
+            player.sendSystemMessage(Component.translatable("blackchannel.minigame.respawned",
+                    Component.translatable("blackchannel.minigame.respawn_bed")));
+            return;
+        }
+        // Иначе — на точку старта
+        MatchData.Drop drop = match.drops.get(player.getUUID());
         if (drop == null || level == null) {
             assign(player, match, true);
             return;
@@ -695,6 +785,8 @@ public final class Minigame {
             return;
         }
         if (!match.drops.containsKey(player.getUUID())) assign(player, match, true);
+        // Вошёл в идущий матч — играет в выживании, как и все
+        player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
         kit(player, match);
         match.setDirty();
     }
@@ -702,6 +794,10 @@ public final class Minigame {
     public static void onInteractEntity(net.minecraftforge.event.entity.player.PlayerInteractEvent.EntityInteract event) {
         if (event.getLevel().isClientSide()) return;
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (isDowned(player)) {
+            event.setCanceled(true);
+            return;
+        }
         if (!(event.getTarget() instanceof ServerPlayer target)) return;
         MatchData match = MatchData.get(player.getServer());
         if (!match.active) return;
@@ -723,11 +819,15 @@ public final class Minigame {
         long standTime = Config.REVIVE_STAND_SECONDS.get() * 20L;
         REVIVE.put(target.getUUID(), player.level().getGameTime() + standTime);
         player.sendSystemMessage(Component.translatable("blackchannel.minigame.revive_stand", Config.REVIVE_STAND_SECONDS.get()));
-        target.sendSystemMessage(Component.translatable("blackchannel.minigame.revive_stand_target", Config.REVIVE_STAND_SECONDS.get(), player.getGameProfile().getName()));
+        target.sendSystemMessage(Component.translatable("blackchannel.minigame.revive_stand_target", player.getGameProfile().getName(), Config.REVIVE_STAND_SECONDS.get()));
     }
 
     public static void onUseBlock(PlayerInteractEvent.RightClickBlock event) {
         if (event.getLevel().isClientSide() || !(event.getEntity() instanceof ServerPlayer player)) return;
+        if (isDowned(player)) {
+            event.setCanceled(true);
+            return;
+        }
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         if (!isContainer(level.getBlockState(event.getPos()).getBlock())) return;
         TrapData data = TrapData.get(player.getServer());
@@ -753,6 +853,10 @@ public final class Minigame {
     public static void onPlace(net.minecraftforge.event.level.BlockEvent.EntityPlaceEvent event) {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        if (isDowned(player)) {
+            event.setCanceled(true);
+            return;
+        }
         MatchData match = MatchData.get(level.getServer());
         if (!match.active) return;
         Block block = event.getPlacedBlock().getBlock();
@@ -776,65 +880,89 @@ public final class Minigame {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         MatchData match = MatchData.get(level.getServer());
         Block block = event.getState().getBlock();
+        ServerPlayer breaker = event.getPlayer() instanceof ServerPlayer sp ? sp : null;
+        if (breaker != null && isDowned(breaker)) {
+            event.setCanceled(true);
+            return;
+        }
         // Обработка слома кровати
-        if (block instanceof BedBlock && match.active) {
+        if (block instanceof BedBlock && match.active && breaker != null) {
             BlockPos pos = event.getPos();
             UUID bedOwner = findBedOwner(match, pos);
             if (bedOwner != null) {
-                ServerPlayer breaker = event.getPlayer() instanceof ServerPlayer sp ? sp : null;
-                if (breaker != null) {
-                    String breakerCrew = match.playerCrew.getOrDefault(breaker.getUUID(), "");
-                    String ownerCrew = match.playerCrew.getOrDefault(bedOwner, "");
-                    if (!breakerCrew.equals(ownerCrew)) {
-                        match.setBed(bedOwner, null);
-                        int pts = Config.SCORE_BED.get();
-                        if (pts > 0) {
-                            match.addScore(breakerCrew, pts);
-                            breaker.sendSystemMessage(Component.translatable("blackchannel.minigame.bed_destroyed", pts));
-                        }
-                        level.getServer().getPlayerList().broadcastSystemMessage(
-                                Component.translatable("blackchannel.minigame.bed_destroyed_announce",
-                                        breaker.getGameProfile().getName(),
-                                        bedOwner != null ? level.getServer().getPlayerList().getPlayer(bedOwner).getGameProfile().getName() : "?"), false);
+                String breakerCrew = match.playerCrew.getOrDefault(breaker.getUUID(), "");
+                String ownerCrew = match.playerCrew.getOrDefault(bedOwner, "");
+                if (!breakerCrew.equals(ownerCrew)) {
+                    match.setBed(bedOwner, null);
+                    int pts = Config.SCORE_BED.get();
+                    if (pts > 0) {
+                        match.addScore(breakerCrew, pts);
+                        breaker.sendSystemMessage(Component.translatable("blackchannel.minigame.bed_destroyed", pts));
                     }
+                    level.getServer().getPlayerList().broadcastSystemMessage(
+                            Component.translatable("blackchannel.minigame.bed_destroyed_announce",
+                                    breaker.getGameProfile().getName(), colored(ownerCrew)), false);
                 }
             }
         }
         // Обработка слома маяка отряда — нельзя сломать свой маяк
-        if (block == ModContent.BEACON.get() && match.active) {
+        if (block == ModContent.BEACON.get() && match.active && breaker != null) {
             BlockPos pos = event.getPos();
             String beaconCrew = findBeaconOwner(match, pos);
             if (beaconCrew != null) {
-                ServerPlayer breaker = event.getPlayer() instanceof ServerPlayer sp ? sp : null;
-                if (breaker != null) {
-                    String breakerCrew = match.playerCrew.getOrDefault(breaker.getUUID(), "");
-                    if (!breakerCrew.equals(beaconCrew)) {
-                        match.setBeacon(beaconCrew, null);
-                        int pts = Config.SCORE_BEACON.get();
-                        if (pts > 0) {
-                            match.addScore(breakerCrew, pts);
-                            breaker.sendSystemMessage(Component.translatable("blackchannel.minigame.beacon_destroyed", pts));
-                        }
-                        level.getServer().getPlayerList().broadcastSystemMessage(
-                                Component.translatable("blackchannel.minigame.beacon_destroyed_announce",
-                                        breaker.getGameProfile().getName(), beaconCrew), false);
-                    } else {
-                        // Нельзя сломать свой маяк
-                        event.setCanceled(true);
-                        breaker.sendSystemMessage(Component.translatable("blackchannel.minigame.beacon_own"));
+                String breakerCrew = match.playerCrew.getOrDefault(breaker.getUUID(), "");
+                if (!breakerCrew.equals(beaconCrew)) {
+                    match.setBeacon(beaconCrew, null);
+                    int pts = Config.SCORE_BEACON.get();
+                    if (pts > 0) {
+                        match.addScore(breakerCrew, pts);
+                        breaker.sendSystemMessage(Component.translatable("blackchannel.minigame.beacon_destroyed", pts, colored(beaconCrew)));
                     }
+                    level.getServer().getPlayerList().broadcastSystemMessage(
+                            Component.translatable("blackchannel.minigame.beacon_destroyed_announce",
+                                    breaker.getGameProfile().getName(), colored(beaconCrew)), false);
+                } else {
+                    // Нельзя сломать свой маяк
+                    event.setCanceled(true);
+                    breaker.sendSystemMessage(Component.translatable("blackchannel.minigame.beacon_own"));
                 }
             }
         }
-        //原有 логика
+        // Учёт ловушек в сундуках, как и раньше
         if (isContainer(block)) {
             TrapData.get(level.getServer()).removeAt(Str.dim(level), event.getPos());
         }
     }
 
+    /** Имя команды с её цветом для чата. */
+    private static Component colored(String crew) {
+        String label = crew == null || crew.isEmpty() ? "?" : crew;
+        Teams.Team team = Teams.byId(crew);
+        if (team != null) return Component.literal(team.name()).withStyle(team.color());
+        return Component.literal(label);
+    }
+
+    /** Убирает блоки маяков отряда из мира. */
+    private static void removeBeacons(ServerLevel level, MatchData match) {
+        for (BlockPos pos : new ArrayList<>(match.teamBeacons.values())) {
+            if (pos == null) continue;
+            // Маяков максимум по числу отрядов: чанк можно и загрузить, зато блок точно уберётся
+            if (!level.isLoaded(pos)) level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (level.getBlockState(pos).getBlock() == ModContent.BEACON.get()) {
+                level.setBlock(pos, Blocks.AIR.defaultBlockState(), 3);
+            }
+        }
+        match.teamBeacons.clear();
+    }
+
     private static UUID findBedOwner(MatchData match, BlockPos pos) {
         for (Map.Entry<UUID, BlockPos> e : match.bedPositions.entrySet()) {
-            if (e.getValue().equals(pos)) return e.getKey();
+            BlockPos bed = e.getValue();
+            if (bed.equals(pos)) return e.getKey();
+            // Кровать занимает два блока: если сломали вторую половину, владельца всё равно надо найти
+            for (Direction dir : Direction.Plane.HORIZONTAL) {
+                if (bed.relative(dir).equals(pos)) return e.getKey();
+            }
         }
         return null;
     }
@@ -914,16 +1042,22 @@ public final class Minigame {
             String code = NetData.get(player).profile(player.getUUID()).crew;
             crew = code == null || code.isEmpty() ? "-" : code;
         }
-        long left = 0;
+        long peaceful = 0;
+        long pvpFree = 0;
         ServerLevel level = Ops.levelOf(source.getServer(), match.dim);
-        if (match.active && level != null) left = Math.max(0, (match.graceUntil - level.getGameTime()) / 20L);
+        if (match.active && level != null) {
+            long now = level.getGameTime();
+            peaceful = Math.max(0, (match.graceUntil - now) / 20L);
+            pvpFree = Math.max(0, (match.pvpFreeUntil - now) / 20L);
+        }
         int gap = match.baseGap();
         String center = match.centerSet ? match.centerX + " " + match.centerY + " " + match.centerZ : "-";
-        long grace = left;
         String crewShown = crew;
         String state = match.active ? "on" : "off";
+        long peacefulLeft = peaceful;
+        long pvpLeft = pvpFree;
         source.sendSuccess(() -> Component.translatable("blackchannel.minigame.status",
-                Component.translatable("blackchannel.minigame." + state), center, match.size, gap, crewShown, grace), false);
+                Component.translatable("blackchannel.minigame." + state), center, match.size, gap, crewShown, peacefulLeft, pvpLeft), false);
         return 1;
     }
 
@@ -1038,7 +1172,8 @@ public final class Minigame {
         match.anchors.clear();
         match.kitted.clear();
         match.teamScores.clear();
-        match.teamBeacons.clear();
+        // Маяки от прошлой игры: сначала убрать из мира, потом забыть координаты
+        removeBeacons(level, match);
         match.bedPositions.clear();
         match.downedPlayers.clear();
         match.reviveUsed.clear();
@@ -1048,6 +1183,7 @@ public final class Minigame {
         match.eliminatedTeams.clear();
         PROTECT.clear();
         REVIVE.clear();
+        LAST_HIT.clear();
         List<String> keys = new ArrayList<>(groups.keySet());
         List<int[]> spots = anchorsFor(match, keys.size(), gap);
         for (int i = 0; i < keys.size(); i++) {
@@ -1070,18 +1206,29 @@ public final class Minigame {
                 match.drops.put(player.getUUID(), drop);
                 match.playerCrew.put(player.getUUID(), code);
                 match.playerColorIdx.put(player.getUUID(), colorIdx);
+                // Все стартуют в выживании, даже если пришли из креатива или наблюдателей
+                player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
+                player.setForcedPose(null);
+                player.setPose(Pose.STANDING);
                 place(player, level, feet, yaw);
                 kit(player, match);
                 player.sendSystemMessage(Component.translatable("blackchannel.minigame.started_you", teamLabel(server, code), gap));
-                player.sendSystemMessage(Component.translatable("blackchannel.minigame.grace", 60));
+                if (Config.PEACEFUL_MINUTES.get() > 0) {
+                    player.sendSystemMessage(Component.translatable("blackchannel.minigame.peaceful", Config.PEACEFUL_MINUTES.get()));
+                }
+                if (Config.PVP_FREE_MINUTES.get() > 0) {
+                    player.sendSystemMessage(Component.translatable("blackchannel.minigame.pvp_free", Config.PVP_FREE_MINUTES.get()));
+                }
             }
         }
         applyBorder(level, match, true);
         applyKeep(level, match, true);
-        match.graceUntil = level.getGameTime() + 20L * 60L;
+        long startTick = level.getGameTime();
+        match.graceUntil = startTick + Config.PEACEFUL_MINUTES.get() * 60L * 20L;
+        match.pvpFreeUntil = startTick + Config.PVP_FREE_MINUTES.get() * 60L * 20L;
         long matchDuration = Config.MATCH_DURATION_MINUTES.get() * 60L * 20L;
         long finalDuration = Config.FINAL_DURATION_MINUTES.get() * 60L * 20L;
-        match.matchEndTick = level.getGameTime() + matchDuration;
+        match.matchEndTick = startTick + matchDuration;
         match.finalEndTick = match.matchEndTick + finalDuration;
         match.finalActive = false;
         match.ended = false;
@@ -1107,6 +1254,7 @@ public final class Minigame {
         ServerLevel level = Ops.levelOf(source.getServer(), match.dim);
         match.active = false;
         match.graceUntil = 0;
+        match.pvpFreeUntil = 0;
         match.matchEndTick = 0;
         match.finalEndTick = 0;
         match.finalActive = false;
@@ -1114,7 +1262,6 @@ public final class Minigame {
         match.anchors.clear();
         match.kitted.clear();
         match.teamScores.clear();
-        match.teamBeacons.clear();
         match.bedPositions.clear();
         match.downedPlayers.clear();
         match.reviveUsed.clear();
@@ -1124,9 +1271,20 @@ public final class Minigame {
         match.eliminatedTeams.clear();
         PROTECT.clear();
         REVIVE.clear();
+        LAST_HIT.clear();
+        // Маяки убираем, пока карта teamBeacons ещё не очищена
         if (level != null) {
+            removeBeacons(level, match);
             restoreBorder(level, match);
             restoreKeep(level, match);
+        }
+        match.teamBeacons.clear();
+        for (ServerPlayer player : source.getServer().getPlayerList().getPlayers()) {
+            player.setForcedPose(null);
+            player.setPose(Pose.STANDING);
+            player.noPhysics = false;
+            player.removeEffect(MobEffects.BLINDNESS);
+            player.removeEffect(MobEffects.INVISIBILITY);
         }
         removeTeamNametags(source.getServer());
         clearScoreboard(source.getServer());
@@ -1222,7 +1380,6 @@ public final class Minigame {
             give(player, phone);
         }
         give(player, new ItemStack(ModContent.CELL.get()));
-        if (!Devices.has(player, ModContent.MANUAL.get())) give(player, new ItemStack(ModContent.MANUAL.get()));
         give(player, new ItemStack(Items.RED_BED));
         give(player, new ItemStack(Items.STONE_SHOVEL));
         give(player, new ItemStack(Items.STONE_HOE));
@@ -1257,15 +1414,16 @@ public final class Minigame {
         return true;
     }
 
-    private static boolean bedOk(ServerPlayer player, MatchData match) {
-        BlockPos bed = player.getRespawnPosition();
-        ResourceKey<Level> dim = player.getRespawnDimension();
-        if (bed == null || dim == null || player.getServer() == null) return false;
-        ServerLevel level = player.getServer().getLevel(dim);
-        if (level == null || !(level.getBlockState(bed).getBlock() instanceof BedBlock)) return false;
-        ServerLevel matchLevel = Ops.levelOf(player.getServer(), match.dim);
-        if (matchLevel != null && dim.equals(matchLevel.dimension()) && !match.inside(bed)) return false;
-        return true;
+    /** Игрок лёг в кровать — она становится его точкой возрождения. */
+    public static void onSleep(net.minecraftforge.event.entity.player.PlayerSleepInBedEvent event) {
+        if (event.getEntity().level().isClientSide()) return;
+        if (!(event.getEntity() instanceof ServerPlayer player)) return;
+        MatchData match = MatchData.get(player.getServer());
+        if (!match.active) return;
+        if (!match.inside(event.getPos())) return;
+        match.setBed(player.getUUID(), event.getPos());
+        player.sendSystemMessage(Component.translatable("blackchannel.minigame.bed_placed"));
+        match.setDirty();
     }
 
     private static int fitGap(MatchData match, int teams) {
@@ -1350,9 +1508,20 @@ public final class Minigame {
     }
 
     private static BlockPos findSafe(ServerLevel level, int x, int z, RandomSource random) {
-        for (int attempt = 0; attempt < 24; attempt++) {
+        // Сначала ищем по уже загруженным чанкам: в обычном мире генерация новых — самая тяжёлая операция,
+        // и десятки вызовов подряд вешают сервер.
+        for (int attempt = 0; attempt < 16; attempt++) {
             int sx = x + (attempt == 0 ? 0 : random.nextInt(25) - 12);
             int sz = z + (attempt == 0 ? 0 : random.nextInt(25) - 12);
+            if (level.getChunkSource().getChunkNow(sx >> 4, sz >> 4) == null) continue;
+            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, sx, sz);
+            BlockPos feet = new BlockPos(sx, y, sz);
+            if (standable(level, feet)) return feet;
+        }
+        // Не нашли — грузим по одной точке, но не больше восьми попыток
+        for (int attempt = 0; attempt < 8; attempt++) {
+            int sx = x + random.nextInt(25) - 12;
+            int sz = z + random.nextInt(25) - 12;
             level.getChunk(sx >> 4, sz >> 4);
             int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, sx, sz);
             BlockPos feet = new BlockPos(sx, y, sz);
@@ -1421,49 +1590,19 @@ public final class Minigame {
         int count = Mth.clamp(match.size / 120, 8, 40);
         int avoid = Math.min(150, Math.max(32, match.size / 8));
         RandomSource random = level.getRandom();
-        Set<Long> used = new HashSet<>();
+        int half = Math.max(8, match.size / 2 - 8);
         List<BlockPos> positions = new ArrayList<>();
-        for (int i = 0; i < count; i++) {
-            BlockPos pos = pickCache(level, match, avoid, random, used, i < 8);
-            if (pos == null) continue;
-            positions.add(pos);
+        int guard = 0;
+        // Только арифметика: чанки грузим потом, по одному за тик
+        while (positions.size() < count && guard++ < count * 16) {
+            int x = match.centerX + random.nextInt(half * 2 + 1) - half;
+            int z = match.centerZ + random.nextInt(half * 2 + 1) - half;
+            if (crowded(match, x, z, avoid)) continue;
+            positions.add(new BlockPos(x, match.centerY, z));
         }
         match.cachePositions = positions.toArray(new BlockPos[0]);
         match.cacheTotal = positions.size();
         match.cacheTick = 0;
-    }
-
-    private static int placeCaches(ServerLevel level, MatchData match) {
-        int count = Mth.clamp(match.size / 120, 8, 40);
-        int avoid = Math.min(150, Math.max(32, match.size / 8));
-        RandomSource random = level.getRandom();
-        Set<Long> used = new HashSet<>();
-        int placed = 0;
-        for (int i = 0; i < count; i++) {
-            BlockPos pos = pickCache(level, match, avoid, random, used, i < 8);
-            if (pos == null) continue;
-            if (!placeChest(level, pos, random)) continue;
-            placed++;
-        }
-        return placed;
-    }
-
-    private static BlockPos pickCache(ServerLevel level, MatchData match, int avoid, RandomSource random, Set<Long> used, boolean spread) {
-        int half = Math.max(8, match.size / 2 - 8);
-        for (int attempt = 0; attempt < 12; attempt++) {
-            int x = match.centerX + random.nextInt(half * 2 + 1) - half;
-            int z = match.centerZ + random.nextInt(half * 2 + 1) - half;
-            if (crowded(match, x, z, avoid)) continue;
-            long key = ((long) (x >> 4) << 32) ^ (z >> 4 & 0xffffffffL);
-            if (spread && attempt < 8 && used.contains(key)) continue;
-            level.getChunk(x >> 4, z >> 4);
-            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
-            BlockPos feet = new BlockPos(x, y, z);
-            if (!match.inside(feet) || !standable(level, feet)) continue;
-            used.add(key);
-            return feet;
-        }
-        return null;
     }
 
     private static boolean placeChest(ServerLevel level, BlockPos feet, RandomSource random) {
@@ -1473,39 +1612,55 @@ public final class Minigame {
         level.setBlock(chestPos, Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, facing), 3);
         level.setBlock(feet, Blocks.COARSE_DIRT.defaultBlockState(), 3);
         if (!(level.getBlockEntity(chestPos) instanceof ChestBlockEntity chest)) return false;
-        int roll = random.nextInt(100);
-        fill(chest, random, roll < 70 ? 0 : roll < 92 ? 1 : 2);
+        fill(chest, random);
         chest.setCustomName(Component.translatable("block.blackchannel.field_cache"));
         chest.getPersistentData().putBoolean("bcLoot", true);
         chest.setChanged();
         return true;
     }
 
-    private static void injectDungeon(RandomizableContainerBlockEntity box, RandomSource random) {
+    /**
+     * Лут кладётся в любой сундук или бочку в зоне матча, а не только в данжах.
+     * Сгенерированный таблицей лут заменяется нашим, из игроцкого сундука ничего не выкидываем.
+     */
+    private static void injectLoot(ServerLevel level, MatchData match, RandomizableContainerBlockEntity box) {
         if (box.getPersistentData().getBoolean("bcLoot")) return;
-        // 1.20.1 не отдаёт id таблицы методом. Он лежит в теге, пока сундук не открыли.
+        if (!match.inside(box.getBlockPos())) return;
+        RandomSource random = level.getRandom();
+        List<ItemStack> stacks = cacheStacks(random);
+        if (stacks.isEmpty()) return;
         CompoundTag saved = box.saveWithoutMetadata();
-        if (!saved.contains("LootTable", 8)) return;
-        ResourceLocation table = ResourceLocation.tryParse(saved.getString("LootTable"));
-        if (table == null || !"minecraft".equals(table.getNamespace()) || !STRUCTURES.contains(table.getPath())) return;
-        box.unpackLootTable(null);
-        addStacks(box, dungeonStacks(random));
+        // 1.20.1 не отдаёт id таблицы методом. Он лежит в теге, пока сундук не открыли.
+        boolean generated = saved.contains("LootTable", 8);
+        if (generated) {
+            box.unpackLootTable(null);
+            // Ванильный лут заменяется, иначе наши вещи просто дописываются в пустые слоты
+            box.clearContent();
+            addConfigured(stacks, Config.CACHE_DUNGEON.get(), random);
+        }
+        addStacks(box, stacks);
         box.getPersistentData().putBoolean("bcLoot", true);
         box.setChanged();
     }
 
-    private static void fill(ChestBlockEntity chest, RandomSource random, int tier) {
-        List<ItemStack> stacks = new ArrayList<>();
-        addConfigured(stacks, Config.CACHE_COMMON.get(), random);
-        if (tier >= 1) addConfigured(stacks, Config.CACHE_UNCOMMON.get(), random);
-        if (tier >= 2) addConfigured(stacks, Config.CACHE_RARE.get(), random);
+    private static void fill(ChestBlockEntity chest, RandomSource random) {
+        List<ItemStack> stacks = cacheStacks(random);
         addStacks(chest, stacks);
     }
 
-    private static List<ItemStack> dungeonStacks(RandomSource random) {
+    /** Категории лута проверяются независимо, шансы — в конфиге. */
+    private static List<ItemStack> cacheStacks(RandomSource random) {
         List<ItemStack> stacks = new ArrayList<>();
-        addConfigured(stacks, Config.CACHE_DUNGEON.get(), random);
+        if (chance(random, Config.CACHE_COMMON_CHANCE.get())) addConfigured(stacks, Config.CACHE_COMMON.get(), random);
+        if (chance(random, Config.CACHE_UNCOMMON_CHANCE.get())) addConfigured(stacks, Config.CACHE_UNCOMMON.get(), random);
+        if (chance(random, Config.CACHE_RARE_CHANCE.get())) addConfigured(stacks, Config.CACHE_RARE.get(), random);
         return stacks;
+    }
+
+    private static boolean chance(RandomSource random, int percent) {
+        if (percent <= 0) return false;
+        if (percent >= 100) return true;
+        return random.nextInt(100) < percent;
     }
 
     private static void addConfigured(List<ItemStack> into, List<? extends String> lines, RandomSource random) {

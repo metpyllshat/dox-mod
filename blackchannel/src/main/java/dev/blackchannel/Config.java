@@ -77,6 +77,11 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue SCORE_BEACON;
     public static final ForgeConfigSpec.IntValue REVIVE_STAND_SECONDS;
     public static final ForgeConfigSpec.IntValue DOWNED_DURATION_TICKS;
+    public static final ForgeConfigSpec.IntValue PEACEFUL_MINUTES;
+    public static final ForgeConfigSpec.IntValue PVP_FREE_MINUTES;
+    public static final ForgeConfigSpec.IntValue CACHE_COMMON_CHANCE;
+    public static final ForgeConfigSpec.IntValue CACHE_UNCOMMON_CHANCE;
+    public static final ForgeConfigSpec.IntValue CACHE_RARE_CHANCE;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -212,6 +217,10 @@ public final class Config {
                 "blackchannel:battery_cell",
                 "minecraft:gunpowder*1-3"
         ), o -> o instanceof String);
+        b.comment("Шансы категорий лута в схронах и сундуках в зоне, в процентах. Каждая категория проверяется отдельно: обычная при 100 попадает всегда, редкая при 8 — примерно в одном сундуке из двенадцати.");
+        CACHE_COMMON_CHANCE = b.defineInRange("cacheCommonChance", 100, 0, 100);
+        CACHE_UNCOMMON_CHANCE = b.defineInRange("cacheUncommonChance", 25, 0, 100);
+        CACHE_RARE_CHANCE = b.defineInRange("cacheRareChance", 8, 0, 100);
         b.pop();
 
         b.push("world");
@@ -221,6 +230,10 @@ public final class Config {
         b.push("match");
         b.comment("Матч идёт matchDuration минут, потом finalDuration минут — кровати и маяки отключены, смерть перманентная. Победитель — команда с максимумом очков.");
         MATCH_DURATION_MINUTES = b.defineInRange("matchDurationMinutes", 30, 5, 120);
+        b.comment("Мирный режим в начале матча: игроки вообще не получают урон (ни от игроков, ни от мобов, ни от падения). 0 — выключено.");
+        PEACEFUL_MINUTES = b.defineInRange("peacefulMinutes", 5, 0, 120);
+        b.comment("Отсутствие PvP: игроки не могут ранить друг друга, но мобы, падение и лава бьют как обычно. Отсчёт идёт от старта матча. 0 — PvP сразу. Если pvpFree меньше peaceful, всё равно действует более длинный запрет.");
+        PVP_FREE_MINUTES = b.defineInRange("pvpFreeMinutes", 5, 0, 120);
         FINAL_DURATION_MINUTES = b.defineInRange("finalDurationMinutes", 10, 1, 30);
         SCORE_KILL = b.defineInRange("scoreKill", 1, 0, 100);
         SCORE_BED = b.defineInRange("scoreBed", 2, 0, 100);

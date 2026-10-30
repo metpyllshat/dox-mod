@@ -79,7 +79,6 @@ public final class ModContent {
     public static final RegistryObject<Item> SAT = tool("satellite_firmware", ToolItem.Kind.SAT, 16, Rarity.RARE);
     public static final RegistryObject<Item> HASH = tool("hashcoin", ToolItem.Kind.HASH, 64, Rarity.COMMON);
     public static final RegistryObject<Item> SAMPLE = tool("signal_sample", ToolItem.Kind.SAMPLE, 16, Rarity.UNCOMMON);
-    public static final RegistryObject<Item> MANUAL = tool("field_manual", ToolItem.Kind.MANUAL, 1, Rarity.COMMON);
 
     public static final RegistryObject<MenuType<?>> PHONE_MENU = MENUS.register("phone",
             () -> IForgeMenuType.create((id, inv, buf) -> new Menus.PhoneMenu(id, inv)));
