@@ -38,6 +38,7 @@ public class MatchData extends SavedData {
     public long matchEndTick;
     public long finalEndTick;
     public boolean finalActive;
+    public boolean ended;
 
     // Team state
     public final Map<String, Integer> teamScores = new HashMap<>();

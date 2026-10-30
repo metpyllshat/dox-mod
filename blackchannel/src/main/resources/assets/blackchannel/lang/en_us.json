@@ -338,5 +338,6 @@
   "blackchannel.minigame.revive_stand": "Stand and revive for %s seconds. Don't move!",
   "blackchannel.minigame.revive_stand_target": "%s is reviving you. Stand for %s sec.",
   "blackchannel.minigame.revive_already": "This player was already revived this match.",
-  "blackchannel.minigame.beacon_auto": "Team beacon '%s' placed automatically."
+  "blackchannel.minigame.beacon_auto": "Team beacon '%s' placed automatically.",
+  "blackchannel.minigame.beacon_own": "Cannot destroy your own team beacon!"
 }

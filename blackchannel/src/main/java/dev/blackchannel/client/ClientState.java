@@ -50,6 +50,7 @@ public final class ClientState {
     public static String selfStatus = "";
     public static int selfDownedSeconds;
     public static boolean matchActive;
+    public static boolean matchEnded;
     public static final List<String> selfCrew = new ArrayList<>();
 
     public static final class TeamScore {
@@ -112,10 +113,12 @@ public final class ClientState {
     private static void readMatchState(CompoundTag m) {
         if (m == null || m.isEmpty()) {
             matchActive = false;
+            matchEnded = false;
             teamScores.clear();
             return;
         }
         matchActive = m.getBoolean("on");
+        matchEnded = m.getBoolean("ended");
         matchFinalActive = m.getBoolean("final");
         matchTimeLeftSeconds = m.getInt("timeLeft");
         aliveCount = m.getInt("alive");
@@ -126,13 +129,23 @@ public final class ClientState {
         for (int i = 0; i < teams.size(); i++) {
             CompoundTag t = teams.getCompound(i);
             TeamScore ts = new TeamScore();
-            ts.code = t.getString("code");
+            ts.code = simplifyTeamName(t.getString("code"), i);
             ts.score = t.getInt("score");
             ts.colorIdx = t.getInt("colorIdx");
             ts.alive = t.getInt("alive");
             ts.total = t.getInt("total");
             teamScores.put(ts.code, ts);
         }
+    }
+
+    private static String simplifyTeamName(String code, int index) {
+        if (code.startsWith("solo:")) return "Blue";
+        if (code.startsWith("crew:")) {
+            String[] names = {"Blue", "Green", "Yellow", "Aqua", "Purple", "Gold", "DarkGreen", "DarkAqua", "DarkPurple", "DarkRed", "White", "Gray"};
+            int idx = index % names.length;
+            return names[idx];
+        }
+        return code;
     }
 
     public static void applyStatus(CompoundTag tag) {
