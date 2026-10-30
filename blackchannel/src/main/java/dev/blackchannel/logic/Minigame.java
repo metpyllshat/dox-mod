@@ -199,6 +199,7 @@ public final class Minigame {
         scoreboard.getOrCreatePlayerScore(timeStr, obj).setScore(1);
 
         // Живые
+        int alive = match.getAliveCount(server);
         String aliveStr = "bc_alive_" + alive;
         scoreboard.getOrCreatePlayerScore(aliveStr, obj).setScore(2);
 
