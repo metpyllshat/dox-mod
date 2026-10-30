@@ -176,7 +176,7 @@ public final class Minigame {
         if (existing != null) scoreboard.removeObjective(existing);
         Objective obj = scoreboard.addObjective(SCOREBOARD_OBJECTIVE, ObjectiveCriteria.DUMMY, 
                 Component.literal("BlackChannel Match"), ObjectiveCriteria.RenderType.INTEGER);
-        obj.setDisplaySlot(0); // Sidebar
+        scoreboard.setDisplayObjective(Scoreboard.DISPLAY_SLOT_SIDEBAR, obj);
     }
 
     private static void updateScoreboard(MinecraftServer server, MatchData match, ServerLevel level) {
@@ -185,7 +185,7 @@ public final class Minigame {
         if (obj == null) return;
 
         // Удаляем все старые записи
-        scoreboard.listPlayerNames().forEach(name -> {
+        scoreboard.getTrackedPlayers().forEach(name -> {
             if (name.startsWith("bc_")) {
                 scoreboard.resetPlayerScore(name, obj);
             }
@@ -199,7 +199,7 @@ public final class Minigame {
         scoreboard.getOrCreatePlayerScore(timeStr, obj).setScore(1);
 
         // Живые
-        String aliveStr = "bc_alive_" + match.aliveCount;
+        String aliveStr = "bc_alive_" + alive;
         scoreboard.getOrCreatePlayerScore(aliveStr, obj).setScore(2);
 
         // Команды (в обратном порядке чтобы были сверху)
@@ -215,7 +215,7 @@ public final class Minigame {
         Scoreboard scoreboard = server.overworld().getScoreboard();
         Objective obj = scoreboard.getObjective(SCOREBOARD_OBJECTIVE);
         if (obj != null) {
-            scoreboard.listPlayerNames().forEach(name -> {
+            scoreboard.getTrackedPlayers().forEach(name -> {
                 if (name.startsWith("bc_")) {
                     scoreboard.resetPlayerScore(name, obj);
                 }
@@ -228,7 +228,6 @@ public final class Minigame {
         long now = level.getGameTime();
         // Обновляем scoreboard каждую секунду (20 тиков)
         if (now % 20 == 0) {
-            match.aliveCount = match.getAliveCount(server);
             updateScoreboard(server, match, level);
         }
         // Координаты маяков через 1.5 часа (108000 тиков от начала матча)
