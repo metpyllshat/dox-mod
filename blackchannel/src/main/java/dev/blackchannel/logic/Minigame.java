@@ -914,7 +914,6 @@ public final class Minigame {
             PlayerTeam team = new PlayerTeam(scoreboard, teamName);
             team.setNameTagVisibility(PlayerTeam.Visibility.ALWAYS);
             team.setColor(color);
-            scoreboard.addPlayerTeam(team);
             scoreboard.addPlayerToTeam(player.getGameProfile().getName(), team);
         }
     }
@@ -926,7 +925,7 @@ public final class Minigame {
             PlayerTeam team = scoreboard.getPlayersTeam(player.getGameProfile().getName());
             if (team != null && team.getName().startsWith("bc_")) {
                 scoreboard.removePlayerFromTeam(player.getGameProfile().getName(), team);
-                scoreboard.removePlayerTeam(team);
+                scoreboard.removePlayerTeam(team.getName());
             }
         }
     }
