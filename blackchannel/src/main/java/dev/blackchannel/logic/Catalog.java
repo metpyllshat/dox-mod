@@ -23,13 +23,11 @@ public final class Catalog {
                 new Entry("ids", ModContent.IDS::get, 24, 1),
                 new Entry("harden", ModContent.HARDEN::get, 22, 1),
                 new Entry("decoy", ModContent.DECOY_ITEM::get, 12, 1),
-                new Entry("beacon", ModContent.BEACON_ITEM::get, 10, 1),
                 new Entry("faraday", ModContent.FARADAY_ITEM::get, 26, 1),
                 new Entry("jammer", ModContent.JAMMER_ITEM::get, 30, 1),
                 new Entry("sat", ModContent.SAT::get, 36, 1),
                 new Entry("zero", ModContent.ZERO::get, 42, 1),
-                new Entry("deep", ModContent.DEEP_VPN::get, 48, 1),
-                new Entry("manual", ModContent.MANUAL::get, 1, 1)
+                new Entry("deep", ModContent.DEEP_VPN::get, 48, 1)
         );
     }
 

@@ -31,7 +31,6 @@ ITEMS = [
     "satellite_firmware",
     "hashcoin",
     "signal_sample",
-    "field_manual",
 ]
 
 
@@ -152,9 +151,6 @@ def recipes():
     shaped("hashcoin", [" R ", " G ", " R "], {
         "R": "minecraft:redstone", "G": "minecraft:gold_ingot",
     }, "blackchannel:hashcoin", unlock="minecraft:gold_ingot")
-    shaped("field_manual", [" R ", " B ", " R "], {
-        "R": "minecraft:redstone", "B": "minecraft:book",
-    }, "blackchannel:field_manual", unlock="minecraft:book")
     shaped("uplink_rack", ["IOI", "RBR", "III"], {
         "I": "minecraft:iron_ingot", "O": "minecraft:observer",
         "R": "minecraft:redstone", "B": "minecraft:redstone_block",
@@ -170,9 +166,6 @@ def recipes():
         "T": "minecraft:redstone_torch", "R": "minecraft:redstone",
         "I": "minecraft:iron_ingot", "C": "minecraft:copper_ingot",
     }, "blackchannel:signal_jammer", unlock="minecraft:redstone_torch")
-    shaped("team_beacon", ["IRI", "RER", "IRI"], {
-        "I": "minecraft:iron_ingot", "R": "minecraft:redstone", "E": "minecraft:emerald",
-    }, "blackchannel:team_beacon", unlock="minecraft:emerald")
     shaped("decoy_beacon", [" G ", "RIR", " G "], {
         "G": "minecraft:gold_ingot", "R": "minecraft:redstone", "I": "minecraft:iron_ingot",
     }, "blackchannel:decoy_beacon", unlock="minecraft:gold_ingot")
@@ -222,7 +215,6 @@ def lang():
         "satellite_firmware": "Satellite Firmware",
         "hashcoin": "Hashcoin",
         "signal_sample": "Signal Sample",
-        "field_manual": "Field Manual",
     }
     names_ru = {
         "uplink_rack": "Стойка-аплинк",
@@ -247,7 +239,6 @@ def lang():
         "satellite_firmware": "Спутниковая прошивка",
         "hashcoin": "Хэш-коин",
         "signal_sample": "Образец сигнала",
-        "field_manual": "Полевая книжка",
     }
     for block in BLOCKS:
         both("block.blackchannel." + block, names_en[block], names_ru[block])
@@ -259,7 +250,7 @@ def lang():
     both("screen.blackchannel.phone", "Burner", "Телефон")
     both("screen.blackchannel.laptop", "Terminal", "Терминал")
     both("screen.blackchannel.rack", "Uplink", "Аплинк")
-    both("screen.blackchannel.manual", "Field manual", "Полевая книжка")
+    both("screen.blackchannel.manual", "Guide", "Гайд")
     both("screen.blackchannel.rack_hint", "Coal, redstone, cell, or an FE item. Shift + empty hand: kill switch.",
          "Уголь, редстоун, элемент или предмет с FE. Шифт и пустая рука: гашение.")
     both("screen.blackchannel.send_hint", "Enter sends. @handle is a DM.", "Enter отправляет. @позывной — личка.")
@@ -269,7 +260,7 @@ def lang():
     both("screen.blackchannel.tab.gear", "GEAR", "СЕТЬ")
     both("screen.blackchannel.btn.airplane", "AIRPLANE", "АВИА")
     both("screen.blackchannel.btn.killswitch", "KILL", "ГАШЕНИЕ")
-    both("screen.blackchannel.btn.manual", "MANUAL", "КНИЖКА")
+    both("screen.blackchannel.btn.manual", "GUIDE", "ГАЙД")
     both("screen.blackchannel.btn.radar_hud", "HUD", "МЕТКИ")
     both("screen.blackchannel.btn.hack", "HACK", "ВЗЛОМ")
 
@@ -284,14 +275,11 @@ def lang():
         "ids": ("IDS", "IDS"),
         "harden": ("Harden", "Закалка"),
         "decoy": ("Decoy", "Ложный"),
-        "beacon": ("Beacon", "Маяк"),
         "faraday": ("Faraday", "Фарадей"),
         "jammer": ("Jammer", "Глушилка"),
         "sat": ("Sat link", "Спутник"),
         "zero": ("Zero day", "0-day"),
         "deep": ("Deep VPN", "Deep VPN"),
-        "manual": ("Manual", "Книжка"),
-        "bounty": ("BOUNTY", "НАГРАДА"),
     }
     for k, (e, r) in shops.items():
         both("blackchannel.shop." + k, e, r)
@@ -304,7 +292,6 @@ def lang():
         "tracker": ("Sneak-use on a player or block to plant a bug.", "Шифт+ПКМ по игроку или блоку — посадить жучок."),
         "scanner": ("Use on yourself or a block to hunt bugs.", "ПКМ по себе или по блоку — искать жучок."),
         "hash": ("Use to deposit. Sneak-use to withdraw up to 16.", "ПКМ — в кошелёк. Шифт+ПКМ — снять до 16."),
-        "manual": ("Opens this field manual.", "Открывает эту книжку."),
         "sim": ("Sneak-use to burn the handle and roll a new one.", "Шифт+ПКМ сжигает позывной и выдаёт новый."),
         "sat": ("Use to load 3 satellite charges. Works when no rack is nearby.",
                 "ПКМ даёт 3 заряда спутника. Канал есть, даже если стойки рядом нет."),
@@ -345,11 +332,8 @@ def lang():
 
     chats = {
         "welcome": ("Handle assigned: %s", "Позывной назначен: %s"),
-        "manual_given": ("A field manual was added to your inventory.", "Полевая книжка добавлена в инвентарь."),
         "emp": ("EMP. Terminals are dead.", "ЭМИ. Терминалы мертвы."),
         "bug_found": ("A bug on you just chirped.", "Жучок на вас только что пискнул."),
-        "bounty": ("Bounty closed on %s.", "Награда по %s закрыта."),
-        "bounty_new": ("Bounty on %s for #%s. Turn in a signal sample.", "Награда на %s: #%s. Сдайте образец сигнала."),
         "ids_trace": ("IDS: trace from %s.", "IDS: след с пеленга %s."),
         "ids_deanon": ("IDS: deanon attempt from %s.", "IDS: попытка деанона с пеленга %s."),
         "ids_bomb": ("IDS: flood from %s.", "IDS: флуд с пеленга %s."),
@@ -376,7 +360,6 @@ def lang():
         "bomb_locked": ("The handset is locked by the flood.", "Трубку забил флуд."),
         "bomb_ok": ("Flooding %s for %ss.", "Флуд %s на %s с."),
         "bought": ("Bought %s.", "Куплено: %s."),
-        "bounty_ok": ("Bounty on %s paid #%s.", "Награда за %s: #%s."),
         "charged": ("Battery topped up.", "Батарея пополнена."),
         "cooldown": ("Cooldown %ss.", "Перезарядка %s с."),
         "crew_set": ("Crew code %s.", "Код отряда %s."),
@@ -469,7 +452,7 @@ def lang():
         ("Market and bugs",
          "Right-click hashcoin to deposit. Sneak-use to withdraw. A charged rack mints coins. The phone market sells chips. On the laptop, SELL INTEL lists the selected fix and SELL ITEM lists the held item. Put $price in the box to set the price. Sneak-use a tracker on a player or a block. Right-click a signal sample to claim a bounty on that handle."),
         ("Commands",
-         "/bc help, status, hooks. /bc sethandle name. Operators: pulse, givehash, reveal. The manual opens from the item or the phone button. Config lives in config/blackchannel-common.toml. Crafting the first phone also gives you this book."),
+         "/bc help, status, hooks. Match: /minigame center, size, team, start, stop. size is wall to wall, 2500 for 2500x2500. Pick a team in /minigame team before the start. Config: config/blackchannel-common.toml."),
     ]
     pages_ru = [
         ("Что это",
@@ -491,7 +474,7 @@ def lang():
         ("Рынок и жучки",
          "ПКМ по хэш-коину кладёт его в кошелёк. Шифт+ПКМ снимает. Заряженная стойка чеканит монеты. Рынок телефона продаёт чипы. На ноутбуке SELL INTEL продаёт выбранный след, SELL ITEM — предмет в руке. Цена: $число в строке. Жучок клеится шифтом на игрока или блок. ПКМ по образцу сигнала сдаёт награду на этот позывной."),
         ("Команды",
-         "/bc help, status, hooks. /bc sethandle имя. Операторам: pulse, givehash, reveal. Книжка открывается предметом или кнопкой телефона. Конфиг: config/blackchannel-common.toml. Первый крафт телефона тоже кладёт книжку в инвентарь."),
+         "/bc help, status, hooks. Катка: /minigame center, size, team, start, stop. size — от стены до стены, для 2500×2500 пиши 2500. Команда выбирается в меню /minigame team до старта. Конфиг: config/blackchannel-common.toml."),
     ]
     for i, ((et, eb), (rt, rb)) in enumerate(zip(pages_en, pages_ru)):
         both(f"manual.blackchannel.{i}.t", et, rt)
@@ -499,8 +482,16 @@ def lang():
         if len(eb) > 520 or len(rb) > 520:
             print("LONG PAGE", i, len(eb), len(rb))
 
-    dump(os.path.join(RES, "assets/blackchannel/lang/en_us.json"), en)
-    dump(os.path.join(RES, "assets/blackchannel/lang/ru_ru.json"), ru)
+    # Готовые файлы важнее генератора: строки правятся руками, а скрипт лишь дописывает новое.
+    for path, table in ((os.path.join(RES, "assets/blackchannel/lang/en_us.json"), en),
+                        (os.path.join(RES, "assets/blackchannel/lang/ru_ru.json"), ru)):
+        merged = {}
+        if os.path.exists(path):
+            with open(path, encoding="utf-8") as f:
+                merged.update(json.load(f))
+        for key, value in table.items():
+            merged.setdefault(key, value)
+        dump(path, merged)
     print("lang", len(en), len(ru))
     return set(en)
 

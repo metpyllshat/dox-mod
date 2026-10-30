@@ -323,20 +323,6 @@ def hashcoin():
     return a
 
 
-def field_manual():
-    a = Art()
-    a.rect(2, 1, 13, 14, INK)
-    a.rect(3, 2, 12, 13, c(0x2E5A44))
-    a.rect(3, 2, 4, 13, c(0x24503C))
-    a.rect(5, 3, 11, 12, PAPER)
-    a.hline(5, 11, 3, PAPER_LO)
-    for y in (5, 7, 9, 11):
-        a.hline(6, 10, y, PAPER_LO)
-    a.rect(7, 4, 8, 4, GREEN_LO)
-    a.px(12, 2, GREEN_HI)
-    return a
-
-
 def dog_tag():
     a = Art()
     a.rect(5, 4, 11, 14, INK)
@@ -533,7 +519,6 @@ ITEMS = {
     "satellite_firmware": satellite_firmware,
     "hashcoin": hashcoin,
     "signal_sample": signal_sample,
-    "field_manual": field_manual,
     "dog_tag": dog_tag,
     "team_beacon": lambda: team_beacon_block(GREEN, GREEN_HI, GREEN_LO),
     "decoy_beacon": lambda: team_beacon_block(AMBER, AMBER_HI, c(0xB06A1E)),

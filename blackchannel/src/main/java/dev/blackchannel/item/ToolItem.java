@@ -1,8 +1,6 @@
 package dev.blackchannel.item;
 
-import dev.blackchannel.logic.Devices;
 import dev.blackchannel.logic.Ops;
-import dev.blackchannel.net.ModNetwork;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
@@ -20,7 +18,7 @@ import java.util.List;
 
 public class ToolItem extends Item {
     public enum Kind {
-        SCANNER, HASH, MANUAL, SIM, SAT, VPN, VPN2, IDS, HARDEN, EXPLOIT, ZERO, CONTRACT, SAMPLE, CELL
+        SCANNER, HASH, SIM, SAT, VPN, VPN2, IDS, HARDEN, EXPLOIT, ZERO, CONTRACT, SAMPLE, CELL
     }
 
     public final Kind kind;
@@ -41,7 +39,6 @@ public class ToolItem extends Item {
                 if (player.isShiftKeyDown()) Ops.withdraw(sp);
                 else Ops.deposit(sp, stack);
             }
-            case MANUAL -> ModNetwork.open(sp, "manual");
             case SIM -> {
                 if (!player.isShiftKeyDown()) sp.displayClientMessage(Component.translatable("blackchannel.hint.sim_sneak"), true);
                 else Ops.wipeFromSim(sp);
