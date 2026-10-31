@@ -178,7 +178,6 @@ public final class Minigame {
         if (dirty) data.setDirty();
     }
 
-    private static long beaconCoordsAnnounced = 0;
     private static final String SCOREBOARD_OBJECTIVE = "bc_match";
     private static final String LINE_TEAM_PREFIX = "bcs";
     private static final List<String> lineNames = new ArrayList<>();
@@ -301,18 +300,17 @@ public final class Minigame {
             checkVictory(server, match);
             if (!match.active) return;
         }
-        // Координаты маяков через 1.5 часа (108000 тиков от начала матча)
-        long matchStart = match.matchEndTick - Config.MATCH_DURATION_MINUTES.get() * 60L * 20L;
-        if (beaconCoordsAnnounced == 0 && now >= matchStart + 108000L) {
-            beaconCoordsAnnounced = 1;
-            for (Map.Entry<String, BlockPos> entry : match.teamBeacons.entrySet()) {
-                BlockPos pos = entry.getValue();
-                Component line = Component.translatable("blackchannel.minigame.beacon_coords",
-                        teamLabel(server, entry.getKey()), pos.getX(), pos.getY(), pos.getZ());
-                for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                    player.sendSystemMessage(line);
-                }
-            }
+        // Треть и две трети матча: сначала приблизительные координаты игроков, потом точные маяки
+        long matchLength = Math.max(1L, match.matchEndTick - match.matchStartTick);
+        if (!match.playersLeaked && now >= match.matchStartTick + matchLength / 3L) {
+            match.playersLeaked = true;
+            match.setDirty();
+            announcePlayerCoords(server, match, level);
+        }
+        if (!match.beaconsLeaked && now >= match.matchStartTick + matchLength * 2L / 3L) {
+            match.beaconsLeaked = true;
+            match.setDirty();
+            announceBeaconCoords(server, match);
         }
         // Проверка окончания матча
         if (match.finalActive && now >= match.finalEndTick) {
@@ -362,6 +360,51 @@ public final class Minigame {
         }
     }
 
+    /**
+     * 1/3 матча: всем показываем координаты каждого игрока.
+     * Погрешность — 10% стороны карты, то есть при 2500 это ±250 блоков.
+     */
+    private static void announcePlayerCoords(MinecraftServer server, MatchData match, ServerLevel level) {
+        int error = Math.max(8, (int) Math.round(0.10 * Math.max(2, match.size)));
+        Component header = Component.translatable("blackchannel.minigame.coords_leak_header", error);
+        for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
+            receiver.sendSystemMessage(header);
+            receiver.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.MASTER, 0.7f, 0.8f);
+        }
+        RandomSource random = level.getRandom();
+        for (ServerPlayer target : server.getPlayerList().getPlayers()) {
+            UUID id = target.getUUID();
+            if (!match.playerCrew.containsKey(id) || match.permanentDead.contains(id)) continue;
+            BlockPos at = target.blockPosition();
+            int x = at.getX() + random.nextInt(error * 2 + 1) - error;
+            int z = at.getZ() + random.nextInt(error * 2 + 1) - error;
+            int y = at.getY() + random.nextInt(41) - 20;
+            Component line = Component.translatable("blackchannel.minigame.coords_leak",
+                    target.getGameProfile().getName(), x, y, z);
+            for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
+                receiver.sendSystemMessage(line);
+            }
+        }
+    }
+
+    /** 2/3 матча: точные координаты маяков отрядов. */
+    private static void announceBeaconCoords(MinecraftServer server, MatchData match) {
+        Component header = Component.translatable("blackchannel.minigame.beacon_leak_header");
+        for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
+            receiver.sendSystemMessage(header);
+            receiver.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.MASTER, 0.9f, 0.5f);
+        }
+        for (Map.Entry<String, BlockPos> entry : match.teamBeacons.entrySet()) {
+            BlockPos pos = entry.getValue();
+            if (pos == null) continue;
+            Component line = Component.translatable("blackchannel.minigame.beacon_coords",
+                    teamLabel(server, entry.getKey()), pos.getX(), pos.getY(), pos.getZ());
+            for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
+                receiver.sendSystemMessage(line);
+            }
+        }
+    }
+
     /** Матч заканчивается, как только в игре осталась одна команда (или ни одной). */
     private static void checkVictory(MinecraftServer server, MatchData match) {
         if (!match.active) return;
@@ -390,8 +433,9 @@ public final class Minigame {
         match.ended = true;
         ServerLevel level = Ops.levelOf(server, match.dim);
         if (level != null) {
-            // Маяки отрядов не должны оставаться в мире после матча
+            // Маяки отрядов и схроны не должны оставаться в мире после матча
             removeBeacons(level, match);
+            removeCaches(level, match);
             restoreBorder(level, match);
             restoreKeep(level, match);
         }
@@ -469,7 +513,7 @@ public final class Minigame {
         if (status == CHUNK_READY) {
             int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cand.getX(), cand.getZ());
             BlockPos feet = new BlockPos(cand.getX(), y, cand.getZ());
-            if (match.inside(feet) && standableHere(level, feet)) placeChest(level, feet, level.getRandom());
+            if (match.inside(feet) && standableHere(level, feet)) placeChest(level, match, feet, level.getRandom());
         }
         logStep("cache " + match.cacheTick + "/" + match.cacheTotal, started);
         if (match.cacheTick >= match.cacheTotal) announceCaches(server, match);
@@ -634,16 +678,20 @@ public final class Minigame {
         BlockPos respawn = null;
         String kind = "";
         if (!match.finalActive) {
+            // Кровать — точка возврата только пока цел маяк отряда
+            BlockPos beaconPos = match.getBeacon(crew);
+            boolean beaconUp = beaconValid(level, match, beaconPos);
             BlockPos bedPos = match.getBed(victim.getUUID());
-            if (bedValid(level, match, bedPos)) {
-                respawn = bedPos;
-                kind = "bed";
-            } else {
-                BlockPos beaconPos = match.getBeacon(crew);
-                if (beaconValid(level, match, beaconPos)) {
+            if (beaconUp) {
+                if (bedValid(level, match, bedPos)) {
+                    respawn = bedPos;
+                    kind = "bed";
+                } else if (beaconPos != null) {
                     respawn = beaconPos;
                     kind = "beacon";
                 }
+            } else if (bedPos != null) {
+                victim.sendSystemMessage(Component.translatable("blackchannel.minigame.bed_needs_beacon"));
             }
         }
         if (respawn == null || kind.isEmpty()) {
@@ -807,9 +855,11 @@ public final class Minigame {
         freezeDowned(player, ds);
         long now = player.level().getGameTime();
         ServerLevel matchLevel = Ops.levelOf(player.getServer(), match.dim);
-        boolean pointOk = ds.respawnKind != null && ds.respawnKind.equals("bed")
+        // Маяк отряда — общий якорь: сломали его, и кровать тоже перестаёт держать игрока
+        boolean beaconUp = beaconValid(matchLevel, match, match.getBeacon(match.playerCrew.getOrDefault(player.getUUID(), "")));
+        boolean pointOk = beaconUp && (ds.respawnKind != null && ds.respawnKind.equals("bed")
                 ? bedValid(matchLevel, match, ds.respawnPos)
-                : beaconValid(matchLevel, match, ds.respawnPos);
+                : beaconValid(matchLevel, match, ds.respawnPos));
         // Точка возрождения пропала — погибает окончательно
         if (!pointOk) {
             REVIVE.remove(player.getUUID());
@@ -941,9 +991,10 @@ public final class Minigame {
         }
         protect(player, player.serverLevel().getGameTime() + 160L);
         ServerLevel level = Ops.levelOf(player.getServer(), match.dim);
-        // Своя кровать важнее точки сбора: игрок возрождается у себя на базе
+        // Своя кровать важнее точки сбора, но работает только пока цел маяк отряда
         BlockPos bed = match.getBed(player.getUUID());
-        if (level != null && bedValid(level, match, bed)) {
+        BlockPos beacon = match.getBeacon(match.playerCrew.getOrDefault(player.getUUID(), ""));
+        if (level != null && beaconValid(level, match, beacon) && bedValid(level, match, bed)) {
             BlockPos feet = findSafe(level, bed.getX(), bed.getZ(), player.getRandom());
             place(player, level, feet, player.getYRot());
             player.sendSystemMessage(Component.translatable("blackchannel.minigame.respawned",
@@ -1129,6 +1180,20 @@ public final class Minigame {
         return Component.literal(label);
     }
 
+    /** Убирает поставленные модом схроны: сундук и крышку над ним. */
+    private static void removeCaches(ServerLevel level, MatchData match) {
+        for (BlockPos pos : new ArrayList<>(match.cacheChests)) {
+            if (pos == null) continue;
+            // Схронов немного: чанк можно и загрузить, зато блок точно уберётся
+            if (!level.isLoaded(pos)) level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
+            if (!(level.getBlockEntity(pos) instanceof ChestBlockEntity chest)) continue;
+            if (!chest.getPersistentData().getBoolean("bcLoot")) continue;
+            // Оставляем на месте сундука каменистую землю, как и на крышке: ямы после матча не остаётся
+            level.setBlock(pos, Blocks.COARSE_DIRT.defaultBlockState(), 3);
+        }
+        match.cacheChests.clear();
+    }
+
     /** Убирает блоки маяков отряда из мира. */
     private static void removeBeacons(ServerLevel level, MatchData match) {
         for (BlockPos pos : new ArrayList<>(match.teamBeacons.values())) {
@@ -1234,7 +1299,9 @@ public final class Minigame {
         if (match.active && level != null) {
             pvpFree = Math.max(0, (match.pvpFreeUntil - level.getGameTime()) / 20L);
         }
-        int gap = match.baseGap();
+        int gap = match.active && match.spread > 0
+                ? match.spread
+                : minSpread(match, teamsOnline(source.getServer()));
         String center = match.centerSet ? match.centerX + " " + match.centerY + " " + match.centerZ : "-";
         String crewShown = crew;
         String state = match.active ? "on" : "off";
@@ -1322,7 +1389,7 @@ public final class Minigame {
         }
         match.size = blocks;
         match.setDirty();
-        int gap = match.baseGap();
+        int gap = minSpread(match, teamsOnline(source.getServer()));
         source.sendSuccess(() -> Component.translatable("blackchannel.minigame.size_set", blocks, gap), true);
         return 1;
     }
@@ -1349,14 +1416,19 @@ public final class Minigame {
             String key = code == null || code.isEmpty() ? "solo:" + player.getUUID() : "crew:" + code;
             groups.computeIfAbsent(key, k -> new ArrayList<>()).add(player);
         }
-        int gap = fitGap(match, Math.max(1, groups.size()));
-        boolean cramped = groups.size() > 1 && ringFit(match, gap) < groups.size();
+        // Расстановка баз: безопасная область, запретная середина и минимальное расстояние между базами.
+        // Только арифметика, без обращения к миру: точки проверяются на местности уже при высадке.
+        Layout plan = layout(match, Math.max(1, groups.size()), level.getRandom());
+        int gap = plan.distance();
+        boolean cramped = plan.relaxed();
+        match.spread = gap;
         match.drops.clear();
         match.anchors.clear();
         match.kitted.clear();
         match.teamScores.clear();
-        // Маяки от прошлой игры: сначала убрать из мира, потом забыть координаты
+        // Маяки и схроны от прошлой игры: сначала убрать из мира, потом забыть координаты
         removeBeacons(level, match);
+        removeCaches(level, match);
         match.bedPositions.clear();
         match.downedPlayers.clear();
         match.reviveUsed.clear();
@@ -1368,7 +1440,8 @@ public final class Minigame {
         REVIVE.clear();
         LAST_HIT.clear();
         List<String> keys = new ArrayList<>(groups.keySet());
-        List<int[]> spots = anchorsFor(match, keys.size(), gap);
+        List<int[]> spots = plan.spots();
+        RandomSource random = level.getRandom();
         DEPLOY.clear();
         resetChunkWait();
         PVP_WARN.clear();
@@ -1382,11 +1455,12 @@ public final class Minigame {
             int[] spot = spots.get(i);
             String key = keys.get(i);
             int colorIdx = i % TEAM_COLORS.size();
-            match.anchors.put(key, MatchData.Drop.at(spot[0], match.centerY, spot[1], 0));
             String code = key.startsWith("crew:") ? key.substring(5) : key;
             match.teamScores.put(code, 0);
             match.teamColorIdx.put(code, colorIdx);
-            float yaw = yawToward(spot[0], spot[1], match.centerX, match.centerZ);
+            // Смотрим в случайную сторону: по позе нельзя угадать, где центр и чужие базы
+            float yaw = random.nextFloat() * 360f;
+            match.anchors.put(key, MatchData.Drop.at(spot[0], match.centerY, spot[1], yaw));
             List<UUID> members = new ArrayList<>();
             for (ServerPlayer player : groups.get(key)) {
                 members.add(player.getUUID());
@@ -1408,6 +1482,9 @@ public final class Minigame {
         }
         applyKeep(level, match, true);
         long startTick = level.getGameTime();
+        match.matchStartTick = startTick;
+        match.playersLeaked = false;
+        match.beaconsLeaked = false;
         match.pvpFreeUntil = startTick + Config.PVP_FREE_SECONDS.get() * 20L;
         long matchDuration = Config.MATCH_DURATION_MINUTES.get() * 60L * 20L;
         long finalDuration = Config.FINAL_DURATION_MINUTES.get() * 60L * 20L;
@@ -1419,7 +1496,6 @@ public final class Minigame {
         match.setDirty();
         applyTeamNametags(server, match);
         initScoreboard(server, match);
-        beaconCoordsAnnounced = 0;
         source.sendSuccess(() -> Component.translatable("blackchannel.minigame.started", groups.size(), gap), true);
         if (cramped) source.sendSuccess(() -> Component.translatable("blackchannel.minigame.cramped", gap), true);
         announceMatchStart(server, match);
@@ -1437,6 +1513,7 @@ public final class Minigame {
         ServerLevel level = Ops.levelOf(source.getServer(), match.dim);
         match.active = false;
         match.pvpFreeUntil = 0;
+        match.spread = 0;
         DEPLOY.clear();
         resetChunkWait();
         PVP_WARN.clear();
@@ -1464,6 +1541,7 @@ public final class Minigame {
         // Маяки убираем, пока карта teamBeacons ещё не очищена
         if (level != null) {
             removeBeacons(level, match);
+            removeCaches(level, match);
             restoreBorder(level, match);
             restoreKeep(level, match);
         }
@@ -1541,10 +1619,10 @@ public final class Minigame {
         MatchData.Drop anchor = match.anchors.get(key);
         if (anchor == null) {
             int[] spot = freeAnchor(level, match);
-            anchor = MatchData.Drop.at(spot[0], match.centerY, spot[1], 0);
+            anchor = MatchData.Drop.at(spot[0], match.centerY, spot[1], player.getRandom().nextFloat() * 360f);
             match.anchors.put(key, anchor);
         }
-        float yaw = yawToward(anchor.x, anchor.z, match.centerX, match.centerZ);
+        float yaw = anchor.yaw;
         BlockPos feet = scatter(level, anchor.x, anchor.z, player.getRandom());
         match.drops.put(player.getUUID(), MatchData.Drop.at(feet.getX(), feet.getY(), feet.getZ(), yaw));
         if (teleport) place(player, level, feet, yaw);
@@ -1615,57 +1693,140 @@ public final class Minigame {
         match.setDirty();
     }
 
-    private static int fitGap(MatchData match, int teams) {
-        int n = match.baseGap();
-        int guard = 0;
-        while (teams > 1 && n > 48 && guard++ < 40 && ringFit(match, n) < teams) n -= 16;
-        return n;
+    /** Сколько отрядов (и соло) сейчас в игре: от этого зависит минимальное расстояние между базами. */
+    private static int teamsOnline(MinecraftServer server) {
+        Set<String> crews = new HashSet<>();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            String code = NetData.get(server).profile(player.getUUID()).crew;
+            crews.add(code == null || code.isEmpty() ? "solo:" + player.getUUID() : code);
+        }
+        return Math.max(2, crews.size());
     }
 
-    private static int ringFit(MatchData match, int gap) {
-        int margin = margin(match, gap);
-        double radius = Math.max(16, match.size - 2.0 * margin) / 2.0;
-        return Math.max(1, (int) Math.floor(2 * Math.PI * radius / Math.max(1, gap)));
+    /** Готовый план расстановки: точки баз и фактическое минимальное расстояние между ними. */
+    private record Layout(List<int[]> spots, int distance, boolean relaxed) {}
+
+    /** Отступ от барьера: 10% стороны карты. */
+    private static int safeInset(MatchData match) {
+        return Math.max(16, (int) Math.round(0.10 * Math.max(2, match.size)));
     }
 
-    private static int margin(MatchData match, int gap) {
-        return Math.max(24, Math.min(gap / 2, Math.max(24, match.size / 6)));
+    /** Запретная зона в центре карты: 15% стороны. */
+    private static int coreRadius(MatchData match) {
+        return Math.max(16, (int) Math.round(0.15 * Math.max(2, match.size)));
     }
 
-    private static List<int[]> anchorsFor(MatchData match, int teams, int gap) {
-        List<int[]> spots = new ArrayList<>();
+    /**
+     * Минимально допустимое расстояние между базами:
+     * d = max(0.08N, min(0.45N, 0.60N / sqrt(K))).
+     */
+    private static int minSpread(MatchData match, int teams) {
+        int n = Math.max(2, match.size);
+        int k = Math.max(1, teams);
+        double d = 0.60 * n / Math.sqrt(k);
+        d = Math.min(0.45 * n, d);
+        d = Math.max(0.08 * n, d);
+        return (int) Math.round(d);
+    }
+
+    /**
+     * Расстановка баз: случайные точки в безопасной области без запретной середины,
+     * между любыми двумя базами — не меньше d (выборка по типу Poisson-disc).
+     * Если впихнуть все команды с нужным d не выходит, d понемногу ослабляется.
+     */
+    private static Layout layout(MatchData match, int teams, RandomSource random) {
         if (teams <= 1) {
-            spots.add(new int[]{match.centerX, match.centerZ});
-            return spots;
+            List<int[]> single = new ArrayList<>();
+            single.add(new int[]{match.centerX, match.centerZ});
+            return new Layout(single, minSpread(match, 2), false);
         }
-        int edge = margin(match, gap);
-        if (teams == 2) {
-            int dx = Math.min(gap / 2, Math.max(16, match.size / 2 - edge));
-            spots.add(clamp(match, match.centerX - dx, match.centerZ, edge));
-            spots.add(clamp(match, match.centerX + dx, match.centerZ, edge));
-            return spots;
+        int inset = safeInset(match);
+        int core = coreRadius(match);
+        int ideal = minSpread(match, teams);
+        int floor = Math.max(32, (int) Math.round(0.04 * Math.max(2, match.size)));
+        int d = ideal;
+        for (int step = 0; step < 20 && d >= floor; step++) {
+            List<int[]> spots = poisson(match, teams, d, inset, core, random);
+            if (spots != null) return new Layout(spots, spotsMin(spots), d < ideal);
+            d = (int) Math.round(d * 0.95);
         }
-        double radius = Math.max(16, match.size - 2.0 * edge) / 2.0;
+        // Даже ослабленный минимум не влез: раскладываем по кольцу и честно сообщаем админу
+        List<int[]> ring = ring(match, teams, inset, core, random);
+        return new Layout(ring, spotsMin(ring), true);
+    }
+
+    /** Фактическое минимальное расстояние между точками раскладки. */
+    private static int spotsMin(List<int[]> spots) {
+        int best = Integer.MAX_VALUE;
+        for (int i = 0; i < spots.size(); i++) {
+            for (int j = i + 1; j < spots.size(); j++) {
+                long dx = spots.get(i)[0] - spots.get(j)[0];
+                long dz = spots.get(i)[1] - spots.get(j)[1];
+                best = Math.min(best, (int) Math.round(Math.sqrt((double) (dx * dx + dz * dz))));
+            }
+        }
+        return best == Integer.MAX_VALUE ? 0 : best;
+    }
+
+    /** Случайная выборка точек с гарантией минимального расстояния между ними. */
+    private static List<int[]> poisson(MatchData match, int teams, int d, int inset, int core, RandomSource random) {
+        int half = Math.max(8, match.size / 2 - inset);
+        long need = (long) d * d;
+        long coreSq = (long) core * core;
+        List<int[]> spots = new ArrayList<>(teams);
+        int limit = teams * 3000 + 4000;
+        for (int attempt = 0; attempt < limit && spots.size() < teams; attempt++) {
+            int x = match.centerX + random.nextInt(half * 2 + 1) - half;
+            int z = match.centerZ + random.nextInt(half * 2 + 1) - half;
+            long dxc = x - match.centerX;
+            long dzc = z - match.centerZ;
+            if (dxc * dxc + dzc * dzc < coreSq) continue;
+            boolean clash = false;
+            for (int[] other : spots) {
+                long dx = other[0] - x;
+                long dz = other[1] - z;
+                if (dx * dx + dz * dz < need) {
+                    clash = true;
+                    break;
+                }
+            }
+            if (clash) continue;
+            spots.add(new int[]{x, z});
+        }
+        return spots.size() == teams ? spots : null;
+    }
+
+    /** Крайний случай: кольцо с случайным поворотом. */
+    private static List<int[]> ring(MatchData match, int teams, int inset, int core, RandomSource random) {
+        List<int[]> spots = new ArrayList<>(teams);
+        double radius = Math.max(core + 16, match.size / 2.0 - inset - 0.05 * match.size);
+        double start = random.nextDouble() * Math.PI * 2;
         for (int i = 0; i < teams; i++) {
-            double ang = 2 * Math.PI * i / teams;
+            double ang = start + 2 * Math.PI * i / teams;
             int x = match.centerX + (int) Math.round(Math.cos(ang) * radius);
             int z = match.centerZ + (int) Math.round(Math.sin(ang) * radius);
-            spots.add(clamp(match, x, z, edge));
+            spots.add(clamp(match, x, z, inset));
         }
         return spots;
     }
 
+    /** База для команды, пришедшей уже по ходу матча. */
     private static int[] freeAnchor(ServerLevel level, MatchData match) {
-        int gap = Math.max(48, match.baseGap() / 2);
+        int gap = Math.max(48, match.spread > 0 ? match.spread : match.baseGap());
+        int inset = safeInset(match);
+        int core = coreRadius(match);
         RandomSource random = level.getRandom();
-        int half = Math.max(8, match.size / 2 - 16);
-        for (int attempt = 0; attempt < 24; attempt++) {
+        int half = Math.max(8, match.size / 2 - inset);
+        for (int attempt = 0; attempt < 48; attempt++) {
             int x = match.centerX + random.nextInt(half * 2 + 1) - half;
             int z = match.centerZ + random.nextInt(half * 2 + 1) - half;
+            long dxc = x - match.centerX;
+            long dzc = z - match.centerZ;
+            if (dxc * dxc + dzc * dzc < (long) core * core) continue;
             if (crowded(match, x, z, gap)) continue;
             return new int[]{x, z};
         }
-        return new int[]{match.centerX, match.centerZ};
+        return clamp(match, match.centerX, match.centerZ, inset);
     }
 
     private static boolean crowded(MatchData match, int x, int z, int gap) {
@@ -1732,10 +1893,6 @@ public final class Minigame {
                 && level.getBlockState(head).getCollisionShape(level, head).isEmpty();
     }
 
-    private static float yawToward(int x, int z, int tx, int tz) {
-        return (float) Math.toDegrees(Math.atan2(-(tx - x), tz - z));
-    }
-
     private static void applyBorder(ServerLevel level, MatchData match, boolean capture) {
         WorldBorder border = level.getWorldBorder();
         if (capture && !match.borderSaved) {
@@ -1798,7 +1955,7 @@ public final class Minigame {
         match.cacheTick = 0;
     }
 
-    private static boolean placeChest(ServerLevel level, BlockPos feet, RandomSource random) {
+    private static boolean placeChest(ServerLevel level, MatchData match, BlockPos feet, RandomSource random) {
         // Сундук под слоем каменистой земли
         BlockPos chestPos = feet.below();
         Direction facing = Direction.from2DDataValue(random.nextInt(4));
@@ -1809,6 +1966,9 @@ public final class Minigame {
         chest.setCustomName(Component.translatable("block.blackchannel.field_cache"));
         chest.getPersistentData().putBoolean("bcLoot", true);
         chest.setChanged();
+        // Запоминаем свой схрон: после матча его надо убрать из мира
+        match.cacheChests.add(chestPos.immutable());
+        match.setDirty();
         return true;
     }
 
@@ -1847,6 +2007,8 @@ public final class Minigame {
         if (chance(random, Config.CACHE_COMMON_CHANCE.get())) addConfigured(stacks, Config.CACHE_COMMON.get(), random);
         if (chance(random, Config.CACHE_UNCOMMON_CHANCE.get())) addConfigured(stacks, Config.CACHE_UNCOMMON.get(), random);
         if (chance(random, Config.CACHE_RARE_CHANCE.get())) addConfigured(stacks, Config.CACHE_RARE.get(), random);
+        if (chance(random, Config.CACHE_EPIC_CHANCE.get())) addConfigured(stacks, Config.CACHE_EPIC.get(), random);
+        if (chance(random, Config.CACHE_LEGENDARY_CHANCE.get())) addConfigured(stacks, Config.CACHE_LEGENDARY.get(), random);
         return stacks;
     }
 
