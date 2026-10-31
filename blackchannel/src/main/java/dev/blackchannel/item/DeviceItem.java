@@ -3,6 +3,7 @@ package dev.blackchannel.item;
 import dev.blackchannel.data.NetData;
 import dev.blackchannel.logic.Actions;
 import dev.blackchannel.logic.Devices;
+import dev.blackchannel.logic.Msg;
 import dev.blackchannel.logic.Ops;
 import dev.blackchannel.menu.Menus;
 import dev.blackchannel.net.ModNetwork;
@@ -41,7 +42,7 @@ public class DeviceItem extends Item {
                 if (kind == Kind.PHONE) Ops.action(sp, Actions.AIR, "");
                 else {
                     profile.radarHud = !profile.radarHud;
-                    sp.displayClientMessage(Component.translatable(profile.radarHud ? "blackchannel.result.radar_on" : "blackchannel.result.radar_off"), true);
+                    sp.displayClientMessage(Msg.paint(Component.translatable(profile.radarHud ? "blackchannel.result.radar_on" : "blackchannel.result.radar_off")), true);
                     ModNetwork.syncStatus(sp);
                 }
             }

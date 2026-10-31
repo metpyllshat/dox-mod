@@ -128,7 +128,7 @@ public final class Ops {
 
     public static InteractionResult plantPlayer(ServerPlayer attacker, ServerPlayer victim, ItemStack stack) {
         if (!attacker.isShiftKeyDown()) {
-            attacker.displayClientMessage(Component.translatable("blackchannel.hint.tracker_sneak"), true);
+            attacker.displayClientMessage(Msg.paint(Component.translatable("blackchannel.hint.tracker_sneak")), true);
             return InteractionResult.CONSUME;
         }
         if (attacker.distanceToSqr(victim) > 25) return InteractionResult.FAIL;
@@ -148,7 +148,7 @@ public final class Ops {
         float chance = other.ids || Devices.has(victim, ModContent.SCANNER.get()) ? 1f : 0.18f;
         if (attacker.getRandom().nextFloat() < chance) {
             String bearing = bearing(victim, attacker);
-            victim.displayClientMessage(Component.translatable("blackchannel.chat.ids_bug", bearing), true);
+            victim.displayClientMessage(Msg.paint(Component.translatable("blackchannel.chat.ids_bug", bearing)), true);
             other.log("blackchannel.chat.ids_bug", bearing, attacker.getServer().getTickCount());
         }
         result(attacker, self, "blackchannel.result.plant_ok");
@@ -158,7 +158,7 @@ public final class Ops {
 
     public static InteractionResult plantBlock(ServerPlayer attacker, BlockPos pos, ItemStack stack) {
         if (!attacker.isShiftKeyDown()) {
-            attacker.displayClientMessage(Component.translatable("blackchannel.hint.tracker_sneak"), true);
+            attacker.displayClientMessage(Msg.paint(Component.translatable("blackchannel.hint.tracker_sneak")), true);
             return InteractionResult.CONSUME;
         }
         NetData data = NetData.get(attacker);
@@ -189,7 +189,7 @@ public final class Ops {
         give(player, Devices.sample(bug.ownerHandle, false));
         result(player, profile, "blackchannel.result.scan_ok", bug.ownerHandle);
         ServerPlayer owner = player.getServer().getPlayerList().getPlayer(bug.owner);
-        if (owner != null) owner.sendSystemMessage(Component.translatable("blackchannel.chat.bug_found"));
+        if (owner != null) owner.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.bug_found")));
         data.setDirty();
     }
 
@@ -217,7 +217,7 @@ public final class Ops {
 
     public static void identify(ServerPlayer attacker, ServerPlayer victim) {
         if (attacker.distanceToSqr(victim) > 36) {
-            attacker.displayClientMessage(Component.translatable("blackchannel.result.identify_fail"), true);
+            attacker.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.identify_fail")), true);
             return;
         }
         NetData data = NetData.get(attacker);
@@ -236,11 +236,11 @@ public final class Ops {
     public static void bodyRead(ServerPlayer reader, ServerPlayer target) {
         if (reader == target) return;
         if (reader.distanceToSqr(target) > 25.0) {
-            reader.displayClientMessage(Component.translatable("blackchannel.result.body_far"), true);
+            reader.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.body_far")), true);
             return;
         }
         if (!reader.getAbilities().instabuild && Devices.battery(reader) < 8) {
-            reader.displayClientMessage(Component.translatable("blackchannel.result.no_battery"), true);
+            reader.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.no_battery")), true);
             return;
         }
         Devices.drain(reader, 8);
@@ -256,7 +256,7 @@ public final class Ops {
     public static void fileTag(ServerPlayer player, ItemStack stack) {
         if (stack == null || !stack.hasTag() || !stack.getTag().contains("Handle")) return;
         if (!Devices.has(player, ModContent.PHONE.get())) {
-            player.displayClientMessage(Component.translatable("blackchannel.result.tag_need_phone"), true);
+            player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.tag_need_phone")), true);
             return;
         }
         CompoundTag tag = stack.getTag();
@@ -269,7 +269,7 @@ public final class Ops {
         profile.log("blackchannel.log.tag", handle, player.getServer().getTickCount());
         if (!player.getAbilities().instabuild) stack.shrink(1);
         data.setDirty();
-        player.displayClientMessage(Component.translatable("blackchannel.result.tag_ok", handle, name.isEmpty() ? "?" : name), true);
+        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.tag_ok", handle, name.isEmpty() ? "?" : name)), true);
         ModNetwork.syncFull(player);
     }
 
@@ -289,7 +289,7 @@ public final class Ops {
             String name = op.vpn > 0 ? "" : op.lastName;
             if (!noteHeard(self, op.handle, name, false)) continue;
             any = true;
-            viewer.displayClientMessage(Component.translatable(name.isEmpty() ? "blackchannel.result.net_handle" : "blackchannel.result.net_named", op.handle, name), true);
+            viewer.displayClientMessage(Msg.paint(Component.translatable(name.isEmpty() ? "blackchannel.result.net_handle" : "blackchannel.result.net_named", op.handle, name)), true);
         }
         if (any) {
             data.setDirty();
@@ -334,7 +334,7 @@ public final class Ops {
         self.log("blackchannel.log.body", other.handle, reader.getServer().getTickCount());
         data.setDirty();
         if (alwaysTell || !known) {
-            reader.displayClientMessage(Component.translatable("blackchannel.result.body_ok", other.handle, other.lastName), true);
+            reader.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.body_ok", other.handle, other.lastName)), true);
             ModNetwork.syncFull(reader);
         }
     }
@@ -375,7 +375,7 @@ public final class Ops {
                 shrink(player, stack);
                 result(player, profile, "blackchannel.result.charged");
             }
-            default -> player.displayClientMessage(Component.translatable("blackchannel.hint.passive"), true);
+            default -> player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.hint.passive")), true);
         }
         data.setDirty();
     }
@@ -434,7 +434,7 @@ public final class Ops {
         profile.lastName = player.getGameProfile().getName();
         if (!profile.welcomed) {
             profile.welcomed = true;
-            player.sendSystemMessage(Component.translatable("blackchannel.chat.welcome", profile.handle));
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.welcome", profile.handle)));
         }
         boolean tx = SignalEnv.transmitting(player, profile);
         if (tx) {
@@ -484,7 +484,7 @@ public final class Ops {
         if (!SignalEnv.transmitting(nearest, other)) return;
         if (hasSample(player, other.handle)) return;
         give(player, Devices.sample(other.handle, other.vpn > 0));
-        player.displayClientMessage(Component.translatable("blackchannel.result.sniff"), true);
+        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.sniff")), true);
     }
 
     private static void say(ServerPlayer player, NetData.Profile profile, String text) {
@@ -674,7 +674,7 @@ public final class Ops {
         if (target != null) {
             ServerPlayer online = player.getServer().getPlayerList().getPlayer(target.id);
             if (online != null) {
-                online.sendSystemMessage(Component.translatable("blackchannel.chat.strike_target", Config.SWAT_DELAY.get(), x, intel.y, z, Str.dimShort(intel.dim)));
+                online.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.strike_target", Config.SWAT_DELAY.get(), x, intel.y, z, Str.dimShort(intel.dim))));
                 online.playNotifySound(SoundEvents.NOTE_BLOCK_BELL.value(), SoundSource.MASTER, 1f, 0.5f);
             }
         }
@@ -709,7 +709,7 @@ public final class Ops {
         profile.cdBomb = now + Config.BOMB_CD.get() * 20;
         result(player, profile, "blackchannel.result.bomb_ok", target.handle, String.valueOf(dur));
         if (target.ids) alert(online, player, "blackchannel.chat.ids_bomb");
-        else online.displayClientMessage(Component.translatable("blackchannel.chat.ids_bomb_soft"), true);
+        else online.displayClientMessage(Msg.paint(Component.translatable("blackchannel.chat.ids_bomb_soft")), true);
     }
 
     private static void traceUav(ServerPlayer player, NetData.Profile profile) {
@@ -875,7 +875,7 @@ public final class Ops {
         result(player, profile, "blackchannel.result.hack_ok", owner.handle);
         ServerPlayer online = player.getServer().getPlayerList().getPlayer(be.owner);
         if (online != null) {
-            online.sendSystemMessage(Component.translatable("blackchannel.chat.ids_hack"));
+            online.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.ids_hack")));
             owner.log("blackchannel.chat.ids_hack", bearing(online, player), player.getServer().getTickCount());
         }
     }
@@ -912,7 +912,7 @@ public final class Ops {
             }
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
                 if (player.getUUID().equals(strike.attacker) || player.getUUID().equals(strike.target) || near(player, strike, 64)) {
-                    player.sendSystemMessage(Component.translatable("blackchannel.chat.strike_impact", strike.x, strike.y, strike.z));
+                    player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.strike_impact", strike.x, strike.y, strike.z)));
                 }
             }
         }
@@ -924,15 +924,15 @@ public final class Ops {
             boolean target = player.getUUID().equals(strike.target);
             boolean close = near(player, strike, 48);
             if (!target && !close) continue;
-            player.displayClientMessage(Component.translatable(target ? "blackchannel.hud.strike" : "blackchannel.chat.strike_near", sec, strike.x, strike.z), true);
+            player.displayClientMessage(Msg.paint(Component.translatable(target ? "blackchannel.hud.strike" : "blackchannel.chat.strike_near", sec, strike.x, strike.z)), true);
         }
     }
 
     private static void announceAbort(MinecraftServer server, NetData.Strike strike) {
         ServerPlayer a = server.getPlayerList().getPlayer(strike.attacker);
         ServerPlayer t = server.getPlayerList().getPlayer(strike.target);
-        if (a != null) a.sendSystemMessage(Component.translatable("blackchannel.chat.strike_abort"));
-        if (t != null) t.sendSystemMessage(Component.translatable("blackchannel.chat.strike_abort"));
+        if (a != null) a.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.strike_abort")));
+        if (t != null) t.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.strike_abort")));
     }
 
     private static int abortNear(NetData data, String dim, BlockPos pos, int radius) {
@@ -998,7 +998,7 @@ public final class Ops {
 
     static void alert(ServerPlayer target, ServerPlayer attacker, String key) {
         String dir = bearing(target, attacker);
-        target.sendSystemMessage(Component.translatable(key, dir));
+        target.sendSystemMessage(Msg.paint(Component.translatable(key, dir)));
         target.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.value(), SoundSource.MASTER, 0.8f, 0.6f);
         NetData.Profile profile = NetData.get(target).profile(target.getUUID());
         profile.toast(key, dir);

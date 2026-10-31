@@ -72,8 +72,8 @@ public final class Flood {
 
     public static void spam(ServerPlayer player, int tick, boolean actionBar) {
         Component line = Component.literal(line(tick));
-        if (actionBar) player.displayClientMessage(line, true);
-        else player.sendSystemMessage(line);
+        if (actionBar) player.displayClientMessage(Msg.paint(line), true);
+        else player.sendSystemMessage(Msg.paint(line));
     }
 
     public static List<NamedPng> images() {

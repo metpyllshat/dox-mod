@@ -275,12 +275,12 @@
   "blackchannel.minigame.on": "live",
   "blackchannel.minigame.off": "off",
   "blackchannel.minigame.help": "/minigame center, center x y z, size 2500, team (team menu), start, stop, status. size is wall to wall. Pick a team in the menu before the start. The border does not shrink.",
-  "blackchannel.minigame.status": "Match: %s. Center %s. Size %s. Base gap %s. Your code %s. No PvP for %s s.",
+  "blackchannel.minigame.status": "Match: %s. Center %s. Size %s. Base gap %s. Your code %s. No PvP for %s s. Caches %s.",
   "blackchannel.minigame.need_player": "Player only.",
   "blackchannel.minigame.crew_set": "Team: %s. Pick it in /minigame team menu.",
   "blackchannel.minigame.already": "Match already running.",
   "blackchannel.minigame.center_set": "Center %s %s %s, dimension %s.",
-  "blackchannel.minigame.size_set": "Map is %s blocks wall to wall. Team gap about %s. Before start: /minigame crew code, or you drop solo.",
+  "blackchannel.minigame.size_set": "Map is %s blocks wall to wall. Team gap about %s. Caches %s. Before start: /minigame crew code, or you drop solo.",
   "blackchannel.minigame.need_setup": "Set center and size first.",
   "blackchannel.minigame.no_level": "Match world unavailable.",
   "blackchannel.minigame.started_you": "Team: %s. Minimum distance between bases: %s blocks.",
@@ -352,5 +352,6 @@
   "blackchannel.minigame.bed_needs_beacon": "Your team beacon is destroyed: the bed no longer works as a respawn point.",
   "blackchannel.minigame.coords_leak_header": "Bearing: player coordinates. Error ±%s blocks.",
   "blackchannel.minigame.coords_leak": "%s: %s %s %s",
-  "blackchannel.minigame.beacon_leak_header": "Exact team beacon coordinates:"
+  "blackchannel.minigame.beacon_leak_header": "Exact team beacon coordinates:",
+  "blackchannel.minigame.ally_fire": "Teammates take no damage from each other."
 }

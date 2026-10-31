@@ -1,5 +1,6 @@
 package dev.blackchannel.item;
 
+import dev.blackchannel.logic.Msg;
 import dev.blackchannel.logic.Ops;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -40,12 +41,12 @@ public class ToolItem extends Item {
                 else Ops.deposit(sp, stack);
             }
             case SIM -> {
-                if (!player.isShiftKeyDown()) sp.displayClientMessage(Component.translatable("blackchannel.hint.sim_sneak"), true);
+                if (!player.isShiftKeyDown()) sp.displayClientMessage(Msg.paint(Component.translatable("blackchannel.hint.sim_sneak")), true);
                 else Ops.wipeFromSim(sp);
             }
-            case SAMPLE -> sp.displayClientMessage(Component.translatable("blackchannel.hint.passive"), true);
+            case SAMPLE -> sp.displayClientMessage(Msg.paint(Component.translatable("blackchannel.hint.passive")), true);
             case SAT, VPN, VPN2, IDS, HARDEN, CELL -> Ops.install(sp, kind, stack);
-            default -> sp.displayClientMessage(Component.translatable("blackchannel.hint.passive"), true);
+            default -> sp.displayClientMessage(Msg.paint(Component.translatable("blackchannel.hint.passive")), true);
         }
         return InteractionResultHolder.sidedSuccess(stack, false);
     }

@@ -1,5 +1,6 @@
 package dev.blackchannel.item;
 
+import dev.blackchannel.logic.Msg;
 import dev.blackchannel.logic.Ops;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
@@ -41,7 +42,7 @@ public class TrackerItem extends Item {
     @Override
     public InteractionResultHolder<ItemStack> use(Level level, Player player, InteractionHand hand) {
         if (!level.isClientSide && player instanceof ServerPlayer sp && !player.isShiftKeyDown()) {
-            sp.displayClientMessage(Component.translatable("blackchannel.hint.tracker_sneak"), true);
+            sp.displayClientMessage(Msg.paint(Component.translatable("blackchannel.hint.tracker_sneak")), true);
         }
         return InteractionResultHolder.sidedSuccess(player.getItemInHand(hand), level.isClientSide);
     }
