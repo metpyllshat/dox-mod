@@ -291,9 +291,11 @@ public final class Sync {
             c.putString("label", blip.label);
             blips.add(c);
         }
-        // Добавляем маяки других команд на радар
+        // Чужие маяки видны только на обычном радаре: телефон или ноутбук с батареей.
+        // Раньше метка лепилась на 360 блоков всем подряд — так чужие базы и находились за минуты.
         MatchData match = MatchData.get(player.getServer());
-        if (match.active) {
+        int beaconRange = SignalEnv.radarRange(player, profile);
+        if (match.active && beaconRange > 0) {
             String playerCrew = match.playerCrew.getOrDefault(player.getUUID(), "");
             for (Map.Entry<String, BlockPos> entry : match.teamBeacons.entrySet()) {
                 String crew = entry.getKey();
@@ -303,7 +305,7 @@ public final class Sync {
                 long dx = player.blockPosition().getX() - beaconPos.getX();
                 long dz = player.blockPosition().getZ() - beaconPos.getZ();
                 int dist = (int) Math.sqrt(dx * dx + dz * dz);
-                if (dist <= Config.STRUCTURE_RADAR.get()) {
+                if (dist <= beaconRange) {
                     CompoundTag c = new CompoundTag();
                     c.putInt("dx", (int) dx);
                     c.putInt("dz", (int) dz);

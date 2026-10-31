@@ -33,6 +33,8 @@ public class MatchData extends SavedData {
     public boolean playersLeaked;
     /** Публикация точных координат маяков на 2/3 матча. */
     public boolean beaconsLeaked;
+    /** Тик следующего аирдропа. Ноль — аирдропы выключены. */
+    public long nextAirdropTick;
     public boolean borderSaved;
     public double prevSize = 5.9999968E7;
     public double prevCenterX;
@@ -88,6 +90,7 @@ public class MatchData extends SavedData {
         data.spread = tag.getInt("spread");
         data.playersLeaked = tag.getBoolean("leakPlayers");
         data.beaconsLeaked = tag.getBoolean("leakBeacons");
+        data.nextAirdropTick = tag.getLong("nextAirdrop");
         data.borderSaved = tag.getBoolean("borderSaved");
         data.prevSize = tag.contains("prevSize") ? tag.getDouble("prevSize") : 5.9999968E7;
         data.prevCenterX = tag.getDouble("prevCx");
@@ -149,6 +152,7 @@ public class MatchData extends SavedData {
         tag.putInt("spread", spread);
         tag.putBoolean("leakPlayers", playersLeaked);
         tag.putBoolean("leakBeacons", beaconsLeaked);
+        tag.putLong("nextAirdrop", nextAirdropTick);
         tag.putBoolean("borderSaved", borderSaved);
         tag.putDouble("prevSize", prevSize);
         tag.putDouble("prevCx", prevCenterX);

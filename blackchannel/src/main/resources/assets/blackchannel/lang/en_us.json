@@ -356,5 +356,10 @@
   "blackchannel.minigame.ally_fire": "Teammates take no damage from each other.",
   "blackchannel.minigame.cache_ok": "Cache nearby: %s %s %s. It will be cleaned up with the rest after the match.",
   "blackchannel.minigame.cache_ok_free": "Cache nearby: %s %s %s. No match is running, so it stays in the world.",
-  "blackchannel.minigame.cache_no_room": "No free spot for a chest nearby. Step away from the wall or find flat ground."
+  "blackchannel.minigame.cache_no_room": "No free spot for a chest nearby. Step away from the wall or find flat ground.",
+  "blackchannel.minigame.bunker_hint": "Your team beacon is in a bunker under the base. Hatch at %s %s %s, ladder down.",
+  "blackchannel.minigame.beacon_shield_left": "The beacon is still shielded: %s s left.",
+  "blackchannel.minigame.beacon_under_attack": "Someone is breaking your beacon!",
+  "blackchannel.minigame.airdrop_header": "Airdrop! Top-tier loot has landed.",
+  "blackchannel.minigame.airdrop_at": "Coordinates: %s %s %s. First come, first served."
 }

@@ -356,5 +356,10 @@
   "blackchannel.minigame.ally_fire": "Свои не получают урона от своих.",
   "blackchannel.minigame.cache_ok": "Схрон рядом: %s %s %s. После катки он уберётся вместе с остальными.",
   "blackchannel.minigame.cache_ok_free": "Схрон рядом: %s %s %s. Катка не идёт, поэтому в мире он останется.",
-  "blackchannel.minigame.cache_no_room": "Рядом нет свободного места под сундук. Отойди от стены или встань на ровное место."
+  "blackchannel.minigame.cache_no_room": "Рядом нет свободного места под сундук. Отойди от стены или встань на ровное место.",
+  "blackchannel.minigame.bunker_hint": "Маяк отряда в бункере под базой. Вход — люк по координатам %s %s %s, вниз по лестнице.",
+  "blackchannel.minigame.beacon_shield_left": "Маяк пока под защитой: ещё %s с.",
+  "blackchannel.minigame.beacon_under_attack": "Твой маяк пытаются сломать!",
+  "blackchannel.minigame.airdrop_header": "Аирдроп! Верхушка лута уже на земле.",
+  "blackchannel.minigame.airdrop_at": "Координаты: %s %s %s. Кто первый, того и добро."
 }
