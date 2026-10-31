@@ -283,9 +283,9 @@
   "blackchannel.minigame.size_set": "Map is %s blocks wall to wall. Team gap about %s. Before start: /minigame crew code, or you drop solo.",
   "blackchannel.minigame.need_setup": "Set center and size first.",
   "blackchannel.minigame.no_level": "Match world unavailable.",
-  "blackchannel.minigame.started_you": "Team: %s. Base gap: %s blocks.",
+  "blackchannel.minigame.started_you": "Team: %s. Minimum distance between bases: %s blocks.",
   "blackchannel.minigame.grace": "Peaceful: %s seconds without damage.",
-  "blackchannel.minigame.started": "Match started! Teams: %s, gap: %s.",
+  "blackchannel.minigame.started": "Match started! Teams: %s, minimum distance: %s.",
   "blackchannel.minigame.cramped": "Warning: teams are close, gap %s.",
   "blackchannel.minigame.caches": "Caches placed: %s.",
   "blackchannel.minigame.not_running": "Match not running.",
@@ -348,5 +348,9 @@
   "blackchannel.minigame.downed_seconds": "Respawn in %s s. Point: %s.",
   "blackchannel.minigame.kill_assist": "+%s points for the finish.",
   "blackchannel.minigame.beacon_cleared": "Team beacons removed.",
-  "blackchannel.minigame.pvp_off": "PvP is off for another %s s."
+  "blackchannel.minigame.pvp_off": "PvP is off for another %s s.",
+  "blackchannel.minigame.bed_needs_beacon": "Your team beacon is destroyed: the bed no longer works as a respawn point.",
+  "blackchannel.minigame.coords_leak_header": "Bearing: player coordinates. Error ±%s blocks.",
+  "blackchannel.minigame.coords_leak": "%s: %s %s %s",
+  "blackchannel.minigame.beacon_leak_header": "Exact team beacon coordinates:"
 }

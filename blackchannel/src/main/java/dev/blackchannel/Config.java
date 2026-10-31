@@ -62,6 +62,8 @@ public final class Config {
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_COMMON;
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_UNCOMMON;
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_RARE;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_EPIC;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_LEGENDARY;
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_DUNGEON;
     public static final ForgeConfigSpec.DoubleValue SWAT_POWER;
     public static final ForgeConfigSpec.DoubleValue FLOOD_VOLUME;
@@ -81,6 +83,8 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue CACHE_COMMON_CHANCE;
     public static final ForgeConfigSpec.IntValue CACHE_UNCOMMON_CHANCE;
     public static final ForgeConfigSpec.IntValue CACHE_RARE_CHANCE;
+    public static final ForgeConfigSpec.IntValue CACHE_EPIC_CHANCE;
+    public static final ForgeConfigSpec.IntValue CACHE_LEGENDARY_CHANCE;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -209,6 +213,23 @@ public final class Config {
                 "ballistix:missiletier1*1-2",
                 "ballistix:rocketlauncher"
         ), o -> o instanceof String);
+        CACHE_EPIC = b.defineList("cacheEpic", List.of(
+                "minecraft:diamond*2-5",
+                "minecraft:emerald*3-6",
+                "minecraft:netherite_scrap*1-2",
+                "minecraft:golden_apple*1-2",
+                "electrodynamics:circuitadvanced*1-2",
+                "ballistix:missiletier2*1-2",
+                "blackchannel:satellite_firmware"
+        ), o -> o instanceof String);
+        CACHE_LEGENDARY = b.defineList("cacheLegendary", List.of(
+                "minecraft:netherite_ingot*1-2",
+                "minecraft:diamond_block",
+                "minecraft:enchanted_golden_apple",
+                "minecraft:elytra",
+                "electrodynamics:circuitelite",
+                "blackchannel:deep_vpn"
+        ), o -> o instanceof String);
         CACHE_DUNGEON = b.defineList("cacheDungeon", List.of(
                 "minecraft:iron_ingot*2-6",
                 "minecraft:redstone*2-8",
@@ -216,10 +237,12 @@ public final class Config {
                 "blackchannel:battery_cell",
                 "minecraft:gunpowder*1-3"
         ), o -> o instanceof String);
-        b.comment("Шансы категорий лута в схронах и сундуках в зоне, в процентах. Каждая категория проверяется отдельно: обычная при 100 попадает всегда, редкая при 8 — примерно в одном сундуке из двенадцати.");
+        b.comment("Шансы категорий лута в схронах и сундуках в зоне, в процентах. Каждая категория проверяется отдельно: обычная при 100 попадает всегда, редкая при 8 — примерно в одном сундуке из двенадцати, эпик при 3 и легендарка при 1 — совсем редко.");
         CACHE_COMMON_CHANCE = b.defineInRange("cacheCommonChance", 100, 0, 100);
         CACHE_UNCOMMON_CHANCE = b.defineInRange("cacheUncommonChance", 25, 0, 100);
         CACHE_RARE_CHANCE = b.defineInRange("cacheRareChance", 8, 0, 100);
+        CACHE_EPIC_CHANCE = b.defineInRange("cacheEpicChance", 3, 0, 100);
+        CACHE_LEGENDARY_CHANCE = b.defineInRange("cacheLegendaryChance", 1, 0, 100);
         b.pop();
 
         b.push("world");

@@ -8,8 +8,10 @@ import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.level.saveddata.SavedData;
 
+import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
@@ -23,6 +25,14 @@ public class MatchData extends SavedData {
     public String dim = "";
     public int size;
     public long pvpFreeUntil;
+    /** Тик старта матча: от него считаются трети и финал. */
+    public long matchStartTick;
+    /** Фактическое минимальное расстояние между базами в этом матче. */
+    public int spread;
+    /** Публикация координат игроков на 1/3 матча. */
+    public boolean playersLeaked;
+    /** Публикация точных координат маяков на 2/3 матча. */
+    public boolean beaconsLeaked;
     public boolean borderSaved;
     public double prevSize = 5.9999968E7;
     public double prevCenterX;
@@ -57,6 +67,8 @@ public class MatchData extends SavedData {
     public int cacheTick;
     public int cacheTotal;
     public BlockPos[] cachePositions = new BlockPos[0];
+    /** Поставленные модом схроны: после матча их надо убрать из мира. */
+    public final List<BlockPos> cacheChests = new ArrayList<>();
 
     public static MatchData get(MinecraftServer server) {
         return server.overworld().getDataStorage().computeIfAbsent(MatchData::load, MatchData::new, "blackchannel_match");
@@ -72,6 +84,10 @@ public class MatchData extends SavedData {
         data.dim = tag.getString("dim");
         data.size = tag.getInt("size");
         data.pvpFreeUntil = tag.getLong("pvpFree");
+        data.matchStartTick = tag.getLong("matchStart");
+        data.spread = tag.getInt("spread");
+        data.playersLeaked = tag.getBoolean("leakPlayers");
+        data.beaconsLeaked = tag.getBoolean("leakBeacons");
         data.borderSaved = tag.getBoolean("borderSaved");
         data.prevSize = tag.contains("prevSize") ? tag.getDouble("prevSize") : 5.9999968E7;
         data.prevCenterX = tag.getDouble("prevCx");
@@ -109,6 +125,11 @@ public class MatchData extends SavedData {
             CompoundTag c = cpos.getCompound(i);
             data.cachePositions[i] = new BlockPos(c.getInt("x"), c.getInt("y"), c.getInt("z"));
         }
+        ListTag chests = tag.getList("cacheChests", Tag.TAG_COMPOUND);
+        for (int i = 0; i < chests.size(); i++) {
+            CompoundTag c = chests.getCompound(i);
+            data.cacheChests.add(new BlockPos(c.getInt("x"), c.getInt("y"), c.getInt("z")));
+        }
         ListTag elim = tag.getList("eliminated", Tag.TAG_STRING);
         for (int i = 0; i < elim.size(); i++) data.eliminatedTeams.add(elim.getString(i));
         return data;
@@ -124,6 +145,10 @@ public class MatchData extends SavedData {
         tag.putString("dim", dim == null ? "" : dim);
         tag.putInt("size", size);
         tag.putLong("pvpFree", pvpFreeUntil);
+        tag.putLong("matchStart", matchStartTick);
+        tag.putInt("spread", spread);
+        tag.putBoolean("leakPlayers", playersLeaked);
+        tag.putBoolean("leakBeacons", beaconsLeaked);
         tag.putBoolean("borderSaved", borderSaved);
         tag.putDouble("prevSize", prevSize);
         tag.putDouble("prevCx", prevCenterX);
@@ -174,6 +199,16 @@ public class MatchData extends SavedData {
             }
         }
         tag.put("cachePos", cpos);
+        ListTag chests = new ListTag();
+        for (BlockPos p : cacheChests) {
+            if (p == null) continue;
+            CompoundTag c = new CompoundTag();
+            c.putInt("x", p.getX());
+            c.putInt("y", p.getY());
+            c.putInt("z", p.getZ());
+            chests.add(c);
+        }
+        tag.put("cacheChests", chests);
         ListTag elim = new ListTag();
         for (String code : eliminatedTeams) elim.add(net.minecraft.nbt.StringTag.valueOf(code));
         tag.put("eliminated", elim);
