@@ -20,7 +20,6 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.entity.Entity;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.Level;
@@ -124,95 +123,6 @@ public final class Ops {
         profile.airplane = !profile.airplane;
         player.playNotifySound(SoundEvents.NOTE_BLOCK_BIT.value(), SoundSource.MASTER, 0.5f, profile.airplane ? 0.7f : 1.6f);
         result(player, profile, profile.airplane ? "blackchannel.result.air_on" : "blackchannel.result.air_off");
-    }
-
-    public static InteractionResult plantPlayer(ServerPlayer attacker, ServerPlayer victim, ItemStack stack) {
-        if (!attacker.isShiftKeyDown()) {
-            attacker.displayClientMessage(Msg.paint(Component.translatable("blackchannel.hint.tracker_sneak")), true);
-            return InteractionResult.CONSUME;
-        }
-        if (attacker.distanceToSqr(victim) > 25) return InteractionResult.FAIL;
-        NetData data = NetData.get(attacker);
-        NetData.Profile self = data.profile(attacker.getUUID());
-        NetData.Profile other = data.profile(victim.getUUID());
-        if (other.bugs.size() >= 3) {
-            result(attacker, self, "blackchannel.result.plant_fail");
-            return InteractionResult.FAIL;
-        }
-        NetData.Bug bug = new NetData.Bug();
-        bug.owner = attacker.getUUID();
-        bug.ownerHandle = self.handle;
-        bug.expireTick = attacker.getServer().getTickCount() + 20L * 60 * 8;
-        other.bugs.add(bug);
-        if (!attacker.getAbilities().instabuild) stack.shrink(1);
-        float chance = other.ids || Devices.has(victim, ModContent.SCANNER.get()) ? 1f : 0.18f;
-        if (attacker.getRandom().nextFloat() < chance) {
-            String bearing = bearing(victim, attacker);
-            victim.displayClientMessage(Msg.paint(Component.translatable("blackchannel.chat.ids_bug", bearing)), true);
-            other.log("blackchannel.chat.ids_bug", bearing, attacker.getServer().getTickCount());
-        }
-        result(attacker, self, "blackchannel.result.plant_ok");
-        data.setDirty();
-        return InteractionResult.SUCCESS;
-    }
-
-    public static InteractionResult plantBlock(ServerPlayer attacker, BlockPos pos, ItemStack stack) {
-        if (!attacker.isShiftKeyDown()) {
-            attacker.displayClientMessage(Msg.paint(Component.translatable("blackchannel.hint.tracker_sneak")), true);
-            return InteractionResult.CONSUME;
-        }
-        NetData data = NetData.get(attacker);
-        NetData.Profile self = data.profile(attacker.getUUID());
-        NetData.BlockBug bug = new NetData.BlockBug();
-        bug.owner = attacker.getUUID();
-        bug.ownerHandle = self.handle;
-        bug.dim = Str.dim(attacker.level());
-        bug.x = pos.getX();
-        bug.y = pos.getY();
-        bug.z = pos.getZ();
-        bug.expireTick = attacker.getServer().getTickCount() + 20L * 60 * 10;
-        data.blockBugs.add(bug);
-        if (!attacker.getAbilities().instabuild) stack.shrink(1);
-        result(attacker, self, "blackchannel.result.plant_ok");
-        data.setDirty();
-        return InteractionResult.SUCCESS;
-    }
-
-    public static void scanSelf(ServerPlayer player) {
-        NetData data = NetData.get(player);
-        NetData.Profile profile = data.profile(player.getUUID());
-        if (profile.bugs.isEmpty()) {
-            result(player, profile, "blackchannel.result.scan_none");
-            return;
-        }
-        NetData.Bug bug = profile.bugs.remove(0);
-        give(player, Devices.sample(bug.ownerHandle, false));
-        result(player, profile, "blackchannel.result.scan_ok", bug.ownerHandle);
-        ServerPlayer owner = player.getServer().getPlayerList().getPlayer(bug.owner);
-        if (owner != null) owner.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.bug_found")));
-        data.setDirty();
-    }
-
-    public static void scanBlock(ServerPlayer player, BlockPos pos) {
-        NetData data = NetData.get(player);
-        NetData.Profile profile = data.profile(player.getUUID());
-        String dim = Str.dim(player.level());
-        NetData.BlockBug found = null;
-        for (NetData.BlockBug bug : data.blockBugs) {
-            if (!dim.equals(bug.dim)) continue;
-            if (bug.x == pos.getX() && bug.y == pos.getY() && bug.z == pos.getZ()) {
-                found = bug;
-                break;
-            }
-        }
-        if (found == null) {
-            result(player, profile, "blackchannel.result.scan_none");
-            return;
-        }
-        data.blockBugs.remove(found);
-        give(player, Devices.sample(found.ownerHandle, false));
-        result(player, profile, "blackchannel.result.scan_ok", found.ownerHandle);
-        data.setDirty();
     }
 
     public static void identify(ServerPlayer attacker, ServerPlayer victim) {

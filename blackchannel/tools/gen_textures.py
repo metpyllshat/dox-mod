@@ -236,42 +236,6 @@ def signal_sample():
     return a
 
 
-def sticky_tracker():
-    a = Art()
-    a.rect(2, 6, 13, 13, INK)
-    a.rect(3, 7, 12, 12, STEEL_LO)
-    a.rect(4, 8, 11, 8, STEEL_HI)
-    a.rect(5, 9, 10, 11, DARK)
-    a.px(7, 10, RED)
-    a.px(8, 10, RED_HI)
-    a.px(6, 5, STEEL)
-    a.px(6, 4, STEEL_HI)
-    a.px(6, 3, STEEL_LO)
-    a.px(10, 6, STEEL)
-    a.px(11, 5, STEEL_HI)
-    a.px(12, 4, STEEL_LO)
-    a.rect(3, 13, 4, 14, c(0x6B5A3A))
-    a.rect(11, 13, 12, 14, c(0x6B5A3A))
-    return a
-
-
-def signal_scanner():
-    a = Art()
-    a.rect(4, 4, 12, 15, INK)
-    a.rect(5, 5, 11, 14, DARK)
-    a.rect(5, 5, 11, 5, STEEL_LO)
-    a.rect(6, 6, 10, 9, GLASS)
-    a.rect(7, 7, 9, 8, GREEN_LO)
-    a.px(7, 7, GREEN_HI)
-    a.rect(6, 11, 10, 12, STEEL_LO)
-    a.px(7, 11, AMBER)
-    a.px(9, 11, GREEN)
-    a.px(4, 3, STEEL_HI)
-    a.px(3, 2, STEEL)
-    a.px(2, 1, STEEL_LO)
-    return a
-
-
 def battery_cell():
     a = Art()
     a.rect(4, 2, 11, 14, INK)
@@ -512,8 +476,6 @@ ITEMS = {
     "exploit_firmware": exploit_firmware,
     "zero_day": zero_day,
     "false_contract": false_contract,
-    "sticky_tracker": sticky_tracker,
-    "signal_scanner": signal_scanner,
     "battery_cell": battery_cell,
     "burner_sim": burner_sim,
     "satellite_firmware": satellite_firmware,

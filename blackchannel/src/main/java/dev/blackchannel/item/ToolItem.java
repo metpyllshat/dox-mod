@@ -5,13 +5,11 @@ import dev.blackchannel.logic.Ops;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.InteractionHand;
-import net.minecraft.world.InteractionResult;
 import net.minecraft.world.InteractionResultHolder;
 import net.minecraft.world.entity.player.Player;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.TooltipFlag;
-import net.minecraft.world.item.context.UseOnContext;
 import net.minecraft.world.level.Level;
 import org.jetbrains.annotations.Nullable;
 
@@ -19,7 +17,7 @@ import java.util.List;
 
 public class ToolItem extends Item {
     public enum Kind {
-        SCANNER, HASH, SIM, SAT, VPN, VPN2, IDS, HARDEN, EXPLOIT, ZERO, CONTRACT, SAMPLE, CELL
+        HASH, SIM, SAT, VPN, VPN2, IDS, HARDEN, EXPLOIT, ZERO, CONTRACT, SAMPLE, CELL
     }
 
     public final Kind kind;
@@ -35,7 +33,6 @@ public class ToolItem extends Item {
         if (level.isClientSide) return InteractionResultHolder.sidedSuccess(stack, true);
         if (!(player instanceof ServerPlayer sp)) return InteractionResultHolder.pass(stack);
         switch (kind) {
-            case SCANNER -> Ops.scanSelf(sp);
             case HASH -> {
                 if (player.isShiftKeyDown()) Ops.withdraw(sp);
                 else Ops.deposit(sp, stack);
@@ -49,14 +46,6 @@ public class ToolItem extends Item {
             default -> sp.displayClientMessage(Msg.paint(Component.translatable("blackchannel.hint.passive")), true);
         }
         return InteractionResultHolder.sidedSuccess(stack, false);
-    }
-
-    @Override
-    public InteractionResult useOn(UseOnContext context) {
-        if (kind != Kind.SCANNER) return InteractionResult.PASS;
-        if (context.getLevel().isClientSide) return InteractionResult.SUCCESS;
-        if (context.getPlayer() instanceof ServerPlayer sp) Ops.scanBlock(sp, context.getClickedPos());
-        return InteractionResult.CONSUME;
     }
 
     @Override

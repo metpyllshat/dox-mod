@@ -16,10 +16,14 @@ import net.minecraft.core.BlockPos;
 import net.minecraft.ChatFormatting;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.Tag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.network.chat.MutableComponent;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerBossEvent;
+import net.minecraft.world.BossEvent.BossBarColor;
+import net.minecraft.world.BossEvent.BossBarOverlay;
 import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
@@ -27,6 +31,7 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.Mth;
 import net.minecraft.util.RandomSource;
 import net.minecraft.world.entity.Pose;
+import net.minecraft.world.entity.item.ItemEntity;
 import net.minecraft.world.item.Item;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.item.Items;
@@ -49,6 +54,7 @@ import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
 import net.minecraft.world.level.levelgen.Heightmap;
+import net.minecraft.world.phys.AABB;
 import net.minecraft.world.phys.Vec3;
 import net.minecraft.world.scores.Objective;
 import net.minecraft.world.scores.PlayerTeam;
@@ -83,6 +89,8 @@ public final class Minigame {
     private static final Map<UUID, Long> PVP_WARN = new HashMap<>();
     private static final Map<UUID, Long> ALLY_WARN = new HashMap<>();
     private static final Map<String, Long> BEACON_ALERT = new HashMap<>();
+    /** Полоса сверху: текущий этап катки и сколько до следующего. */
+    private static ServerBossEvent stageBar;
     // Схроны: 14 на карту 1000×1000 с четырьмя отрядами, дальше — линейно
     private static final double CACHE_PER_TEAM = 3.5;
     private static final int CACHE_MIN = 8;
@@ -234,6 +242,83 @@ public final class Minigame {
         return title;
     }
 
+    private static ServerBossEvent stageBar() {
+        if (stageBar == null) {
+            stageBar = new ServerBossEvent(Component.empty(),
+                    BossBarColor.YELLOW,
+                    BossBarOverlay.PROGRESS);
+        }
+        return stageBar;
+    }
+
+    /** Этап катки и обратный отсчёт до следующего: игрок должен видеть, сколько ему осталось до смены лута. */
+    private static void updateStageBar(MinecraftServer server, MatchData match, long now) {
+        ServerBossEvent bar = stageBar();
+        long start = match.matchStartTick;
+        long end = match.matchEndTick;
+        long finalEnd = match.finalEndTick;
+        long length = Math.max(1L, end - start);
+        long stageEnd;
+        String phaseKey;
+        BossBarColor color;
+        if (now < start + length / 3L) {
+            phaseKey = "blackchannel.minigame.phase_early";
+            stageEnd = start + length / 3L;
+            color = BossBarColor.GREEN;
+        } else if (now < start + length * 2L / 3L) {
+            phaseKey = "blackchannel.minigame.phase_mid";
+            stageEnd = start + length * 2L / 3L;
+            color = BossBarColor.YELLOW;
+        } else if (now < end) {
+            phaseKey = "blackchannel.minigame.phase_late";
+            stageEnd = end;
+            color = BossBarColor.RED;
+        } else {
+            phaseKey = "blackchannel.minigame.phase_final";
+            stageEnd = finalEnd;
+            color = BossBarColor.PURPLE;
+        }
+        // Финал мог ещё не начаться: тогда полоска просто ждёт на нуле, а не делит на ноль
+        if (stageEnd <= now) stageEnd = now + 1L;
+        long left = Math.max(0L, stageEnd - now);
+        float progress = Mth.clamp(left / (float) stageLengthOf(match, stageEnd), 0f, 1f);
+        bar.setName(Msg.paint(Component.translatable("blackchannel.minigame.stage_bar",
+                Component.translatable(phaseKey), clock(left / 20L))));
+        bar.setColor(color);
+        bar.setProgress(progress);
+        bar.setVisible(true);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            // addPlayer идемпотентен: второй раз пакет не уйдёт
+            bar.addPlayer(player);
+        }
+    }
+
+    /** Длина текущего этапа в тиках: нужна для полоски прогресса. */
+    private static long stageLengthOf(MatchData match, long stageEnd) {
+        long start = match.matchStartTick;
+        long end = match.matchEndTick;
+        long length = Math.max(1L, end - start);
+        long stageStart;
+        if (stageEnd == start + length / 3L) stageStart = start;
+        else if (stageEnd == start + length * 2L / 3L) stageStart = start + length / 3L;
+        else if (stageEnd == end) stageStart = start + length * 2L / 3L;
+        else stageStart = end;
+        return Math.max(1L, stageEnd - stageStart);
+    }
+
+    private static String clock(long seconds) {
+        long left = Math.max(0L, seconds);
+        return String.format("%d:%02d", left / 60L, left % 60L);
+    }
+
+    private static void hideStageBar() {
+        if (stageBar == null) return;
+        // REMOVE уходит каждому игроку, поэтому ссылки можно спокойно отпустить
+        stageBar.removeAllPlayers();
+        stageBar.setVisible(false);
+        stageBar = null;
+    }
+
     private static void updateScoreboard(MinecraftServer server, MatchData match) {
         Scoreboard scoreboard = server.overworld().getScoreboard();
         Objective obj = scoreboard.getObjective(SCOREBOARD_OBJECTIVE);
@@ -307,6 +392,7 @@ public final class Minigame {
         // Каждую секунду: скорборд и проверка победы
         if (now % 20 == 0) {
             updateScoreboard(server, match);
+            updateStageBar(server, match, now);
             checkVictory(server, match);
             if (!match.active) return;
         }
@@ -451,12 +537,14 @@ public final class Minigame {
         if (level != null) {
             // Маяки отрядов и схроны не должны оставаться в мире после матча
             removeBeacons(level, match);
+            removeBunkers(level, match);
             removeCaches(level, match);
             restoreBorder(level, match);
             restoreKeep(level, match);
         }
         removeTeamNametags(server);
         clearScoreboard(server);
+        hideStageBar();
         REVIVE.clear();
         LAST_HIT.clear();
         DEPLOY.clear();
@@ -580,10 +668,10 @@ public final class Minigame {
 
     /**
      * Маяк в бункере: зал 5×5×3 под землёй, вокруг кирпичная коробка, чтобы зал не залило
-     * и не засыпало, вход — шахта с лестницей и железный люк на поверхности.
+     * и не засыпало, вход — шахта с лестницей и деревянный люк на поверхности.
      * Сверху видно только люк, поэтому найти чужой маяк с радара или с дороги нельзя.
      */
-    private static Bunker buildBunker(ServerLevel level, BlockPos surface) {
+    private static Bunker buildBunker(ServerLevel level, MatchData match, BlockPos surface) {
         int cx = surface.getX();
         int cz = surface.getZ();
         int top = surface.getY();
@@ -614,8 +702,11 @@ public final class Minigame {
                     .setValue(LadderBlock.FACING, Direction.EAST), 2);
         }
         BlockPos hatch = new BlockPos(sx, top - 1, sz);
-        level.setBlock(hatch, Blocks.IRON_TRAPDOOR.defaultBlockState()
+        level.setBlock(hatch, Blocks.OAK_TRAPDOOR.defaultBlockState()
                 .setValue(TrapDoorBlock.FACING, Direction.NORTH), 3);
+        // Запоминаем бункер целиком: после матча его надо засыпать, чтобы дыр в земле не осталось
+        match.bunkers.add(new int[]{cx, cz, floorY, top});
+        match.setDirty();
         return new Bunker(new BlockPos(cx, floorY + 1, cz), hatch);
     }
 
@@ -693,9 +784,9 @@ public final class Minigame {
         // иначе игроки останутся на старом месте
         long started = System.nanoTime();
         if (status == CHUNK_FAIL) level.getChunk(base.x() >> 4, base.z() >> 4);
-        BlockPos feet = loadedGround(level, base.x(), base.z(), level.getRandom());
+        BlockPos feet = dryGround(level, base.x(), base.z(), level.getRandom());
         // Маяк больше не стоит открыто на поверхности: бункер под базой и люк на земле
-        Bunker bunker = buildBunker(level, feet);
+        Bunker bunker = buildBunker(level, match, feet);
         level.setBlock(bunker.beacon(), ModContent.BEACON.get().defaultBlockState(), 3);
         match.setBeacon(base.crew(), bunker.beacon());
         for (UUID id : base.players()) {
@@ -726,6 +817,54 @@ public final class Minigame {
     private static void logStep(String what, long startedNanos) {
         long ms = (System.nanoTime() - startedNanos) / 1_000_000L;
         if (ms >= 50L) BlackChannelMod.LOGGER.warn("BlackChannel: {} took {} ms", what, ms);
+    }
+
+    /**
+     * Сухая площадка для базы: бункер в океане — это утонувшие игроки и залитый зал,
+     * поэтому воду, лаву и обрывы рядом с точкой отбрасываем и ищем сушу вокруг.
+     */
+    private static BlockPos dryGround(ServerLevel level, int x, int z, RandomSource random) {
+        int loads = 0;
+        for (int radius = 0; radius <= 64; radius += 4) {
+            for (int attempt = 0; attempt < 10; attempt++) {
+                int sx = x + (radius == 0 ? 0 : random.nextInt(radius * 2 + 1) - radius);
+                int sz = z + (radius == 0 ? 0 : random.nextInt(radius * 2 + 1) - radius);
+                if (level.getChunkSource().getChunkNow(sx >> 4, sz >> 4) == null) {
+                    // Всего пара синхронных загрузок на базу: дальше ищем только по готовым чанкам
+                    if (loads >= 8) continue;
+                    loads++;
+                    level.getChunk(sx >> 4, sz >> 4);
+                }
+                int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, sx, sz);
+                BlockPos feet = new BlockPos(sx, y, sz);
+                if (!standable(level, feet)) continue;
+                if (!dryArea(level, feet)) continue;
+                if (radius > 0) BlackChannelMod.LOGGER.info(
+                        "BlackChannel: база съехала на {} блоков на сушу {}", radius, feet.toShortString());
+                return feet;
+            }
+        }
+        BlackChannelMod.LOGGER.warn("blackchannel: сухого места для базы не нашлось около {} {}, база ставится как есть", x, z);
+        return loadedGround(level, x, z, random);
+    }
+
+    /** Площадка 7×7 без воды и лавы: бункер занимает как раз столько места. */
+    private static boolean dryArea(ServerLevel level, BlockPos feet) {
+        for (int dx = -3; dx <= 3; dx++) {
+            for (int dz = -3; dz <= 3; dz++) {
+                int x = feet.getX() + dx;
+                int z = feet.getZ() + dz;
+                if (level.getChunkSource().getChunkNow(x >> 4, z >> 4) == null) return false;
+                int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+                BlockPos column = new BlockPos(x, y, z);
+                if (!level.getFluidState(column).isEmpty()) return false;
+                if (!level.getFluidState(column.below()).isEmpty()) return false;
+                if (!level.getFluidState(column.above()).isEmpty()) return false;
+                // Резкие перепады высоты тоже не годятся: бункер упрётся в воздух или в воду
+                if (Math.abs(y - feet.getY()) > 3) return false;
+            }
+        }
+        return true;
     }
 
     /** Земля в уже загруженном чанке: перебираем точки, не выходя за загруженные чанки. */
@@ -1360,12 +1499,62 @@ public final class Minigame {
             if (pos == null) continue;
             // Схронов немного: чанк можно и загрузить, зато блок точно уберётся
             if (!level.isLoaded(pos)) level.getChunk(pos.getX() >> 4, pos.getZ() >> 4);
-            if (!(level.getBlockEntity(pos) instanceof ChestBlockEntity chest)) continue;
-            if (!chest.getPersistentData().getBoolean("bcLoot")) continue;
+            if (level.getBlockEntity(pos) instanceof ChestBlockEntity chest
+                    && chest.getPersistentData().getBoolean("bcLoot")) {
+                // Сначала вычищаем содержимое: иначе при замене блока лут вываливается на землю
+                chest.clearContent();
+                chest.setChanged();
+            }
             // Оставляем на месте сундука каменистую землю, как и на крышке: ямы после матча не остаётся
             level.setBlock(pos, Blocks.COARSE_DIRT.defaultBlockState(), 3);
+            // И подчищаем то, что всё-таки успело выпасть рядом
+            removeDroppedItems(level, pos);
         }
         match.cacheChests.clear();
+    }
+
+    /**
+     * Засыпает бункеры после матча: зал, шахту и люк заменяем землёй, чтобы в мире
+     * не оставалось ни пещеры, ни лестницы, ни дырки на поверхности.
+     */
+    private static void removeBunkers(ServerLevel level, MatchData match) {
+        for (int[] box : new ArrayList<>(match.bunkers)) {
+            if (box == null || box.length != 4) continue;
+            int cx = box[0];
+            int cz = box[1];
+            int floorY = box[2];
+            int top = box[3];
+            if (!level.isLoaded(new BlockPos(cx, Math.max(level.getMinBuildHeight(), floorY), cz))) {
+                level.getChunk(cx >> 4, cz >> 4);
+            }
+            BlockState fill = Blocks.DIRT.defaultBlockState();
+            // Зал: засыпаем весь объём коробки
+            for (int x = cx - 3; x <= cx + 3; x++) {
+                for (int z = cz - 3; z <= cz + 3; z++) {
+                    for (int y = floorY; y <= floorY + 4; y++) {
+                        level.setBlock(new BlockPos(x, y, z), fill, 2);
+                    }
+                }
+            }
+            // Шахта и люк: столб от верха коробки до поверхности, вместе с кирпичной стенкой
+            int sx = cx - 2;
+            int sz = cz - 2;
+            for (int y = floorY + 5; y <= top - 1; y++) {
+                level.setBlock(new BlockPos(sx, y, sz), fill, 2);
+                level.setBlock(new BlockPos(sx - 1, y, sz), fill, 2);
+            }
+            level.setBlock(new BlockPos(sx, top - 1, sz), fill, 3);
+        }
+        match.bunkers.clear();
+    }
+
+    /** Убирает выпавшие предметы в кубе вокруг точки: от сундука не должно остаться ничего. */
+    private static void removeDroppedItems(ServerLevel level, BlockPos pos) {
+        AABB box = new AABB(pos.getX() - 6.0, pos.getY() - 6.0, pos.getZ() - 6.0,
+                pos.getX() + 7.0, pos.getY() + 7.0, pos.getZ() + 7.0);
+        for (ItemEntity item : level.getEntitiesOfClass(ItemEntity.class, box)) {
+            item.discard();
+        }
     }
 
     /** Убирает блоки маяков отряда из мира. */
@@ -1606,6 +1795,7 @@ public final class Minigame {
         match.teamScores.clear();
         // Маяки и схроны от прошлой игры: сначала убрать из мира, потом забыть координаты
         removeBeacons(level, match);
+        removeBunkers(level, match);
         removeCaches(level, match);
         match.bedPositions.clear();
         match.downedPlayers.clear();
@@ -1725,6 +1915,7 @@ public final class Minigame {
         // Маяки убираем, пока карта teamBeacons ещё не очищена
         if (level != null) {
             removeBeacons(level, match);
+            removeBunkers(level, match);
             removeCaches(level, match);
             restoreBorder(level, match);
             restoreKeep(level, match);
@@ -1739,6 +1930,7 @@ public final class Minigame {
         }
         removeTeamNametags(source.getServer());
         clearScoreboard(source.getServer());
+        hideStageBar();
         match.ended = false;
         match.setDirty();
         for (ServerPlayer player : source.getServer().getPlayerList().getPlayers()) {
@@ -1837,7 +2029,7 @@ public final class Minigame {
         give(player, new ItemStack(Items.STONE_SHOVEL));
         give(player, new ItemStack(Items.STONE_HOE));
         give(player, new ItemStack(Items.STONE_AXE));
-        give(player, new ItemStack(Items.IRON_PICKAXE));
+        give(player, new ItemStack(Items.STONE_PICKAXE));
         give(player, new ItemStack(Items.BREAD, 2));
         match.kitted.put(player.getUUID(), true);
     }
@@ -2266,7 +2458,7 @@ public final class Minigame {
     }
 
     /** Один предмет пула: сколько выдать и с каким весом он попадается. */
-    private record LootEntry(Item item, int min, int max, int weight) {}
+    private record LootEntry(Item item, int min, int max, int weight, CompoundTag nbt) {}
 
     /** Пул по волне матча: первая треть — ранняя, вторая — средняя, дальше поздняя. */
     private static List<? extends String> wavePool(MatchData match, long now) {
@@ -2278,7 +2470,11 @@ public final class Minigame {
         return Config.CACHE_LATE.get();
     }
 
-    /** Разбор строки пула: id, id*count, id*min-max и вес через собаку. */
+    /**
+     * Разбор строки пула: id, id*count, id*min-max, вес через собаку и NBT в фигурных скобках.
+     * Примеры: minecraft:bread*2-4@16, tacz:modern_kinetic_gun{GunId=tacz:ak47}@8,
+     * tacz:ammo{AmmoId=tacz:9mm}*24-48@14. NBT нужен ровно для оружия TACZ: там один предмет на все стволы.
+     */
     private static LootEntry entryOf(String raw) {
         if (raw == null) return null;
         String spec = raw.trim();
@@ -2292,6 +2488,13 @@ public final class Minigame {
                 return null;
             }
             spec = spec.substring(0, at).trim();
+        }
+        CompoundTag nbt = null;
+        int brace = spec.indexOf('{');
+        int close = spec.lastIndexOf('}');
+        if (brace >= 0 && close > brace) {
+            nbt = parseNbt(spec.substring(brace + 1, close));
+            spec = (spec.substring(0, brace) + spec.substring(close + 1)).trim();
         }
         int min = 1;
         int max = 1;
@@ -2321,7 +2524,26 @@ public final class Minigame {
         if (id == null || !ForgeRegistries.ITEMS.containsKey(id)) return null;
         Item item = ForgeRegistries.ITEMS.getValue(id);
         if (item == null || item == Items.AIR) return null;
-        return new LootEntry(item, Math.max(1, Math.min(64, min)), Math.max(1, Math.min(64, max)), weight);
+        return new LootEntry(item, Math.max(1, Math.min(64, min)), Math.max(1, Math.min(64, max)),
+                weight, nbt);
+    }
+
+    /** Простой разбор NBT из конфига: пары ключ=значение через запятую, значения строковые. */
+    private static CompoundTag parseNbt(String body) {
+        CompoundTag tag = new CompoundTag();
+        for (String pair : body.split(",")) {
+            int eq = pair.indexOf('=');
+            if (eq <= 0) continue;
+            String key = pair.substring(0, eq).trim();
+            String value = pair.substring(eq + 1).trim();
+            if (key.isEmpty() || value.isEmpty()) continue;
+            if (key.startsWith("\"")) key = key.substring(1);
+            if (key.endsWith("\"")) key = key.substring(0, key.length() - 1);
+            if (value.startsWith("\"")) value = value.substring(1);
+            if (value.endsWith("\"")) value = value.substring(0, value.length() - 1);
+            tag.putString(key, value);
+        }
+        return tag.getAllKeys().isEmpty() ? null : tag;
     }
 
     /** Случайная выборка по весам без повторов: чем больше вес строки, тем чаще предмет. */
@@ -2350,9 +2572,78 @@ public final class Minigame {
             int n = chosen.min() == chosen.max()
                     ? chosen.min()
                     : chosen.min() + random.nextInt(chosen.max() - chosen.min() + 1);
-            out.add(new ItemStack(chosen.item(), Math.max(1, Math.min(64, n))));
+            ItemStack stack = new ItemStack(chosen.item(), Math.max(1, Math.min(64, n)));
+            // NBT копируем: у оружия TACZ именно в нём лежит, какой это ствол
+            if (chosen.nbt() != null) stack.setTag(chosen.nbt().copy());
+            out.add(stack);
         }
+        ensureAmmo(out, random);
         return out;
+    }
+
+    /** Карта «ствол TACZ → его патрон»: нужна, чтобы оружие никогда не выпадало без патронов. */
+    private static final Map<String, String> GUN_AMMO = gunAmmo();
+
+    private static Map<String, String> gunAmmo() {
+        Map<String, String> map = new HashMap<>();
+        ammoGroup(map, "9mm", "glock_17", "m9a4", "b93r", "cz75", "hk_mp5a5", "uzi");
+        ammoGroup(map, "45acp", "m1911", "hk_mk23", "p320", "ump45", "vector45");
+        ammoGroup(map, "50ae", "deagle", "timeless50");
+        ammoGroup(map, "357mag", "rhino357", "deagle_golden");
+        ammoGroup(map, "500mag", "taurus500");
+        ammoGroup(map, "22wmr", "taurus943");
+        ammoGroup(map, "762x39", "ak47", "rpk", "sks_tactical", "type_81");
+        ammoGroup(map, "556x45", "m4a1", "m16a1", "m16a4", "hk416d", "scar_l", "aug", "g36k",
+                "spr15hb", "m249");
+        ammoGroup(map, "308", "scar_h", "hk_g3", "fn_fal", "mk14", "fn_evolys", "minigun");
+        ammoGroup(map, "58x42", "qbz_95", "qbz_191");
+        ammoGroup(map, "57x28", "p90");
+        ammoGroup(map, "338", "ai_awp");
+        ammoGroup(map, "30_06", "m700", "lonetrail");
+        ammoGroup(map, "792x57", "kar98");
+        ammoGroup(map, "45_70", "springfield1873");
+        ammoGroup(map, "50bmg", "m95", "m107");
+        ammoGroup(map, "12g", "aa12", "db_long", "db_short", "m870", "m1014", "spas_12");
+        ammoGroup(map, "40mm", "m320");
+        ammoGroup(map, "rpg_rocket", "rpg7");
+        return map;
+    }
+
+    private static void ammoGroup(Map<String, String> map, String ammo, String... guns) {
+        for (String gun : guns) map.put(gun, ammo);
+    }
+
+    /**
+     * Ствол без патронов — это бесполезный кусок металла. Поэтому к любому выпавшему
+     * оружию TACZ добиваем стак подходящих патронов, если их ещё нет в наборе.
+     */
+    private static void ensureAmmo(List<ItemStack> out, RandomSource random) {
+        Item ammoItem = ForgeRegistries.ITEMS.getValue(new ResourceLocation("tacz", "ammo"));
+        if (ammoItem == null || ammoItem == Items.AIR) return;
+        for (ItemStack stack : new ArrayList<>(out)) {
+            CompoundTag tag = stack.getTag();
+            if (tag == null || !tag.contains("GunId", Tag.TAG_STRING)) continue;
+            String gunId = tag.getString("GunId");
+            String gun = gunId.contains(":") ? gunId.substring(gunId.indexOf(':') + 1) : gunId;
+            String ammo = GUN_AMMO.get(gun);
+            if (ammo == null) continue;
+            boolean has = false;
+            for (ItemStack other : out) {
+                CompoundTag otherTag = other.getTag();
+                if (other.getItem() == ammoItem && otherTag != null
+                        && otherTag.contains("AmmoId", Tag.TAG_STRING)
+                        && otherTag.getString("AmmoId").endsWith(":" + ammo)) {
+                    has = true;
+                    break;
+                }
+            }
+            if (has) continue;
+            CompoundTag ammoTag = new CompoundTag();
+            ammoTag.putString("AmmoId", "tacz:" + ammo);
+            ItemStack ammoStack = new ItemStack(ammoItem, 16 + random.nextInt(17));
+            ammoStack.setTag(ammoTag);
+            out.add(ammoStack);
+        }
     }
 
     private static void fill(ChestBlockEntity chest, RandomSource random, List<? extends String> pool) {

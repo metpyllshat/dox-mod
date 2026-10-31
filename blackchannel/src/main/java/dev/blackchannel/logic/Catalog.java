@@ -14,8 +14,6 @@ public final class Catalog {
     public static List<Entry> entries() {
         return List.of(
                 new Entry("cell", ModContent.CELL::get, 6, 1),
-                new Entry("tracker", ModContent.TRACKER::get, 8, 2),
-                new Entry("scanner", ModContent.SCANNER::get, 14, 1),
                 new Entry("sim", ModContent.SIM::get, 8, 1),
                 new Entry("exploit", ModContent.EXPLOIT::get, 12, 1),
                 new Entry("contract", ModContent.CONTRACT::get, 16, 1),
