@@ -59,6 +59,7 @@ import net.minecraftforge.event.entity.player.PlayerInteractEvent;
 import net.minecraftforge.event.level.BlockEvent;
 import net.minecraftforge.registries.ForgeRegistries;
 
+import java.util.ArrayDeque;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
@@ -94,12 +95,23 @@ public final class Minigame {
     private static int chunkWaitX = Integer.MIN_VALUE;
     private static int chunkWaitZ = Integer.MIN_VALUE;
     private static long chunkWaitSince;
-    private static int chunkWaitMisses;
     /** Паузы между генерациями: сервер успевает доделать свет и сущности чанка. */
     private static long nextDeployTick;
     private static long nextCacheTick;
-    private static final int DEPLOY_GAP_TICKS = 10;
-    private static final int CACHE_GAP_TICKS = 4;
+    private static final int DEPLOY_GAP_TICKS = 20;
+    /** Одна генерация в секунду — это ровно тот темп, с каким игрок идёт пешком по новым местам. */
+    private static final int CACHE_GAP_TICKS = 20;
+    /** Схроны начинаем ставить только после высадки, чтобы первые секунды никто не лагал. */
+    private static final int CACHE_START_DELAY = 60;
+    /**
+     * Лут в чужие сундуки кладём не в момент загрузки чанка (там нельзя менять мир),
+     * а из тика, по нескольку контейнеров за раз.
+     */
+    private static final ArrayDeque<BlockPos> LOOT_QUEUE = new ArrayDeque<>();
+    private static final int LOOT_PER_TICK = 4;
+    private static final int LOOT_QUEUE_LIMIT = 2048;
+    /** Границу включаем после высадки: пока базы грузятся, игроки стоят вне зоны. */
+    private static boolean borderPending;
 
     private static final List<ChatFormatting> TEAM_COLORS = List.of(
             ChatFormatting.RED, ChatFormatting.GREEN, ChatFormatting.YELLOW,
@@ -337,6 +349,8 @@ public final class Minigame {
             }
             match.setDirty();
         }
+        // Лут в найденные сундуки — по чуть-чуть каждый тик
+        lootStep(match, level);
         // Высадка идёт первой: пока базы не расставлены, схроны не трогаем
         if (!DEPLOY.isEmpty()) {
             deployStep(server, match, level);
@@ -388,8 +402,10 @@ public final class Minigame {
         DEPLOY.clear();
         resetChunkWait();
         PVP_WARN.clear();
+        borderPending = false;
         nextDeployTick = 0;
         nextCacheTick = 0;
+        LOOT_QUEUE.clear();
         match.downedPlayers.clear();
         String winner;
         if (survivor != null) {
@@ -440,17 +456,22 @@ public final class Minigame {
             match.setDirty();
             return;
         }
-        // Чанк грузится в фоне: тик сервера не стоит, генерация идёт в рабочих потоках
+        // Чанк грузится в фоне: тик сервера не стоит, генерация идёт в рабочих потоках.
+        // Один запрос за раз и пауза между ними: генерация дальнего чанка тянет за собой
+        // соседей (почти сотню чанков), пачкой это и вешало сервер.
+        long started = System.nanoTime();
         int status = chunkStatus(level, cand.getX() >> 4, cand.getZ() >> 4);
         if (status == CHUNK_WAIT) return;
-        nextCacheTick = level.getGameTime() + CACHE_GAP_TICKS;
+        // Уже загруженный чанк — ставим сразу; новый — только одну генерацию в секунду
+        nextCacheTick = level.getGameTime() + (status == CHUNK_READY ? 4 : CACHE_GAP_TICKS);
         match.cacheTick++;
         match.setDirty();
         if (status == CHUNK_READY) {
             int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cand.getX(), cand.getZ());
             BlockPos feet = new BlockPos(cand.getX(), y, cand.getZ());
-            if (match.inside(feet) && standable(level, feet)) placeChest(level, feet, level.getRandom());
+            if (match.inside(feet) && standableHere(level, feet)) placeChest(level, feet, level.getRandom());
         }
+        logStep("cache " + match.cacheTick + "/" + match.cacheTotal, started);
         if (match.cacheTick >= match.cacheTotal) announceCaches(server, match);
     }
 
@@ -461,12 +482,13 @@ public final class Minigame {
     }
 
     /**
-     * Статус чанка: готов, ещё грузится или загрузка не удалась.
-     * Незагруженный чанк запрашивается асинхронно, поэтому большой радиус не вешает сервер.
+     * Статус чанка: готов, ещё грузится или не удалось.
+     * Один асинхронный запрос на чанк: тик сервера не стоит, а повторных запросов нет,
+     * иначе на каждый тик улетал бы новый тикет и чанковая система захлёбывалась.
      */
     private static int chunkStatus(ServerLevel level, int cx, int cz) {
         if (level.getChunkSource().getChunkNow(cx, cz) != null) {
-            chunkWaitMisses = 0;
+            if (chunkWaitX == cx && chunkWaitZ == cz) resetChunkWait();
             return CHUNK_READY;
         }
         long now = level.getGameTime();
@@ -480,29 +502,17 @@ public final class Minigame {
         if (!CHUNK_WAIT_FUTURE.isDone()) {
             if (now - chunkWaitSince <= CHUNK_WAIT_LIMIT) return CHUNK_WAIT;
             resetChunkWait();
-            if (++chunkWaitMisses >= 3) {
-                chunkWaitMisses = 0;
-                return CHUNK_FAIL;
-            }
-            return CHUNK_WAIT;
-        }
-        CHUNK_WAIT_FUTURE = null;
-        if (level.getChunkSource().getChunkNow(cx, cz) != null) {
-            chunkWaitMisses = 0;
-            return CHUNK_READY;
-        }
-        if (++chunkWaitMisses >= 3) {
-            chunkWaitMisses = 0;
             return CHUNK_FAIL;
         }
-        return CHUNK_WAIT;
+        // Будущее готово, но в видимой карте чанка нет: не гоняемся за ним повторно
+        resetChunkWait();
+        return CHUNK_FAIL;
     }
 
     private static void resetChunkWait() {
         CHUNK_WAIT_FUTURE = null;
         chunkWaitX = Integer.MIN_VALUE;
         chunkWaitZ = Integer.MIN_VALUE;
-        chunkWaitMisses = 0;
     }
 
     /** Одна база за тик: поставить маяк и высадить её игроков. */
@@ -513,6 +523,7 @@ public final class Minigame {
         if (status == CHUNK_WAIT) return;
         // Крайний случай (генерация не удалась за 10 с): догружаем одну базу синхронно,
         // иначе игроки останутся на старом месте
+        long started = System.nanoTime();
         if (status == CHUNK_FAIL) level.getChunk(base.x() >> 4, base.z() >> 4);
         BlockPos feet = loadedGround(level, base.x(), base.z(), level.getRandom());
         level.setBlock(feet, ModContent.BEACON.get().defaultBlockState(), 3);
@@ -531,6 +542,18 @@ public final class Minigame {
         match.setDirty();
         DEPLOY.remove(0);
         nextDeployTick = level.getGameTime() + DEPLOY_GAP_TICKS;
+        logStep("base " + base.crew() + " at " + feet.toShortString(), started);
+        if (DEPLOY.isEmpty() && borderPending) {
+            borderPending = false;
+            applyBorder(level, match, true);
+            BlackChannelMod.LOGGER.info("BlackChannel: all bases deployed, border applied");
+        }
+    }
+
+    /** Пишем в лог только заметные по времени шаги: по нему видно, что именно тормозит. */
+    private static void logStep(String what, long startedNanos) {
+        long ms = (System.nanoTime() - startedNanos) / 1_000_000L;
+        if (ms >= 50L) BlackChannelMod.LOGGER.warn("BlackChannel: {} took {} ms", what, ms);
     }
 
     /** Земля в уже загруженном чанке: перебираем точки, не выходя за загруженные чанки. */
@@ -543,7 +566,7 @@ public final class Minigame {
             int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, sx, sz);
             BlockPos feet = new BlockPos(sx, y, sz);
             if (fallback == null) fallback = feet;
-            if (standable(level, feet)) return feet;
+            if (standableHere(level, feet)) return feet;
         }
         if (fallback != null) return fallback;
         int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
@@ -559,16 +582,31 @@ public final class Minigame {
         applyKeep(level, match, false);
     }
 
+    /** Загрузка чанка: только запоминаем контейнеры, мир здесь менять нельзя. */
     public static void onChunk(ServerLevel level, LevelChunk chunk) {
         MatchData match = MatchData.get(level.getServer());
         if (!match.active || !Str.dim(level).equals(match.dim)) return;
         for (BlockEntity be : chunk.getBlockEntities().values()) {
             if (!(be instanceof RandomizableContainerBlockEntity box)) continue;
             if (!isContainer(be.getBlockState().getBlock())) continue;
+            if (!match.inside(be.getBlockPos())) continue;
+            if (LOOT_QUEUE.size() >= LOOT_QUEUE_LIMIT) return;
+            LOOT_QUEUE.add(be.getBlockPos().immutable());
+        }
+    }
+
+    /** Разбор очереди сундуков: несколько штук за тик, уже в нормальном контексте тика. */
+    private static void lootStep(MatchData match, ServerLevel level) {
+        for (int i = 0; i < LOOT_PER_TICK && !LOOT_QUEUE.isEmpty(); i++) {
+            BlockPos pos = LOOT_QUEUE.poll();
+            if (pos == null) return;
+            if (!level.isLoaded(pos)) continue;
+            if (!(level.getBlockEntity(pos) instanceof RandomizableContainerBlockEntity box)) continue;
+            if (!isContainer(box.getBlockState().getBlock())) continue;
             try {
                 injectLoot(level, match, box);
             } catch (RuntimeException e) {
-                BlackChannelMod.LOGGER.warn("field chest skip at {}: {}", be.getBlockPos(), e.toString());
+                BlackChannelMod.LOGGER.warn("field chest skip at {}: {}", pos, e.toString());
             }
         }
     }
@@ -1335,7 +1373,9 @@ public final class Minigame {
         resetChunkWait();
         PVP_WARN.clear();
         nextDeployTick = 0;
-        nextCacheTick = 0;
+        nextCacheTick = level.getGameTime() + CACHE_START_DELAY;
+        LOOT_QUEUE.clear();
+        borderPending = true;
         // Генерацию чанков, постановку маяка и телепорт раскладываем по тикам:
         // десятки чанков в одном тике на обычном мире вешают сервер на минуты.
         for (int i = 0; i < keys.size(); i++) {
@@ -1361,9 +1401,11 @@ public final class Minigame {
                     player.sendSystemMessage(Component.translatable("blackchannel.minigame.pvp_free", Config.PVP_FREE_SECONDS.get()));
                 }
             }
-            DEPLOY.add(new PendingBase(code, spot[0], spot[1], yaw, members));
+            // Центр базы держим в середине чанка: постановка маяка не заденет соседние чанки
+            int bx = (spot[0] & ~15) + 5;
+            int bz = (spot[1] & ~15) + 5;
+            DEPLOY.add(new PendingBase(code, bx, bz, yaw, members));
         }
-        applyBorder(level, match, true);
         applyKeep(level, match, true);
         long startTick = level.getGameTime();
         match.pvpFreeUntil = startTick + Config.PVP_FREE_SECONDS.get() * 20L;
@@ -1398,8 +1440,10 @@ public final class Minigame {
         DEPLOY.clear();
         resetChunkWait();
         PVP_WARN.clear();
+        borderPending = false;
         nextDeployTick = 0;
         nextCacheTick = 0;
+        LOOT_QUEUE.clear();
         match.matchEndTick = 0;
         match.finalEndTick = 0;
         match.finalActive = false;
@@ -1668,6 +1712,16 @@ public final class Minigame {
         return new BlockPos(x, Math.max(level.getMinBuildHeight() + 1, y), z);
     }
 
+    /** То же, но только по загруженным чанкам: не провоцирует синхронную генерацию соседей. */
+    private static boolean standableHere(ServerLevel level, BlockPos feet) {
+        BlockPos ground = feet.below();
+        BlockPos head = feet.above();
+        if (level.getChunkSource().getChunkNow(feet.getX() >> 4, feet.getZ() >> 4) == null) return false;
+        if (level.getChunkSource().getChunkNow(ground.getX() >> 4, ground.getZ() >> 4) == null) return false;
+        if (level.getChunkSource().getChunkNow(head.getX() >> 4, head.getZ() >> 4) == null) return false;
+        return standable(level, feet);
+    }
+
     private static boolean standable(ServerLevel level, BlockPos feet) {
         BlockPos ground = feet.below();
         BlockPos head = feet.above();
@@ -1734,6 +1788,9 @@ public final class Minigame {
             int x = match.centerX + random.nextInt(half * 2 + 1) - half;
             int z = match.centerZ + random.nextInt(half * 2 + 1) - half;
             if (crowded(match, x, z, avoid)) continue;
+            // Ставим точку в середину своего чанка: иначе проверка земли дёргает соседние чанки
+            x = (x & ~15) + 2 + random.nextInt(12);
+            z = (z & ~15) + 2 + random.nextInt(12);
             positions.add(new BlockPos(x, match.centerY, z));
         }
         match.cachePositions = positions.toArray(new BlockPos[0]);
