@@ -274,7 +274,7 @@
   "screen.blackchannel.drain": "расход",
   "blackchannel.minigame.on": "идёт",
   "blackchannel.minigame.off": "нет",
-  "blackchannel.minigame.help": "/minigame center, center x y z, size 2500, team (меню команд), start, stop, status. size — от стены до стены. Команда выбирается в меню до старта. Граница не сужается.",
+  "blackchannel.minigame.help": "/minigame center, center x y z, size 2500, cache (схрон рядом), team (меню команд), start, stop, status. size — от стены до стены. Команда выбирается в меню до старта. Граница не сужается.",
   "blackchannel.minigame.status": "Катка: %s. Центр %s. Размер %s. Разрыв отрядов %s. Твой код %s. Без PvP ещё %s с. Схронов %s.",
   "blackchannel.minigame.need_player": "Только игрок.",
   "blackchannel.minigame.crew_set": "Команда: %s. Выбор — в меню /minigame team.",
@@ -353,5 +353,8 @@
   "blackchannel.minigame.coords_leak_header": "Пеленг: координаты игроков. Погрешность ±%s блоков.",
   "blackchannel.minigame.coords_leak": "%s: %s %s %s",
   "blackchannel.minigame.beacon_leak_header": "Точные координаты маяков отрядов:",
-  "blackchannel.minigame.ally_fire": "Свои не получают урона от своих."
+  "blackchannel.minigame.ally_fire": "Свои не получают урона от своих.",
+  "blackchannel.minigame.cache_ok": "Схрон рядом: %s %s %s. После катки он уберётся вместе с остальными.",
+  "blackchannel.minigame.cache_ok_free": "Схрон рядом: %s %s %s. Катка не идёт, поэтому в мире он останется.",
+  "blackchannel.minigame.cache_no_room": "Рядом нет свободного места под сундук. Отойди от стены или встань на ровное место."
 }

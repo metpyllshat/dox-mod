@@ -42,6 +42,7 @@ import net.minecraft.world.level.block.ChestBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
+import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.border.WorldBorder;
 import net.minecraft.world.level.chunk.ChunkStatus;
 import net.minecraft.world.level.chunk.LevelChunk;
@@ -145,6 +146,7 @@ public final class Minigame {
                 .then(Commands.literal("size").requires(Minigame::op)
                         .then(Commands.argument("blocks", IntegerArgumentType.integer(256, 20000))
                                 .executes(c -> size(c.getSource(), IntegerArgumentType.getInteger(c, "blocks")))))
+                .then(Commands.literal("cache").requires(Minigame::op).executes(c -> spawnCache(c.getSource())))
                 .then(Commands.literal("start").requires(Minigame::op).executes(c -> start(c.getSource())))
                 .then(Commands.literal("stop").requires(Minigame::op).executes(c -> stop(c.getSource()))));
     }
@@ -2016,6 +2018,78 @@ public final class Minigame {
         match.cachePositions = positions.toArray(new BlockPos[0]);
         match.cacheTotal = positions.size();
         match.cacheTick = 0;
+    }
+
+    /**
+     * /minigame cache: поставить случайный схрон рядом с игроком.
+     * В отличие от схронов катки сундук стоит открыто на земле: не надо копать, чтобы проверить.
+     */
+    private static int spawnCache(CommandSourceStack source) {
+        if (!(source.getEntity() instanceof ServerPlayer player)) {
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.need_player")));
+            return 0;
+        }
+        ServerLevel level = player.serverLevel();
+        MatchData match = MatchData.get(source.getServer());
+        RandomSource random = level.getRandom();
+        BlockPos spot = nearbyChestSpot(level, player, random);
+        if (spot == null) {
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.cache_no_room")));
+            return 0;
+        }
+        // Сундук развёрнут к игроку, чтобы сразу было видно, что он не декоративный
+        Direction facing = Direction.getNearest(
+                player.getX() - (spot.getX() + 0.5D), 0.0D, player.getZ() - (spot.getZ() + 0.5D));
+        level.setBlock(spot, Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, facing), 3);
+        if (!(level.getBlockEntity(spot) instanceof ChestBlockEntity chest)) {
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.cache_no_room")));
+            return 0;
+        }
+        fill(chest, random);
+        chest.setCustomName(Component.translatable("block.blackchannel.field_cache"));
+        chest.getPersistentData().putBoolean("bcLoot", true);
+        chest.setChanged();
+        // Внутри катки схрон попадёт в общую уборку, вне катки останется в мире
+        boolean tracked = match.active && Str.dim(level).equals(match.dim);
+        if (tracked) {
+            match.cacheChests.add(spot.immutable());
+            match.setDirty();
+        }
+        source.sendSuccess(() -> Msg.paint(tracked
+                ? Component.translatable("blackchannel.minigame.cache_ok", spot.getX(), spot.getY(), spot.getZ())
+                : Component.translatable("blackchannel.minigame.cache_ok_free", spot.getX(), spot.getY(), spot.getZ())), true);
+        return 1;
+    }
+
+    /** Ближайшее кольцо вокруг игрока, в котором помещается открытый сундук; точка берётся случайная. */
+    private static BlockPos nearbyChestSpot(ServerLevel level, ServerPlayer player, RandomSource random) {
+        BlockPos base = player.blockPosition();
+        for (int r = 2; r <= 6; r++) {
+            List<BlockPos> spots = new ArrayList<>();
+            for (int dx = -r; dx <= r; dx++) {
+                for (int dz = -r; dz <= r; dz++) {
+                    // Только край кольца: внутренние точки уже проверены на меньшем радиусе
+                    if (Math.max(Math.abs(dx), Math.abs(dz)) != r) continue;
+                    for (int dy = -2; dy <= 2; dy++) {
+                        BlockPos pos = new BlockPos(base.getX() + dx, base.getY() + dy, base.getZ() + dz);
+                        if (chestFits(level, pos)) spots.add(pos.immutable());
+                    }
+                }
+            }
+            if (!spots.isEmpty()) return spots.get(random.nextInt(spots.size()));
+        }
+        return null;
+    }
+
+    /** Место свободно, под ним твёрдая земля и нет воды или лавы. */
+    private static boolean chestFits(ServerLevel level, BlockPos pos) {
+        if (!level.isLoaded(pos)) return false;
+        BlockState state = level.getBlockState(pos);
+        if (!state.isAir() && !state.canBeReplaced()) return false;
+        if (!level.getFluidState(pos).isEmpty()) return false;
+        BlockPos ground = pos.below();
+        if (!level.getBlockState(ground).isFaceSturdy(level, ground, Direction.UP)) return false;
+        return level.getFluidState(ground).isEmpty();
     }
 
     private static boolean placeChest(ServerLevel level, MatchData match, BlockPos feet, RandomSource random) {

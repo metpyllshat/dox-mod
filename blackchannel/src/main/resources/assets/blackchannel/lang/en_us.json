@@ -274,7 +274,7 @@
   "screen.blackchannel.drain": "drain",
   "blackchannel.minigame.on": "live",
   "blackchannel.minigame.off": "off",
-  "blackchannel.minigame.help": "/minigame center, center x y z, size 2500, team (team menu), start, stop, status. size is wall to wall. Pick a team in the menu before the start. The border does not shrink.",
+  "blackchannel.minigame.help": "/minigame center, center x y z, size 2500, cache (a cache nearby), team (team menu), start, stop, status. size is wall to wall. Pick a team in the menu before the start. The border does not shrink.",
   "blackchannel.minigame.status": "Match: %s. Center %s. Size %s. Base gap %s. Your code %s. No PvP for %s s. Caches %s.",
   "blackchannel.minigame.need_player": "Player only.",
   "blackchannel.minigame.crew_set": "Team: %s. Pick it in /minigame team menu.",
@@ -353,5 +353,8 @@
   "blackchannel.minigame.coords_leak_header": "Bearing: player coordinates. Error ±%s blocks.",
   "blackchannel.minigame.coords_leak": "%s: %s %s %s",
   "blackchannel.minigame.beacon_leak_header": "Exact team beacon coordinates:",
-  "blackchannel.minigame.ally_fire": "Teammates take no damage from each other."
+  "blackchannel.minigame.ally_fire": "Teammates take no damage from each other.",
+  "blackchannel.minigame.cache_ok": "Cache nearby: %s %s %s. It will be cleaned up with the rest after the match.",
+  "blackchannel.minigame.cache_ok_free": "Cache nearby: %s %s %s. No match is running, so it stays in the world.",
+  "blackchannel.minigame.cache_no_room": "No free spot for a chest nearby. Step away from the wall or find flat ground."
 }
