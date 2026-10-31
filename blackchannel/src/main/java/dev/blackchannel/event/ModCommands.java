@@ -7,6 +7,7 @@ import dev.blackchannel.data.NetData;
 import dev.blackchannel.logic.Bridges;
 import dev.blackchannel.logic.Devices;
 import dev.blackchannel.logic.Minigame;
+import dev.blackchannel.logic.Msg;
 import dev.blackchannel.logic.SignalEnv;
 import dev.blackchannel.logic.Str;
 import net.minecraft.commands.CommandSourceStack;
@@ -26,7 +27,7 @@ public final class ModCommands {
                 .then(Commands.literal("help").executes(c -> help(c.getSource())))
                 .then(Commands.literal("status").executes(c -> status(c.getSource())))
                 .then(Commands.literal("hooks").executes(c -> {
-                    c.getSource().sendSuccess(() -> Component.literal(Bridges.hookSummary()), false);
+                    c.getSource().sendSuccess(() -> Msg.paint(Component.literal(Bridges.hookSummary())), false);
                     return 1;
                 }))
                 .then(Commands.literal("pulse").requires(s -> s.hasPermission(2))
@@ -43,7 +44,7 @@ public final class ModCommands {
     }
 
     private static int help(CommandSourceStack source) {
-        source.sendSuccess(() -> Component.translatable("blackchannel.cmd.help"), false);
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.cmd.help")), false);
         return 1;
     }
 
@@ -52,7 +53,7 @@ public final class ModCommands {
             ServerPlayer player = source.getPlayerOrException();
             NetData.Profile profile = NetData.get(player).profile(player.getUUID());
             SignalEnv.Link link = SignalEnv.link(player, profile);
-            source.sendSuccess(() -> Component.translatable("blackchannel.cmd.status",
+            source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.cmd.status",
                     profile.handle,
                     profile.lastName,
                     profile.crypto,
@@ -63,10 +64,10 @@ public final class ModCommands {
                     profile.airplane,
                     SignalEnv.emp(profile, player.getServer()),
                     SignalEnv.jammed(player.serverLevel(), player.blockPosition()),
-                    SignalEnv.faraday(player.serverLevel(), player.blockPosition())), false);
+                    SignalEnv.faraday(player.serverLevel(), player.blockPosition()))), false);
             return 1;
         } catch (Exception e) {
-            source.sendFailure(Component.translatable("blackchannel.cmd.no_player"));
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.cmd.no_player")));
             return 0;
         }
     }
@@ -75,7 +76,7 @@ public final class ModCommands {
         ServerLevel level = source.getLevel();
         BlockPos pos = BlockPos.containing(source.getPosition());
         BlackChannelAPI.pulse(level, pos, radius, 12);
-        source.sendSuccess(() -> Component.translatable("blackchannel.cmd.pulse", radius), true);
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.cmd.pulse", radius)), true);
         return 1;
     }
 
@@ -83,13 +84,13 @@ public final class ModCommands {
         NetData.Profile profile = NetData.get(player).profile(player.getUUID());
         profile.crypto = Math.min(5000, profile.crypto + amount);
         NetData.get(player).setDirty();
-        source.sendSuccess(() -> Component.translatable("blackchannel.cmd.give", player.getGameProfile().getName(), amount), true);
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.cmd.give", player.getGameProfile().getName(), amount)), true);
         return 1;
     }
 
     private static int reveal(CommandSourceStack source, ServerPlayer player) {
         NetData.Profile profile = NetData.get(player).profile(player.getUUID());
-        source.sendSuccess(() -> Component.translatable("blackchannel.cmd.reveal", player.getGameProfile().getName(), profile.handle, Str.dimShort(profile.lastDim), profile.lastX, profile.lastY, profile.lastZ), false);
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.cmd.reveal", player.getGameProfile().getName(), profile.handle, Str.dimShort(profile.lastDim), profile.lastX, profile.lastY, profile.lastZ)), false);
         return 1;
     }
 }

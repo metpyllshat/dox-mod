@@ -78,6 +78,11 @@ public final class Minigame {
     private static final long KILL_CREDIT_TICKS = 600L;
     /** Не спамим сообщением «PvP отключён» на каждый удар. */
     private static final Map<UUID, Long> PVP_WARN = new HashMap<>();
+    private static final Map<UUID, Long> ALLY_WARN = new HashMap<>();
+    // Схроны: 14 на карту 1000×1000 с четырьмя отрядами, дальше — линейно
+    private static final double CACHE_PER_TEAM = 3.5;
+    private static final int CACHE_MIN = 8;
+    private static final int CACHE_MAX = 56;
 
     private record LastHit(UUID attacker, long tick) {}
 
@@ -322,7 +327,7 @@ public final class Minigame {
             match.finalActive = true;
             match.setDirty();
             for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                player.sendSystemMessage(Component.translatable("blackchannel.minigame.final_start", Config.FINAL_DURATION_MINUTES.get()));
+                player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.final_start", Config.FINAL_DURATION_MINUTES.get())));
                 player.playNotifySound(net.minecraft.sounds.SoundEvents.RAID_HORN.value(), net.minecraft.sounds.SoundSource.MASTER, 1.0f, 1.0f);
             }
             // Убить всех downed игроков в финале
@@ -341,7 +346,7 @@ public final class Minigame {
                     player.removeEffect(MobEffects.BLINDNESS);
                     player.removeEffect(MobEffects.INVISIBILITY);
                     player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
-                    player.sendSystemMessage(Component.translatable("blackchannel.minigame.permanent_dead"));
+                    player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.permanent_dead")));
                     checkTeamElimination(match, match.playerCrew.getOrDefault(id, ""));
                 }
             }
@@ -368,7 +373,7 @@ public final class Minigame {
         int error = Math.max(8, (int) Math.round(0.10 * Math.max(2, match.size)));
         Component header = Component.translatable("blackchannel.minigame.coords_leak_header", error);
         for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
-            receiver.sendSystemMessage(header);
+            receiver.sendSystemMessage(Msg.paint(header));
             receiver.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.MASTER, 0.7f, 0.8f);
         }
         RandomSource random = level.getRandom();
@@ -382,7 +387,7 @@ public final class Minigame {
             Component line = Component.translatable("blackchannel.minigame.coords_leak",
                     target.getGameProfile().getName(), x, y, z);
             for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
-                receiver.sendSystemMessage(line);
+                receiver.sendSystemMessage(Msg.paint(line));
             }
         }
     }
@@ -391,7 +396,7 @@ public final class Minigame {
     private static void announceBeaconCoords(MinecraftServer server, MatchData match) {
         Component header = Component.translatable("blackchannel.minigame.beacon_leak_header");
         for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
-            receiver.sendSystemMessage(header);
+            receiver.sendSystemMessage(Msg.paint(header));
             receiver.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.MASTER, 0.9f, 0.5f);
         }
         for (Map.Entry<String, BlockPos> entry : match.teamBeacons.entrySet()) {
@@ -400,7 +405,7 @@ public final class Minigame {
             Component line = Component.translatable("blackchannel.minigame.beacon_coords",
                     teamLabel(server, entry.getKey()), pos.getX(), pos.getY(), pos.getZ());
             for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
-                receiver.sendSystemMessage(line);
+                receiver.sendSystemMessage(Msg.paint(line));
             }
         }
     }
@@ -446,6 +451,7 @@ public final class Minigame {
         DEPLOY.clear();
         resetChunkWait();
         PVP_WARN.clear();
+        ALLY_WARN.clear();
         borderPending = false;
         nextDeployTick = 0;
         nextCacheTick = 0;
@@ -475,9 +481,9 @@ public final class Minigame {
             player.removeEffect(MobEffects.INVISIBILITY);
             player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
             if (winnerLabel.isEmpty()) {
-                player.sendSystemMessage(Component.translatable("blackchannel.minigame.match_end_none"));
+                player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.match_end_none")));
             } else {
-                player.sendSystemMessage(Component.translatable("blackchannel.minigame.match_end", winnerLabel, winnerScore));
+                player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.match_end", winnerLabel, winnerScore)));
                 player.playNotifySound(SoundEvents.PLAYER_LEVELUP, SoundSource.MASTER, 1.0f, 1.2f);
             }
         }
@@ -521,7 +527,7 @@ public final class Minigame {
 
     private static void announceCaches(MinecraftServer server, MatchData match) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            player.sendSystemMessage(Component.translatable("blackchannel.minigame.caches_done", match.cacheTotal));
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.caches_done", match.cacheTotal)));
         }
     }
 
@@ -691,7 +697,7 @@ public final class Minigame {
                     kind = "beacon";
                 }
             } else if (bedPos != null) {
-                victim.sendSystemMessage(Component.translatable("blackchannel.minigame.bed_needs_beacon"));
+                victim.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.bed_needs_beacon")));
             }
         }
         if (respawn == null || kind.isEmpty()) {
@@ -720,14 +726,14 @@ public final class Minigame {
         victim.setForcedPose(Pose.SWIMMING);
         victim.setPose(Pose.SWIMMING);
         victim.addEffect(new MobEffectInstance(MobEffects.BLINDNESS, downedTicks + 40, 1, false, false));
-        victim.sendSystemMessage(Component.translatable("blackchannel.minigame.downed", downedTicks / 20));
-        victim.sendSystemMessage(Component.translatable("blackchannel.minigame.downed_help", downedTicks / 20));
-        victim.sendSystemMessage(Component.translatable("blackchannel.minigame.downed_seconds",
+        victim.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.downed", downedTicks / 20)));
+        victim.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.downed_help", downedTicks / 20)));
+        victim.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.downed_seconds",
                 downedTicks / 20,
-                Component.translatable(kind.equals("bed") ? "blackchannel.minigame.respawn_bed" : "blackchannel.minigame.respawn_beacon")));
-        victim.getServer().getPlayerList().broadcastSystemMessage(
+                Component.translatable(kind.equals("bed") ? "blackchannel.minigame.respawn_bed" : "blackchannel.minigame.respawn_beacon"))));
+        victim.getServer().getPlayerList().broadcastSystemMessage(Msg.paint(
                 Component.translatable("blackchannel.minigame.downed_announce",
-                        victim.getGameProfile().getName(), downedTicks / 20), false);
+                        victim.getGameProfile().getName(), downedTicks / 20)), false);
         match.setDirty();
         event.setCanceled(true);
     }
@@ -762,9 +768,9 @@ public final class Minigame {
         player.removeEffect(MobEffects.BLINDNESS);
         player.removeEffect(MobEffects.INVISIBILITY);
         player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
-        player.sendSystemMessage(Component.translatable("blackchannel.minigame.permanent_dead"));
-        player.getServer().getPlayerList().broadcastSystemMessage(
-                Component.translatable("blackchannel.minigame.permanent_dead_announce", player.getGameProfile().getName()), false);
+        player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.permanent_dead")));
+        player.getServer().getPlayerList().broadcastSystemMessage(Msg.paint(
+                Component.translatable("blackchannel.minigame.permanent_dead_announce", player.getGameProfile().getName())), false);
         checkTeamElimination(match, crew);
     }
 
@@ -791,8 +797,8 @@ public final class Minigame {
             assign(player, match, true);
             protect(player, player.serverLevel().getGameTime() + 100L);
         }
-        player.sendSystemMessage(Component.translatable("blackchannel.minigame.respawned",
-                Component.translatable(kind.equals("beacon") ? "blackchannel.minigame.respawn_beacon" : "blackchannel.minigame.respawn_bed")));
+        player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.respawned",
+                Component.translatable(kind.equals("beacon") ? "blackchannel.minigame.respawn_beacon" : "blackchannel.minigame.respawn_bed"))));
     }
 
     private static void awardKill(ServerPlayer killer, ServerPlayer victim, MatchData match) {
@@ -802,7 +808,7 @@ public final class Minigame {
         int pts = Config.SCORE_KILL.get();
         if (pts > 0) {
             match.addScore(killerCrew, pts);
-            killer.sendSystemMessage(Component.translatable("blackchannel.minigame.score_kill", pts));
+            killer.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.score_kill", pts)));
         }
     }
 
@@ -827,9 +833,15 @@ public final class Minigame {
             return;
         }
         long now = victim.serverLevel().getGameTime();
-        ServerPlayer attacker = event.getSource().getEntity() instanceof ServerPlayer sp && sp != victim ? sp : null;
+        ServerPlayer attacker = attackerOf(event.getSource(), victim);
         // Урон не от игрока (мобы, падение, огонь, лава) проходит всегда
         if (attacker == null) return;
+        // Своих не бьём ничем: ни мечом, ни стрелой, ни взрывом
+        if (allies(match, attacker, victim)) {
+            event.setCanceled(true);
+            warnAlly(attacker, now);
+            return;
+        }
         // Отсутствие PvP в начале матча: игрок по игроку не проходит вообще
         if (pvpBlocked(match, now)) {
             event.setCanceled(true);
@@ -882,9 +894,9 @@ public final class Minigame {
             match.reviveUsed.add(player.getUUID());
             // Встаёт там, где лежал, без переноса на базу
             reviveInPlace(player);
-            player.sendSystemMessage(Component.translatable("blackchannel.minigame.revived"));
-            player.getServer().getPlayerList().broadcastSystemMessage(
-                    Component.translatable("blackchannel.minigame.revived_announce", player.getGameProfile().getName()), false);
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.revived")));
+            player.getServer().getPlayerList().broadcastSystemMessage(Msg.paint(
+                    Component.translatable("blackchannel.minigame.revived_announce", player.getGameProfile().getName())), false);
             match.setDirty();
         }
     }
@@ -954,6 +966,12 @@ public final class Minigame {
         if (!(event.getTarget() instanceof ServerPlayer)) return;
         MatchData match = MatchData.get(attacker.getServer());
         long now = attacker.serverLevel().getGameTime();
+        // Свой не получает даже отбрасывания: замах не проходит
+        if (match.active && event.getTarget() instanceof ServerPlayer ally && allies(match, attacker, ally)) {
+            event.setCanceled(true);
+            warnAlly(attacker, now);
+            return;
+        }
         // Замах по игроку не проходит вовсе: ни урона, ни отбрасывания
         if (pvpBlocked(match, now)) {
             event.setCanceled(true);
@@ -966,6 +984,31 @@ public final class Minigame {
     }
 
     /** PvP запрещён в начале матча. */
+    /** Кто ударил: сам игрок или владелец стрелы, зелья, взрывчатки. */
+    private static ServerPlayer attackerOf(net.minecraft.world.damagesource.DamageSource source, ServerPlayer victim) {
+        if (source == null) return null;
+        net.minecraft.world.entity.Entity direct = source.getEntity();
+        if (direct instanceof ServerPlayer sp) return sp == victim ? null : sp;
+        if (direct instanceof net.minecraft.world.entity.projectile.Projectile shot
+                && shot.getOwner() instanceof ServerPlayer sp) return sp == victim ? null : sp;
+        return null;
+    }
+
+    /** Игроки в одном отряде: урон по своим не проходит (как friendlyFire false у ванильных команд). */
+    private static boolean allies(MatchData match, ServerPlayer a, ServerPlayer b) {
+        if (a == null || b == null || a == b || !match.active) return false;
+        String crewA = match.playerCrew.get(a.getUUID());
+        String crewB = match.playerCrew.get(b.getUUID());
+        return crewA != null && !crewA.isEmpty() && crewA.equals(crewB);
+    }
+
+    private static void warnAlly(ServerPlayer player, long now) {
+        Long last = ALLY_WARN.get(player.getUUID());
+        if (last != null && now - last < 60L) return;
+        ALLY_WARN.put(player.getUUID(), now);
+        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.minigame.ally_fire")), true);
+    }
+
     private static boolean pvpBlocked(MatchData match, long now) {
         return match.active && now < match.pvpFreeUntil;
     }
@@ -976,7 +1019,7 @@ public final class Minigame {
         if (last != null && now - last < 40L) return;
         PVP_WARN.put(player.getUUID(), now);
         long left = Math.max(0L, (match.pvpFreeUntil - now) / 20L);
-        player.displayClientMessage(Component.translatable("blackchannel.minigame.pvp_off", left), true);
+        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.minigame.pvp_off", left)), true);
     }
 
     public static void onRespawn(ServerPlayer player) {
@@ -997,8 +1040,8 @@ public final class Minigame {
         if (level != null && beaconValid(level, match, beacon) && bedValid(level, match, bed)) {
             BlockPos feet = findSafe(level, bed.getX(), bed.getZ(), player.getRandom());
             place(player, level, feet, player.getYRot());
-            player.sendSystemMessage(Component.translatable("blackchannel.minigame.respawned",
-                    Component.translatable("blackchannel.minigame.respawn_bed")));
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.respawned",
+                    Component.translatable("blackchannel.minigame.respawn_bed"))));
             return;
         }
         // Иначе — на точку старта
@@ -1046,7 +1089,7 @@ public final class Minigame {
         if (playerCrew.isEmpty() || !playerCrew.equals(targetCrew)) return;
         // Проверяем: уже использовал воскрешение?
         if (match.reviveUsed.contains(target.getUUID())) {
-            player.sendSystemMessage(Component.translatable("blackchannel.minigame.revive_already"));
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.revive_already")));
             return;
         }
         // Проверяем дистанцию
@@ -1056,8 +1099,8 @@ public final class Minigame {
         // Начинаем воскрешение
         long standTime = Config.REVIVE_STAND_SECONDS.get() * 20L;
         REVIVE.put(target.getUUID(), player.level().getGameTime() + standTime);
-        player.sendSystemMessage(Component.translatable("blackchannel.minigame.revive_stand", Config.REVIVE_STAND_SECONDS.get()));
-        target.sendSystemMessage(Component.translatable("blackchannel.minigame.revive_stand_target", player.getGameProfile().getName(), Config.REVIVE_STAND_SECONDS.get()));
+        player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.revive_stand", Config.REVIVE_STAND_SECONDS.get())));
+        target.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.revive_stand_target", player.getGameProfile().getName(), Config.REVIVE_STAND_SECONDS.get())));
     }
 
     public static void onUseBlock(PlayerInteractEvent.RightClickBlock event) {
@@ -1100,16 +1143,16 @@ public final class Minigame {
         Block block = event.getPlacedBlock().getBlock();
         if (block instanceof BedBlock) {
             match.setBed(player.getUUID(), event.getPos());
-            player.sendSystemMessage(Component.translatable("blackchannel.minigame.bed_placed"));
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.bed_placed")));
         }
         if (block == ModContent.BEACON.get()) {
             String crew = match.playerCrew.getOrDefault(player.getUUID(), "");
             if (!crew.isEmpty()) {
                 match.setBeacon(crew, event.getPos());
-                player.sendSystemMessage(Component.translatable("blackchannel.minigame.beacon_placed", crew));
-                level.getServer().getPlayerList().broadcastSystemMessage(
+                player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.beacon_placed", crew)));
+                level.getServer().getPlayerList().broadcastSystemMessage(Msg.paint(
                         Component.translatable("blackchannel.minigame.beacon_placed_announce",
-                                player.getGameProfile().getName(), crew), false);
+                                player.getGameProfile().getName(), crew)), false);
             }
         }
     }
@@ -1135,11 +1178,11 @@ public final class Minigame {
                     int pts = Config.SCORE_BED.get();
                     if (pts > 0) {
                         match.addScore(breakerCrew, pts);
-                        breaker.sendSystemMessage(Component.translatable("blackchannel.minigame.bed_destroyed", pts));
+                        breaker.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.bed_destroyed", pts)));
                     }
-                    level.getServer().getPlayerList().broadcastSystemMessage(
+                    level.getServer().getPlayerList().broadcastSystemMessage(Msg.paint(
                             Component.translatable("blackchannel.minigame.bed_destroyed_announce",
-                                    breaker.getGameProfile().getName(), colored(ownerCrew)), false);
+                                    breaker.getGameProfile().getName(), colored(ownerCrew))), false);
                 }
             }
         }
@@ -1154,15 +1197,15 @@ public final class Minigame {
                     int pts = Config.SCORE_BEACON.get();
                     if (pts > 0) {
                         match.addScore(breakerCrew, pts);
-                        breaker.sendSystemMessage(Component.translatable("blackchannel.minigame.beacon_destroyed", pts, colored(beaconCrew)));
+                        breaker.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.beacon_destroyed", pts, colored(beaconCrew))));
                     }
-                    level.getServer().getPlayerList().broadcastSystemMessage(
+                    level.getServer().getPlayerList().broadcastSystemMessage(Msg.paint(
                             Component.translatable("blackchannel.minigame.beacon_destroyed_announce",
-                                    breaker.getGameProfile().getName(), colored(beaconCrew)), false);
+                                    breaker.getGameProfile().getName(), colored(beaconCrew))), false);
                 } else {
                     // Нельзя сломать свой маяк
                     event.setCanceled(true);
-                    breaker.sendSystemMessage(Component.translatable("blackchannel.minigame.beacon_own"));
+                    breaker.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.beacon_own")));
                 }
             }
         }
@@ -1236,13 +1279,13 @@ public final class Minigame {
         BlockPos pos = context.getClickedPos();
         TrapData data = TrapData.get(player.getServer());
         if (data.at(Str.dim(level), pos) != null) {
-            player.displayClientMessage(Component.translatable("blackchannel.result.logger_full"), true);
+            player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.logger_full")), true);
             return;
         }
         ItemStack stack = context.getItemInHand();
         int charges = chargesOf(stack);
         if (charges <= 0) {
-            player.displayClientMessage(Component.translatable("blackchannel.result.logger_dead"), true);
+            player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.logger_dead")), true);
             return;
         }
         TrapData.Trap trap = new TrapData.Trap();
@@ -1255,7 +1298,7 @@ public final class Minigame {
         data.traps.add(trap);
         data.setDirty();
         if (!player.getAbilities().instabuild) stack.shrink(1);
-        player.displayClientMessage(Component.translatable("blackchannel.result.logger_set"), true);
+        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.logger_set")), true);
     }
 
     public static boolean scanBlock(ServerLevel level, BlockPos pos, UUID owner, List<UUID> seen) {
@@ -1283,7 +1326,7 @@ public final class Minigame {
     }
 
     private static int help(CommandSourceStack source) {
-        source.sendSuccess(() -> Component.translatable("blackchannel.minigame.help"), false);
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.help")), false);
         return 1;
     }
 
@@ -1299,15 +1342,17 @@ public final class Minigame {
         if (match.active && level != null) {
             pvpFree = Math.max(0, (match.pvpFreeUntil - level.getGameTime()) / 20L);
         }
+        int online = teamsOnline(source.getServer());
         int gap = match.active && match.spread > 0
                 ? match.spread
-                : minSpread(match, teamsOnline(source.getServer()));
+                : minSpread(match, online);
+        int caches = cacheCount(match, online);
         String center = match.centerSet ? match.centerX + " " + match.centerY + " " + match.centerZ : "-";
         String crewShown = crew;
         String state = match.active ? "on" : "off";
         long pvpLeft = pvpFree;
-        source.sendSuccess(() -> Component.translatable("blackchannel.minigame.status",
-                Component.translatable("blackchannel.minigame." + state), center, match.size, gap, crewShown, pvpLeft), false);
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.status",
+                Component.translatable("blackchannel.minigame." + state), center, match.size, gap, crewShown, pvpLeft, caches)), false);
         return 1;
     }
 
@@ -1328,7 +1373,7 @@ public final class Minigame {
 
     private static int openTeamMenu(CommandSourceStack source) {
         if (!(source.getEntity() instanceof ServerPlayer player)) {
-            source.sendFailure(Component.translatable("blackchannel.minigame.need_player"));
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.need_player")));
             return 0;
         }
         ModNetwork.open(player, "team");
@@ -1339,7 +1384,7 @@ public final class Minigame {
     public static void setTeam(ServerPlayer player, String teamId) {
         MatchData match = MatchData.get(player.getServer());
         if (match.active) {
-            player.displayClientMessage(Component.translatable("blackchannel.minigame.team_locked"), true);
+            player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.minigame.team_locked")), true);
             return;
         }
         Teams.Team team = Teams.byId(teamId);
@@ -1349,12 +1394,12 @@ public final class Minigame {
         profile.crew = team.id();
         data.setDirty();
         ModNetwork.syncFull(player);
-        player.displayClientMessage(Component.translatable("blackchannel.minigame.team_set", team.name()), true);
+        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.minigame.team_set", team.name())), true);
     }
 
     private static int centerHere(CommandSourceStack source) {
         if (!(source.getEntity() instanceof ServerPlayer player)) {
-            source.sendFailure(Component.translatable("blackchannel.minigame.need_player"));
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.need_player")));
             return 0;
         }
         BlockPos pos = player.blockPosition();
@@ -1368,7 +1413,7 @@ public final class Minigame {
     private static int setCenter(CommandSourceStack source, ServerLevel level, int x, int y, int z) {
         MatchData match = MatchData.get(source.getServer());
         if (match.active) {
-            source.sendFailure(Component.translatable("blackchannel.minigame.already"));
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.already")));
             return 0;
         }
         match.centerSet = true;
@@ -1377,20 +1422,22 @@ public final class Minigame {
         match.centerZ = z;
         match.dim = Str.dim(level);
         match.setDirty();
-        source.sendSuccess(() -> Component.translatable("blackchannel.minigame.center_set", x, y, z, Str.dimShort(match.dim)), true);
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.center_set", x, y, z, Str.dimShort(match.dim))), true);
         return 1;
     }
 
     private static int size(CommandSourceStack source, int blocks) {
         MatchData match = MatchData.get(source.getServer());
         if (match.active) {
-            source.sendFailure(Component.translatable("blackchannel.minigame.already"));
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.already")));
             return 0;
         }
         match.size = blocks;
         match.setDirty();
-        int gap = minSpread(match, teamsOnline(source.getServer()));
-        source.sendSuccess(() -> Component.translatable("blackchannel.minigame.size_set", blocks, gap), true);
+        int online = teamsOnline(source.getServer());
+        int gap = minSpread(match, online);
+        int caches = cacheCount(match, online);
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.size_set", blocks, gap, caches)), true);
         return 1;
     }
 
@@ -1398,16 +1445,16 @@ public final class Minigame {
         MinecraftServer server = source.getServer();
         MatchData match = MatchData.get(server);
         if (match.active) {
-            source.sendFailure(Component.translatable("blackchannel.minigame.already"));
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.already")));
             return 0;
         }
         if (!match.centerSet || match.size < 256) {
-            source.sendFailure(Component.translatable("blackchannel.minigame.need_setup"));
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.need_setup")));
             return 0;
         }
         ServerLevel level = Ops.levelOf(server, match.dim);
         if (level == null) {
-            source.sendFailure(Component.translatable("blackchannel.minigame.no_level"));
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.no_level")));
             return 0;
         }
         Map<String, List<ServerPlayer>> groups = new java.util.LinkedHashMap<>();
@@ -1445,6 +1492,7 @@ public final class Minigame {
         DEPLOY.clear();
         resetChunkWait();
         PVP_WARN.clear();
+        ALLY_WARN.clear();
         nextDeployTick = 0;
         nextCacheTick = level.getGameTime() + CACHE_START_DELAY;
         LOOT_QUEUE.clear();
@@ -1470,9 +1518,9 @@ public final class Minigame {
                 player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
                 player.setForcedPose(null);
                 player.setPose(Pose.STANDING);
-                player.sendSystemMessage(Component.translatable("blackchannel.minigame.started_you", teamLabel(server, code), gap));
+                player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.started_you", teamLabel(server, code), gap)));
                 if (Config.PVP_FREE_SECONDS.get() > 0) {
-                    player.sendSystemMessage(Component.translatable("blackchannel.minigame.pvp_free", Config.PVP_FREE_SECONDS.get()));
+                    player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.pvp_free", Config.PVP_FREE_SECONDS.get())));
                 }
             }
             // Центр базы держим в середине чанка: постановка маяка не заденет соседние чанки
@@ -1496,18 +1544,18 @@ public final class Minigame {
         match.setDirty();
         applyTeamNametags(server, match);
         initScoreboard(server, match);
-        source.sendSuccess(() -> Component.translatable("blackchannel.minigame.started", groups.size(), gap), true);
-        if (cramped) source.sendSuccess(() -> Component.translatable("blackchannel.minigame.cramped", gap), true);
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.started", groups.size(), gap)), true);
+        if (cramped) source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.cramped", gap)), true);
         announceMatchStart(server, match);
         prepareCaches(level, match);
-        source.sendSuccess(() -> Component.translatable("blackchannel.minigame.caches_prep", match.cacheTotal), true);
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.caches_prep", match.cacheTotal)), true);
         return 1;
     }
 
     private static int stop(CommandSourceStack source) {
         MatchData match = MatchData.get(source.getServer());
         if (!match.active) {
-            source.sendFailure(Component.translatable("blackchannel.minigame.not_running"));
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.not_running")));
             return 0;
         }
         ServerLevel level = Ops.levelOf(source.getServer(), match.dim);
@@ -1517,6 +1565,7 @@ public final class Minigame {
         DEPLOY.clear();
         resetChunkWait();
         PVP_WARN.clear();
+        ALLY_WARN.clear();
         borderPending = false;
         nextDeployTick = 0;
         nextCacheTick = 0;
@@ -1558,9 +1607,9 @@ public final class Minigame {
         match.ended = false;
         match.setDirty();
         for (ServerPlayer player : source.getServer().getPlayerList().getPlayers()) {
-            player.sendSystemMessage(Component.translatable("blackchannel.minigame.stopped"));
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.stopped")));
         }
-        source.sendSuccess(() -> Component.translatable("blackchannel.minigame.stopped"), true);
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.stopped")), true);
         return 1;
     }
 
@@ -1576,6 +1625,8 @@ public final class Minigame {
                 team = scoreboard.addPlayerTeam(teamTag(crew));
                 team.setNameTagVisibility(PlayerTeam.Visibility.ALWAYS);
                 team.setColor(scoreColor(match, crew));
+                // Ванильная же защита от дружественного огня внутри команды
+                team.setAllowFriendlyFire(false);
                 teams.put(crew, team);
             }
             scoreboard.addPlayerToTeam(player.getGameProfile().getName(), team);
@@ -1607,7 +1658,7 @@ public final class Minigame {
     private static void announceMatchStart(MinecraftServer server, MatchData match) {
         int minutes = Config.MATCH_DURATION_MINUTES.get();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            player.sendSystemMessage(Component.translatable("blackchannel.minigame.match_start", minutes));
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.match_start", minutes)));
         }
     }
 
@@ -1689,7 +1740,7 @@ public final class Minigame {
         if (!match.active) return;
         if (!match.inside(event.getPos())) return;
         match.setBed(player.getUUID(), event.getPos());
-        player.sendSystemMessage(Component.translatable("blackchannel.minigame.bed_placed"));
+        player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.bed_placed")));
         match.setDirty();
     }
 
@@ -1933,8 +1984,20 @@ public final class Minigame {
         match.keepSaved = false;
     }
 
+    /**
+     * Сколько схронов ставить. Эталон: карта 1000×1000 и 4 отряда — 14 схронов.
+     * Линейно по числу отрядов (за каждым отрядом стоят игроки) и по стороне карты:
+     * 2 отряда на 1000 — 7 (поднимаем до минимума 8), 8 отрядов на 1000 — 28,
+     * 4 отряда на 2500 — 35. Крайние значения — от 8 до 56 схронов.
+     */
+    public static int cacheCount(MatchData match, int teams) {
+        int side = Math.max(2, match.size);
+        double raw = CACHE_PER_TEAM * Math.max(1, teams) * side / 1000.0;
+        return Mth.clamp((int) Math.round(raw), CACHE_MIN, CACHE_MAX);
+    }
+
     private static void prepareCaches(ServerLevel level, MatchData match) {
-        int count = Mth.clamp(match.size / 120, 8, 40);
+        int count = cacheCount(match, Math.max(1, match.teamScores.size()));
         int avoid = Math.min(150, Math.max(32, match.size / 8));
         RandomSource random = level.getRandom();
         int half = Math.max(8, match.size / 2 - 8);
@@ -2086,11 +2149,11 @@ public final class Minigame {
         data.setDirty();
         ServerPlayer ownerPlayer = level.getServer().getPlayerList().getPlayer(owner);
         if (fresh && ownerPlayer != null) {
-            ownerPlayer.sendSystemMessage(Component.translatable(shown.isEmpty() ? "blackchannel.result.net_handle" : "blackchannel.result.net_named", other.handle, shown));
+            ownerPlayer.sendSystemMessage(Msg.paint(Component.translatable(shown.isEmpty() ? "blackchannel.result.net_handle" : "blackchannel.result.net_named", other.handle, shown)));
             ModNetwork.syncFull(ownerPlayer);
         }
         if (other.ids) {
-            player.sendSystemMessage(Component.translatable("blackchannel.chat.ids_logger", bearing(player, pos)));
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.ids_logger", bearing(player, pos))));
             player.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.value(), SoundSource.MASTER, 0.8f, 0.6f);
         }
         return left;

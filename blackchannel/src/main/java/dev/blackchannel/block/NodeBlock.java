@@ -1,6 +1,7 @@
 package dev.blackchannel.block;
 
 import dev.blackchannel.data.NetData;
+import dev.blackchannel.logic.Msg;
 import dev.blackchannel.logic.Ops;
 import dev.blackchannel.registry.ModContent;
 import net.minecraft.core.BlockPos;
@@ -90,11 +91,11 @@ public class NodeBlock extends BaseEntityBlock {
         if (!(level.getBlockEntity(pos) instanceof NodeBlockEntity be)) return InteractionResult.PASS;
         ItemStack held = player.getItemInHand(hand);
         if (be.tryFuel(player, held)) {
-            sp.displayClientMessage(Component.translatable("blackchannel.result.fuel", be.charge), true);
+            sp.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.fuel", be.charge)), true);
             return InteractionResult.CONSUME;
         }
         if (kind == Kind.RACK && (held.is(ModContent.PHONE.get()) || held.is(ModContent.LAPTOP.get())) && be.chargeDevice(held)) {
-            sp.displayClientMessage(Component.translatable("blackchannel.result.rack_charged_device"), true);
+            sp.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.rack_charged_device")), true);
             return InteractionResult.CONSUME;
         }
         if (kind == Kind.RACK) {
@@ -111,7 +112,7 @@ public class NodeBlock extends BaseEntityBlock {
             be.code = profile.crew;
             be.owner = sp.getUUID();
             be.setChanged();
-            sp.displayClientMessage(Component.translatable("blackchannel.result.beacon_set", be.code.isEmpty() ? "-" : be.code), true);
+            sp.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.beacon_set", be.code.isEmpty() ? "-" : be.code)), true);
             return InteractionResult.CONSUME;
         }
         if (kind == Kind.DECOY) {
@@ -120,10 +121,10 @@ public class NodeBlock extends BaseEntityBlock {
             be.owner = sp.getUUID();
             if (be.charge < 80) be.charge = 80;
             be.setChanged();
-            sp.displayClientMessage(Component.translatable("blackchannel.result.decoy_set", be.fakeHandle), true);
+            sp.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.decoy_set", be.fakeHandle)), true);
             return InteractionResult.CONSUME;
         }
-        sp.displayClientMessage(Component.translatable(be.powered() ? "blackchannel.result.node_on" : "blackchannel.result.node_off", be.charge), true);
+        sp.displayClientMessage(Msg.paint(Component.translatable(be.powered() ? "blackchannel.result.node_on" : "blackchannel.result.node_off", be.charge)), true);
         return InteractionResult.CONSUME;
     }
 }

@@ -243,7 +243,7 @@ public final class SignalEnv {
                     || player.containerMenu instanceof dev.blackchannel.menu.Menus.LaptopMenu) {
                 player.closeContainer();
             }
-            player.displayClientMessage(Component.translatable("blackchannel.chat.emp"), true);
+            player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.chat.emp")), true);
             player.playNotifySound(SoundEvents.BEACON_DEACTIVATE, SoundSource.MASTER, 0.8f, 0.5f);
             hit.add(player.getUUID());
             data.setDirty();
@@ -272,8 +272,8 @@ public final class SignalEnv {
             it.remove();
             ServerPlayer a = server.getPlayerList().getPlayer(strike.attacker);
             ServerPlayer t = server.getPlayerList().getPlayer(strike.target);
-            if (a != null) a.sendSystemMessage(Component.translatable("blackchannel.chat.strike_abort"));
-            if (t != null) t.sendSystemMessage(Component.translatable("blackchannel.chat.strike_abort"));
+            if (a != null) a.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.strike_abort")));
+            if (t != null) t.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.strike_abort")));
         }
         level.playSound(null, pos, SoundEvents.BEACON_DEACTIVATE, SoundSource.BLOCKS, 1.4f, 0.4f);
         level.sendParticles(net.minecraft.core.particles.ParticleTypes.ELECTRIC_SPARK, center.x, center.y, center.z, 40, radius / 6.0, 0.6, radius / 6.0, 0.05);

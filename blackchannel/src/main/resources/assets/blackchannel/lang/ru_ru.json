@@ -275,12 +275,12 @@
   "blackchannel.minigame.on": "идёт",
   "blackchannel.minigame.off": "нет",
   "blackchannel.minigame.help": "/minigame center, center x y z, size 2500, team (меню команд), start, stop, status. size — от стены до стены. Команда выбирается в меню до старта. Граница не сужается.",
-  "blackchannel.minigame.status": "Катка: %s. Центр %s. Размер %s. Разрыв отрядов %s. Твой код %s. Без PvP ещё %s с.",
+  "blackchannel.minigame.status": "Катка: %s. Центр %s. Размер %s. Разрыв отрядов %s. Твой код %s. Без PvP ещё %s с. Схронов %s.",
   "blackchannel.minigame.need_player": "Только игрок.",
   "blackchannel.minigame.crew_set": "Команда: %s. Выбор — в меню /minigame team.",
   "blackchannel.minigame.already": "Матч уже идёт.",
   "blackchannel.minigame.center_set": "Центр %s %s %s, измерение %s.",
-  "blackchannel.minigame.size_set": "Карта %s блоков от стены до стены. Разрыв отрядов около %s. До старта: /minigame crew код, иначе ты соло.",
+  "blackchannel.minigame.size_set": "Карта %s блоков от стены до стены. Разрыв отрядов около %s. Схронов %s. До старта: /minigame crew код, иначе ты соло.",
   "blackchannel.minigame.need_setup": "Сначала установите центр и размер.",
   "blackchannel.minigame.no_level": "Мир матча недоступен.",
   "blackchannel.minigame.started_you": "Команда: %s. Минимальная дистанция между базами: %s блоков.",
@@ -352,5 +352,6 @@
   "blackchannel.minigame.bed_needs_beacon": "Маяк отряда сломан: кровать больше не точка возрождения.",
   "blackchannel.minigame.coords_leak_header": "Пеленг: координаты игроков. Погрешность ±%s блоков.",
   "blackchannel.minigame.coords_leak": "%s: %s %s %s",
-  "blackchannel.minigame.beacon_leak_header": "Точные координаты маяков отрядов:"
+  "blackchannel.minigame.beacon_leak_header": "Точные координаты маяков отрядов:",
+  "blackchannel.minigame.ally_fire": "Свои не получают урона от своих."
 }
