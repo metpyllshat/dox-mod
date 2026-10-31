@@ -24,8 +24,6 @@ ITEMS = [
     "exploit_firmware",
     "zero_day",
     "false_contract",
-    "sticky_tracker",
-    "signal_scanner",
     "battery_cell",
     "burner_sim",
     "satellite_firmware",
@@ -133,12 +131,6 @@ def recipes():
     shaped("false_contract", ["PPP", "GIG", "PPP"], {
         "P": "minecraft:paper", "G": "minecraft:gold_nugget", "I": "minecraft:ink_sac",
     }, "blackchannel:false_contract", unlock="minecraft:ink_sac")
-    shaped("sticky_tracker", [" S ", "RIR", " S "], {
-        "S": "minecraft:slime_ball", "R": "minecraft:redstone", "I": "minecraft:iron_nugget",
-    }, "blackchannel:sticky_tracker", 2, unlock="minecraft:slime_ball")
-    shaped("signal_scanner", [" R ", "ICI", " R "], {
-        "R": "minecraft:redstone", "I": "minecraft:copper_ingot", "C": "minecraft:compass",
-    }, "blackchannel:signal_scanner", unlock="minecraft:compass")
     shaped("battery_cell", [" R ", "CCC", " R "], {
         "R": "minecraft:redstone", "C": "minecraft:copper_ingot",
     }, "blackchannel:battery_cell", 2)
@@ -208,8 +200,6 @@ def lang():
         "exploit_firmware": "Exploit Firmware",
         "zero_day": "Zero Day",
         "false_contract": "False Contract",
-        "sticky_tracker": "Sticky Tracker",
-        "signal_scanner": "Signal Scanner",
         "battery_cell": "Battery Cell",
         "burner_sim": "Burner SIM",
         "satellite_firmware": "Satellite Firmware",
@@ -232,8 +222,6 @@ def lang():
         "exploit_firmware": "Прошивка эксплойта",
         "zero_day": "Нулевой день",
         "false_contract": "Фальшивый контракт",
-        "sticky_tracker": "Липкий жучок",
-        "signal_scanner": "Сканер сигнала",
         "battery_cell": "Элемент питания",
         "burner_sim": "Одноразовая SIM",
         "satellite_firmware": "Спутниковая прошивка",

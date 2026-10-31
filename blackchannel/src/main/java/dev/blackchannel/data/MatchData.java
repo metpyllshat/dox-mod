@@ -2,6 +2,7 @@ package dev.blackchannel.data;
 
 import net.minecraft.core.BlockPos;
 import net.minecraft.nbt.CompoundTag;
+import net.minecraft.nbt.IntArrayTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.Tag;
 import net.minecraft.server.MinecraftServer;
@@ -35,6 +36,8 @@ public class MatchData extends SavedData {
     public boolean beaconsLeaked;
     /** Тик следующего аирдропа. Ноль — аирдропы выключены. */
     public long nextAirdropTick;
+    /** Бункеры баз: {x, z, нижний слой, верхний слой}. После матча их засыпаем. */
+    public final List<int[]> bunkers = new ArrayList<>();
     public boolean borderSaved;
     public double prevSize = 5.9999968E7;
     public double prevCenterX;
@@ -91,6 +94,11 @@ public class MatchData extends SavedData {
         data.playersLeaked = tag.getBoolean("leakPlayers");
         data.beaconsLeaked = tag.getBoolean("leakBeacons");
         data.nextAirdropTick = tag.getLong("nextAirdrop");
+        data.bunkers.clear();
+        for (Tag element : tag.getList("bunkers", Tag.TAG_INT_ARRAY)) {
+            int[] box = ((IntArrayTag) element).getAsIntArray();
+            if (box.length == 4) data.bunkers.add(box);
+        }
         data.borderSaved = tag.getBoolean("borderSaved");
         data.prevSize = tag.contains("prevSize") ? tag.getDouble("prevSize") : 5.9999968E7;
         data.prevCenterX = tag.getDouble("prevCx");
@@ -153,6 +161,9 @@ public class MatchData extends SavedData {
         tag.putBoolean("leakPlayers", playersLeaked);
         tag.putBoolean("leakBeacons", beaconsLeaked);
         tag.putLong("nextAirdrop", nextAirdropTick);
+        ListTag bunkers = new ListTag();
+        for (int[] box : this.bunkers) bunkers.add(new IntArrayTag(box));
+        tag.put("bunkers", bunkers);
         tag.putBoolean("borderSaved", borderSaved);
         tag.putDouble("prevSize", prevSize);
         tag.putDouble("prevCx", prevCenterX);

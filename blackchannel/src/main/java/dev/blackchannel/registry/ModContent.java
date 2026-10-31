@@ -9,7 +9,6 @@ import dev.blackchannel.item.DeviceItem;
 import dev.blackchannel.item.LoggerItem;
 import dev.blackchannel.item.TagItem;
 import dev.blackchannel.item.ToolItem;
-import dev.blackchannel.item.TrackerItem;
 import dev.blackchannel.menu.Menus;
 import net.minecraft.core.registries.Registries;
 import net.minecraft.network.chat.Component;
@@ -72,8 +71,6 @@ public final class ModContent {
     public static final RegistryObject<Item> EXPLOIT = tool("exploit_firmware", ToolItem.Kind.EXPLOIT, 16, Rarity.UNCOMMON);
     public static final RegistryObject<Item> ZERO = tool("zero_day", ToolItem.Kind.ZERO, 16, Rarity.EPIC);
     public static final RegistryObject<Item> CONTRACT = tool("false_contract", ToolItem.Kind.CONTRACT, 16, Rarity.UNCOMMON);
-    public static final RegistryObject<Item> TRACKER = ITEMS.register("sticky_tracker", () -> new TrackerItem(new Item.Properties().stacksTo(16)));
-    public static final RegistryObject<Item> SCANNER = tool("signal_scanner", ToolItem.Kind.SCANNER, 1, Rarity.UNCOMMON);
     public static final RegistryObject<Item> CELL = tool("battery_cell", ToolItem.Kind.CELL, 16, Rarity.COMMON);
     public static final RegistryObject<Item> SIM = tool("burner_sim", ToolItem.Kind.SIM, 16, Rarity.COMMON);
     public static final RegistryObject<Item> SAT = tool("satellite_firmware", ToolItem.Kind.SAT, 16, Rarity.RARE);

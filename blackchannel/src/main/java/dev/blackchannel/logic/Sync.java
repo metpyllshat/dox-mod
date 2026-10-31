@@ -302,8 +302,9 @@ public final class Sync {
                 if (crew.equals(playerCrew)) continue; // Свой маяк не показываем
                 BlockPos beaconPos = entry.getValue();
                 if (!Str.dim(player.level()).equals(match.dim)) continue;
-                long dx = player.blockPosition().getX() - beaconPos.getX();
-                long dz = player.blockPosition().getZ() - beaconPos.getZ();
+                // Знак как у остальных блипов: от игрока к цели, иначе метка зеркалится на радаре
+                long dx = beaconPos.getX() - player.blockPosition().getX();
+                long dz = beaconPos.getZ() - player.blockPosition().getZ();
                 int dist = (int) Math.sqrt(dx * dx + dz * dz);
                 if (dist <= beaconRange) {
                     CompoundTag c = new CompoundTag();
