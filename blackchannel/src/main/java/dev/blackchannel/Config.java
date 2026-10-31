@@ -59,11 +59,10 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue STRUCTURE_RADAR;
     public static final ForgeConfigSpec.IntValue STRUCTURE_PHONE;
     public static final ForgeConfigSpec.IntValue LOGGER_RADIUS;
-    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_COMMON;
-    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_UNCOMMON;
-    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_RARE;
-    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_EPIC;
-    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_LEGENDARY;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_EARLY;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_MID;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_LATE;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_AIRDROP;
     public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_DUNGEON;
     public static final ForgeConfigSpec.DoubleValue SWAT_POWER;
     public static final ForgeConfigSpec.DoubleValue FLOOD_VOLUME;
@@ -80,11 +79,13 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue REVIVE_STAND_SECONDS;
     public static final ForgeConfigSpec.IntValue DOWNED_DURATION_TICKS;
     public static final ForgeConfigSpec.IntValue PVP_FREE_SECONDS;
-    public static final ForgeConfigSpec.IntValue CACHE_COMMON_CHANCE;
-    public static final ForgeConfigSpec.IntValue CACHE_UNCOMMON_CHANCE;
-    public static final ForgeConfigSpec.IntValue CACHE_RARE_CHANCE;
-    public static final ForgeConfigSpec.IntValue CACHE_EPIC_CHANCE;
-    public static final ForgeConfigSpec.IntValue CACHE_LEGENDARY_CHANCE;
+    public static final ForgeConfigSpec.IntValue CACHE_ITEMS_MIN;
+    public static final ForgeConfigSpec.IntValue CACHE_ITEMS_MAX;
+    public static final ForgeConfigSpec.BooleanValue AIRDROP_ENABLED;
+    public static final ForgeConfigSpec.IntValue AIRDROP_FIRST_MINUTE;
+    public static final ForgeConfigSpec.IntValue AIRDROP_INTERVAL_MINUTES;
+    public static final ForgeConfigSpec.IntValue AIRDROP_ITEMS;
+    public static final ForgeConfigSpec.IntValue BEACON_SHIELD_SECONDS;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -188,61 +189,178 @@ public final class Config {
         b.pop();
 
         b.push("caches");
-        b.comment("Лут схронов. Строка: modid:item или modid:item*count или modid:item*min-max. Нет предмета в сборке — строка пропускается. Тёмной материи, антиматерии и стержня урана в списке нет: добавь сам, если хочешь.");
-        CACHE_COMMON = b.defineList("cacheCommon", List.of(
-                "minecraft:bread*4-8",
-                "minecraft:iron_ingot*3-8",
-                "minecraft:copper_ingot*3-8",
-                "minecraft:redstone*4-10",
-                "minecraft:coal*4-8",
-                "minecraft:gunpowder*2-5"
+        b.comment("Лут схронов. Строка: modid:item, modid:item*count или modid:item*min-max, "
+                + "плюс необязательный вес через собаку: modid:item*1-2@25. Вес по умолчанию 10. "
+                + "Нет предмета в сборке — строка пропускается. Лут выбирается по весам, а не по категориям: "
+                + "чем больше вес, тем чаще предмет. Радиоактивных изотопов (уран, плутоний, полоний) здесь нет: "
+                + "они убивают прямо в руках. Защита от радиации — хазмат и антидот, они есть в поздней волне.");
+        b.comment("Ранняя волна: первая треть матча. Стартовое снаряжение и пистолеты.");
+        CACHE_EARLY = b.defineList("cacheEarly", List.of(
+                "minecraft:bread*2-4@16",
+                "minecraft:iron_ingot*4-8@12",
+                "minecraft:gunpowder*4-8@8",
+                "minecraft:redstone*6-10@8",
+                "minecraft:sugar*3-6@6",
+                "superbwarfare:handgun_ammo*12-24@14",
+                "superbwarfare:rifle_ammo*10-20@12",
+                "superbwarfare:shotgun_ammo*6-12@9",
+                "superbwarfare:glock_17@9",
+                "superbwarfare:m_1911@7",
+                "superbwarfare:mp_443@7",
+                "superbwarfare:hunting_rifle@6",
+                "superbwarfare:sks@5",
+                "superbwarfare:armor_plate*1-2@9",
+                "superbwarfare:us_helmet_pasgt@5",
+                "superbwarfare:ge_helmet_m_35@5",
+                "superbwarfare:medical_kit@6",
+                "superbwarfare:heal_clip@7",
+                "superbwarfare:hand_grenade*1-2@6",
+                "superbwarfare:crowbar@4",
+                "superbwarfare:steel_ingot*2-4@7",
+                "electrodynamics:circuitbasic*2-4@7",
+                "electrodynamics:platesteel*2-4@7",
+                "blackchannel:field_laptop@5",
+                "blackchannel:trace_logger@5",
+                "blackchannel:battery_cell@5",
+                "blackchannel:burner_phone@4"
         ), o -> o instanceof String);
-        CACHE_UNCOMMON = b.defineList("cacheUncommon", List.of(
-                "blackchannel:field_laptop",
-                "blackchannel:signal_scanner",
-                "blackchannel:battery_cell",
-                "blackchannel:trace_logger",
-                "electrodynamics:circuitbasic",
-                "electrodynamics:platesteel*2-4"
+        b.comment("Средняя волна: вторая треть матча. Автоматы, броня, взрывчатка, РЭБ.");
+        CACHE_MID = b.defineList("cacheMid", List.of(
+                "superbwarfare:ak_47@7",
+                "superbwarfare:m_4@7",
+                "superbwarfare:mp_5@7",
+                "superbwarfare:hk_416@5",
+                "superbwarfare:vector@5",
+                "superbwarfare:m_870@5",
+                "superbwarfare:mosin_nagant@5",
+                "superbwarfare:rpk@4",
+                "superbwarfare:m_79@3",
+                "superbwarfare:rifle_ammo*20-40@14",
+                "superbwarfare:handgun_ammo*24-48@10",
+                "superbwarfare:shotgun_ammo*12-24@10",
+                "superbwarfare:sniper_ammo*6-12@6",
+                "superbwarfare:heavy_ammo*2-4@4",
+                "superbwarfare:armor_plate*2-3@10",
+                "superbwarfare:us_chest_iotv@5",
+                "superbwarfare:ru_chest_6b43@5",
+                "superbwarfare:ru_helmet_6b47@5",
+                "superbwarfare:medical_kit*1-2@8",
+                "superbwarfare:heal_clip*1-2@8",
+                "superbwarfare:field_doctor@3",
+                "superbwarfare:c4_bomb@3",
+                "superbwarfare:detonator@3",
+                "superbwarfare:rgo_grenade*1-2@6",
+                "superbwarfare:m18_smoke_grenade*1-2@5",
+                "superbwarfare:claymore_mine*1-2@4",
+                "ballistix:grenadeshrapnel*1-2@5",
+                "ballistix:grenadeincendiary*1-2@4",
+                "ballistix:grenadechemical*1-2@3",
+                "sbw_ew_addon:portable_jammer@4",
+                "sbw_ew_addon:direction_finder@4",
+                "sbw_ew_addon:radio@4",
+                "electrodynamics:nightvisiongoggles@3",
+                "electrodynamics:hydraulicboots@3",
+                "electrodynamics:servoleggings@3",
+                "electrodynamics:electricbaton@4",
+                "electrodynamics:combatarmorchestplate@4",
+                "electrodynamics:combatarmorhelmet@4",
+                "electrodynamics:mechanizedcrossbow@3",
+                "nuclearscience:iodinetablet@3",
+                "nuclearscience:antidote@3",
+                "nuclearscience:geigercounter@3",
+                "blackchannel:uplink_rack@3",
+                "blackchannel:sigint_dish@3",
+                "blackchannel:deep_vpn@3",
+                "blackchannel:signal_scanner@3"
         ), o -> o instanceof String);
-        CACHE_RARE = b.defineList("cacheRare", List.of(
-                "blackchannel:uplink_rack",
-                "blackchannel:sigint_dish",
-                "sbw_ew_addon:radio",
-                "sbw_ew_addon:portable_jammer",
-                "ballistix:missiletier1*1-2",
-                "ballistix:rocketlauncher"
+        b.comment("Поздняя волна: последняя треть матча. Снайперки, тяжёлое оружие, хазмат, топ-броня.");
+        CACHE_LATE = b.defineList("cacheLate", List.of(
+                "superbwarfare:awm@4",
+                "superbwarfare:svd@4",
+                "superbwarfare:m_60@4",
+                "superbwarfare:mk_14@4",
+                "superbwarfare:qbz_191@4",
+                "superbwarfare:aa_12@4",
+                "superbwarfare:m_2_hb@3",
+                "superbwarfare:minigun@2",
+                "superbwarfare:ntw_20@2",
+                "superbwarfare:rpg@3",
+                "superbwarfare:rpg_rocket_standard*1-2@5",
+                "superbwarfare:rpg_rocket_tbg*1-2@3",
+                "superbwarfare:sniper_ammo*10-20@8",
+                "superbwarfare:heavy_ammo*4-8@6",
+                "superbwarfare:thermal_imaging_goggles@4",
+                "superbwarfare:parachute@4",
+                "superbwarfare:repair_tool@5",
+                "superbwarfare:armor_plate*3-4@8",
+                "nuclearscience:hazmathelmet@4",
+                "nuclearscience:hazmatplate@4",
+                "nuclearscience:hazmatlegs@4",
+                "nuclearscience:hazmatboots@4",
+                "nuclearscience:reinforcedhazmathelmet@2",
+                "nuclearscience:reinforcedhazmatplate@2",
+                "electrodynamics:compositearmorchestplate@3",
+                "electrodynamics:compositearmorhelmet@3",
+                "electrodynamics:compositearmorleggings@3",
+                "electrodynamics:compositearmorboots@3",
+                "electrodynamics:jetpack@2",
+                "electrodynamics:railgunkinetic@2",
+                "electrodynamics:seismicscanner@3",
+                "electrodynamics:circuitadvanced*2-4@6",
+                "ballistix:rocketlauncher@3",
+                "ballistix:missiletier1*1-2@3",
+                "ballistix:defuser@3",
+                "sbw_ew_addon:electromagnetic_gun@2",
+                "sbw_ew_addon:advanced_drone@2",
+                "minecraft:netherite_ingot@2",
+                "minecraft:diamond_block@2",
+                "minecraft:enchanted_golden_apple@1",
+                "blackchannel:satellite_firmware@2",
+                "blackchannel:deep_vpn@4"
         ), o -> o instanceof String);
-        CACHE_EPIC = b.defineList("cacheEpic", List.of(
-                "minecraft:diamond*2-5",
-                "minecraft:emerald*3-6",
-                "minecraft:netherite_scrap*1-2",
-                "minecraft:golden_apple*1-2",
-                "electrodynamics:circuitadvanced*1-2",
-                "ballistix:missiletier2*1-2",
-                "blackchannel:satellite_firmware"
+        b.comment("Аирдроп: сбрасывается по расписанию в случайную точку карты, координаты видят все. Только верхушка лута.");
+        CACHE_AIRDROP = b.defineList("cacheAirdrop", List.of(
+                "superbwarfare:awm@6",
+                "superbwarfare:minigun@4",
+                "superbwarfare:ntw_20@4",
+                "superbwarfare:rpg@5",
+                "superbwarfare:rpg_rocket_tbg*2-3@6",
+                "superbwarfare:thermal_imaging_goggles@6",
+                "superbwarfare:medical_kit*2-3@8",
+                "superbwarfare:armor_plate*3-5@8",
+                "electrodynamics:jetpack@4",
+                "electrodynamics:railgunplasma@3",
+                "electrodynamics:compositearmorchestplate@5",
+                "nuclearscience:reinforcedhazmatplate@4",
+                "nuclearscience:reinforcedhazmathelmet@4",
+                "ballistix:missiletier2*1-2@4",
+                "ballistix:rocketlauncher@4",
+                "sbw_ew_addon:electromagnetic_gun@3",
+                "sbw_ew_addon:advanced_drone@3",
+                "minecraft:netherite_ingot*1-2@3",
+                "minecraft:enchanted_golden_apple@3",
+                "minecraft:elytra@2",
+                "blackchannel:satellite_firmware@4",
+                "blackchannel:deep_vpn@5"
         ), o -> o instanceof String);
-        CACHE_LEGENDARY = b.defineList("cacheLegendary", List.of(
-                "minecraft:netherite_ingot*1-2",
-                "minecraft:diamond_block",
-                "minecraft:enchanted_golden_apple",
-                "minecraft:elytra",
-                "electrodynamics:circuitelite",
-                "blackchannel:deep_vpn"
-        ), o -> o instanceof String);
+        b.comment("Лут в чужие сундуки и данжи внутри зоны: верстается отдельно от схронов, формат строк тот же.");
         CACHE_DUNGEON = b.defineList("cacheDungeon", List.of(
-                "minecraft:iron_ingot*2-6",
-                "minecraft:redstone*2-8",
-                "minecraft:bread*1-4",
-                "blackchannel:battery_cell",
-                "minecraft:gunpowder*1-3"
+                "minecraft:bread*1-4@12",
+                "minecraft:iron_ingot*2-6@10",
+                "minecraft:redstone*2-8@8",
+                "minecraft:gunpowder*1-3@8",
+                "blackchannel:battery_cell@6",
+                "superbwarfare:handgun_ammo*6-12@8",
+                "superbwarfare:rifle_ammo*6-12@8"
         ), o -> o instanceof String);
-        b.comment("Шансы категорий лута в схронах и сундуках в зоне, в процентах. Каждая категория проверяется отдельно: обычная при 100 попадает всегда, редкая при 8 — примерно в одном сундуке из двенадцати, эпик при 3 и легендарка при 1 — совсем редко.");
-        CACHE_COMMON_CHANCE = b.defineInRange("cacheCommonChance", 100, 0, 100);
-        CACHE_UNCOMMON_CHANCE = b.defineInRange("cacheUncommonChance", 25, 0, 100);
-        CACHE_RARE_CHANCE = b.defineInRange("cacheRareChance", 8, 0, 100);
-        CACHE_EPIC_CHANCE = b.defineInRange("cacheEpicChance", 3, 0, 100);
-        CACHE_LEGENDARY_CHANCE = b.defineInRange("cacheLegendaryChance", 1, 0, 100);
+        b.comment("Сколько предметов выпадает в одном схроне: случайное число от минимума до максимума.");
+        CACHE_ITEMS_MIN = b.defineInRange("cacheItemsMin", 3, 1, 12);
+        CACHE_ITEMS_MAX = b.defineInRange("cacheItemsMax", 6, 1, 12);
+        b.comment("Аирдропы: сброс в случайную точку карты с координатами для всех. Первый — через airDropFirstMinute минут, дальше каждые airDropIntervalMinutes.");
+        AIRDROP_ENABLED = b.define("airdropEnabled", true);
+        AIRDROP_FIRST_MINUTE = b.defineInRange("airdropFirstMinute", 15, 1, 180);
+        AIRDROP_INTERVAL_MINUTES = b.defineInRange("airdropIntervalMinutes", 20, 5, 180);
+        AIRDROP_ITEMS = b.defineInRange("airdropItems", 5, 1, 12);
         b.pop();
 
         b.push("world");
@@ -260,6 +378,8 @@ public final class Config {
         SCORE_BEACON = b.defineInRange("scoreBeacon", 2, 0, 100);
         REVIVE_STAND_SECONDS = b.defineInRange("reviveStandSeconds", 5, 1, 30);
         DOWNED_DURATION_TICKS = b.defineInRange("downedDurationTicks", 200, 40, 1200);
+        b.comment("Сколько секунд от старта маяк отряда нельзя сломать: он стоит в бункере под землёй, а это защита от раннего набега. 0 — без щита.");
+        BEACON_SHIELD_SECONDS = b.defineInRange("beaconShieldSeconds", 600, 0, 7200);
         b.pop();
 
         SPEC = b.build();

@@ -58,7 +58,10 @@ public final class GameEvents {
 
     @SubscribeEvent
     public static void explode(ExplosionEvent.Detonate event) {
-        if (!(event.getLevel() instanceof ServerLevel level) || !Config.HOOK_EMP.get()) return;
+        if (!(event.getLevel() instanceof ServerLevel level)) return;
+        // Щит маяка: в первые минуты взрыв его не снимает
+        Minigame.onExplode(event);
+        if (!Config.HOOK_EMP.get()) return;
         Entity exploder = event.getExplosion().getExploder();
         if (exploder == null) return;
         if (!exploder.getClass().getName().toLowerCase(Locale.ROOT).contains("emp")) return;

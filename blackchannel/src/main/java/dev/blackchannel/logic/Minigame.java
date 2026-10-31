@@ -39,6 +39,8 @@ import net.minecraft.world.level.block.BedBlock;
 import net.minecraft.world.level.block.Block;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.ChestBlock;
+import net.minecraft.world.level.block.LadderBlock;
+import net.minecraft.world.level.block.TrapDoorBlock;
 import net.minecraft.world.level.block.entity.BlockEntity;
 import net.minecraft.world.level.block.entity.ChestBlockEntity;
 import net.minecraft.world.level.block.entity.RandomizableContainerBlockEntity;
@@ -80,6 +82,7 @@ public final class Minigame {
     /** Не спамим сообщением «PvP отключён» на каждый удар. */
     private static final Map<UUID, Long> PVP_WARN = new HashMap<>();
     private static final Map<UUID, Long> ALLY_WARN = new HashMap<>();
+    private static final Map<String, Long> BEACON_ALERT = new HashMap<>();
     // Схроны: 14 на карту 1000×1000 с четырьмя отрядами, дальше — линейно
     private static final double CACHE_PER_TEAM = 3.5;
     private static final int CACHE_MIN = 8;
@@ -318,6 +321,12 @@ public final class Minigame {
             match.beaconsLeaked = true;
             match.setDirty();
             announceBeaconCoords(server, match);
+        }
+        // Аирдропы: первый через airDropFirstMinute, дальше по интервалу
+        if (Config.AIRDROP_ENABLED.get() && match.nextAirdropTick > 0L && now >= match.nextAirdropTick) {
+            dropAirdrop(server, match, level);
+            match.nextAirdropTick = now + Config.AIRDROP_INTERVAL_MINUTES.get() * 1200L;
+            match.setDirty();
         }
         // Проверка окончания матча
         if (match.finalActive && now >= match.finalEndTick) {
@@ -567,6 +576,113 @@ public final class Minigame {
         chunkWaitZ = Integer.MIN_VALUE;
     }
 
+    private record Bunker(BlockPos beacon, BlockPos hatch) {}
+
+    /**
+     * Маяк в бункере: зал 5×5×3 под землёй, вокруг кирпичная коробка, чтобы зал не залило
+     * и не засыпало, вход — шахта с лестницей и железный люк на поверхности.
+     * Сверху видно только люк, поэтому найти чужой маяк с радара или с дороги нельзя.
+     */
+    private static Bunker buildBunker(ServerLevel level, BlockPos surface) {
+        int cx = surface.getX();
+        int cz = surface.getZ();
+        int top = surface.getY();
+        int floorY = Math.max(level.getMinBuildHeight() + 8, top - 7);
+        BlockState brick = Blocks.STONE_BRICKS.defaultBlockState();
+        // Коробка: пол, стены и потолок
+        for (int x = cx - 3; x <= cx + 3; x++) {
+            for (int z = cz - 3; z <= cz + 3; z++) {
+                for (int y = floorY; y <= floorY + 4; y++) {
+                    level.setBlock(new BlockPos(x, y, z), brick, 2);
+                }
+            }
+        }
+        // Внутри — воздух
+        for (int x = cx - 2; x <= cx + 2; x++) {
+            for (int z = cz - 2; z <= cz + 2; z++) {
+                for (int y = floorY + 1; y <= floorY + 3; y++) {
+                    level.setBlock(new BlockPos(x, y, z), Blocks.AIR.defaultBlockState(), 2);
+                }
+            }
+        }
+        // Шахта в углу зала: стена под лестницу, сама лестница и люк на поверхности
+        int sx = cx - 2;
+        int sz = cz - 2;
+        for (int y = floorY + 1; y <= top - 2; y++) {
+            level.setBlock(new BlockPos(sx - 1, y, sz), brick, 2);
+            level.setBlock(new BlockPos(sx, y, sz), Blocks.LADDER.defaultBlockState()
+                    .setValue(LadderBlock.FACING, Direction.EAST), 2);
+        }
+        BlockPos hatch = new BlockPos(sx, top - 1, sz);
+        level.setBlock(hatch, Blocks.IRON_TRAPDOOR.defaultBlockState()
+                .setValue(TrapDoorBlock.FACING, Direction.NORTH), 3);
+        return new Bunker(new BlockPos(cx, floorY + 1, cz), hatch);
+    }
+
+    /** Сколько секунд щита у маяка осталось. Ноль — щит кончился или выключен. */
+    private static long beaconShieldLeft(MatchData match, long now) {
+        int seconds = Config.BEACON_SHIELD_SECONDS.get();
+        if (seconds <= 0 || !match.active) return 0L;
+        long until = match.matchStartTick + seconds * 20L;
+        return Math.max(0L, (until - now + 19L) / 20L);
+    }
+
+    /** Своих предупреждаем, что маяк ковыряют: без этого щит выглядит как неуязвимость без причины. */
+    private static void warnBeaconAttack(MinecraftServer server, MatchData match, String crew, long now) {
+        Long last = BEACON_ALERT.get(crew);
+        if (last != null && now - last < 600L) return;
+        BEACON_ALERT.put(crew, now);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            if (!crew.equals(match.playerCrew.getOrDefault(player.getUUID(), ""))) continue;
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.beacon_under_attack")));
+            player.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.value(), SoundSource.MASTER, 1.0f, 0.6f);
+        }
+    }
+
+    /** Взрывы не должны снимать щит с маяка в первые минуты. */
+    public static void onExplode(net.minecraftforge.event.level.ExplosionEvent.Detonate event) {
+        if (!(event.getLevel() instanceof ServerLevel level)) return;
+        MatchData match = MatchData.get(level.getServer());
+        if (!match.active) return;
+        if (beaconShieldLeft(match, level.getGameTime()) <= 0) return;
+        for (BlockPos pos : match.teamBeacons.values()) {
+            if (pos != null) event.getAffectedBlocks().remove(pos);
+        }
+    }
+
+    /** Аирдроп: открытый сундук с верхушкой лута в случайной точке карты, координаты видят все. */
+    private static void dropAirdrop(MinecraftServer server, MatchData match, ServerLevel level) {
+        RandomSource random = level.getRandom();
+        int half = Math.max(32, match.size / 2 - 32);
+        BlockPos spot = null;
+        for (int attempt = 0; attempt < 24; attempt++) {
+            int x = match.centerX + random.nextInt(half * 2 + 1) - half;
+            int z = match.centerZ + random.nextInt(half * 2 + 1) - half;
+            BlockPos feet = loadedGround(level, x, z, random);
+            if (chestFits(level, feet)) {
+                spot = feet;
+                break;
+            }
+        }
+        if (spot == null) return;
+        level.setBlock(spot, Blocks.CHEST.defaultBlockState()
+                .setValue(ChestBlock.FACING, Direction.from2DDataValue(random.nextInt(4))), 3);
+        if (!(level.getBlockEntity(spot) instanceof ChestBlockEntity chest)) return;
+        addStacks(chest, rollLoot(Config.CACHE_AIRDROP.get(), Config.AIRDROP_ITEMS.get(), random));
+        chest.setCustomName(Component.translatable("block.blackchannel.field_cache"));
+        chest.getPersistentData().putBoolean("bcLoot", true);
+        chest.setChanged();
+        match.cacheChests.add(spot.immutable());
+        match.setDirty();
+        Component header = Component.translatable("blackchannel.minigame.airdrop_header");
+        Component line = Component.translatable("blackchannel.minigame.airdrop_at", spot.getX(), spot.getY(), spot.getZ());
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            player.sendSystemMessage(Msg.paint(header));
+            player.sendSystemMessage(Msg.paint(line));
+            player.playNotifySound(SoundEvents.BEACON_ACTIVATE, SoundSource.MASTER, 1.0f, 1.0f);
+        }
+    }
+
     /** Одна база за тик: поставить маяк и высадить её игроков. */
     private static void deployStep(MinecraftServer server, MatchData match, ServerLevel level) {
         if (level.getGameTime() < nextDeployTick) return;
@@ -578,8 +694,10 @@ public final class Minigame {
         long started = System.nanoTime();
         if (status == CHUNK_FAIL) level.getChunk(base.x() >> 4, base.z() >> 4);
         BlockPos feet = loadedGround(level, base.x(), base.z(), level.getRandom());
-        level.setBlock(feet, ModContent.BEACON.get().defaultBlockState(), 3);
-        match.setBeacon(base.crew(), feet);
+        // Маяк больше не стоит открыто на поверхности: бункер под базой и люк на земле
+        Bunker bunker = buildBunker(level, feet);
+        level.setBlock(bunker.beacon(), ModContent.BEACON.get().defaultBlockState(), 3);
+        match.setBeacon(base.crew(), bunker.beacon());
         for (UUID id : base.players()) {
             ServerPlayer player = server.getPlayerList().getPlayer(id);
             if (player == null) continue;
@@ -590,6 +708,8 @@ public final class Minigame {
             player.setPose(Pose.STANDING);
             place(player, level, spot, base.yaw());
             kit(player, match);
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.bunker_hint",
+                    bunker.hatch().getX(), bunker.hatch().getY(), bunker.hatch().getZ())));
         }
         match.setDirty();
         DEPLOY.remove(0);
@@ -1195,6 +1315,15 @@ public final class Minigame {
             if (beaconCrew != null) {
                 String breakerCrew = match.playerCrew.getOrDefault(breaker.getUUID(), "");
                 if (!breakerCrew.equals(beaconCrew)) {
+                    // Первые beaconShieldSeconds секунд маяк не ломается: он ещё в бункере, но щит честнее
+                    long shieldLeft = beaconShieldLeft(match, level.getGameTime());
+                    if (shieldLeft > 0L) {
+                        event.setCanceled(true);
+                        breaker.sendSystemMessage(Msg.paint(Component.translatable(
+                                "blackchannel.minigame.beacon_shield_left", shieldLeft)));
+                        warnBeaconAttack(level.getServer(), match, beaconCrew, level.getGameTime());
+                        return;
+                    }
                     match.setBeacon(beaconCrew, null);
                     int pts = Config.SCORE_BEACON.get();
                     if (pts > 0) {
@@ -1536,6 +1665,9 @@ public final class Minigame {
         match.playersLeaked = false;
         match.beaconsLeaked = false;
         match.pvpFreeUntil = startTick + Config.PVP_FREE_SECONDS.get() * 20L;
+        match.nextAirdropTick = Config.AIRDROP_ENABLED.get()
+                ? startTick + Config.AIRDROP_FIRST_MINUTE.get() * 1200L
+                : 0L;
         long matchDuration = Config.MATCH_DURATION_MINUTES.get() * 60L * 20L;
         long finalDuration = Config.FINAL_DURATION_MINUTES.get() * 60L * 20L;
         match.matchEndTick = startTick + matchDuration;
@@ -1574,6 +1706,7 @@ public final class Minigame {
         LOOT_QUEUE.clear();
         match.matchEndTick = 0;
         match.finalEndTick = 0;
+        match.nextAirdropTick = 0;
         match.finalActive = false;
         match.drops.clear();
         match.anchors.clear();
@@ -2045,7 +2178,7 @@ public final class Minigame {
             source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.cache_no_room")));
             return 0;
         }
-        fill(chest, random);
+        fill(chest, random, wavePool(match, level.getGameTime()));
         chest.setCustomName(Component.translatable("block.blackchannel.field_cache"));
         chest.getPersistentData().putBoolean("bcLoot", true);
         chest.setChanged();
@@ -2099,7 +2232,7 @@ public final class Minigame {
         level.setBlock(chestPos, Blocks.CHEST.defaultBlockState().setValue(ChestBlock.FACING, facing), 3);
         level.setBlock(feet, Blocks.COARSE_DIRT.defaultBlockState(), 3);
         if (!(level.getBlockEntity(chestPos) instanceof ChestBlockEntity chest)) return false;
-        fill(chest, random);
+        fill(chest, random, wavePool(match, level.getGameTime()));
         chest.setCustomName(Component.translatable("block.blackchannel.field_cache"));
         chest.getPersistentData().putBoolean("bcLoot", true);
         chest.setChanged();
@@ -2117,7 +2250,7 @@ public final class Minigame {
         if (box.getPersistentData().getBoolean("bcLoot")) return;
         if (!match.inside(box.getBlockPos())) return;
         RandomSource random = level.getRandom();
-        List<ItemStack> stacks = cacheStacks(random);
+        List<ItemStack> stacks = rollLoot(Config.CACHE_DUNGEON.get(), 3 + random.nextInt(3), random);
         if (stacks.isEmpty()) return;
         CompoundTag saved = box.saveWithoutMetadata();
         // 1.20.1 не отдаёт id таблицы методом. Он лежит в теге, пока сундук не открыли.
@@ -2126,48 +2259,42 @@ public final class Minigame {
             box.unpackLootTable(null);
             // Ванильный лут заменяется, иначе наши вещи просто дописываются в пустые слоты
             box.clearContent();
-            addConfigured(stacks, Config.CACHE_DUNGEON.get(), random);
         }
         addStacks(box, stacks);
         box.getPersistentData().putBoolean("bcLoot", true);
         box.setChanged();
     }
 
-    private static void fill(ChestBlockEntity chest, RandomSource random) {
-        List<ItemStack> stacks = cacheStacks(random);
-        addStacks(chest, stacks);
+    /** Один предмет пула: сколько выдать и с каким весом он попадается. */
+    private record LootEntry(Item item, int min, int max, int weight) {}
+
+    /** Пул по волне матча: первая треть — ранняя, вторая — средняя, дальше поздняя. */
+    private static List<? extends String> wavePool(MatchData match, long now) {
+        if (!match.active || match.matchEndTick <= match.matchStartTick) return Config.CACHE_MID.get();
+        long length = match.matchEndTick - match.matchStartTick;
+        long elapsed = Math.max(0L, now - match.matchStartTick);
+        if (elapsed * 3L < length) return Config.CACHE_EARLY.get();
+        if (elapsed * 3L < length * 2L) return Config.CACHE_MID.get();
+        return Config.CACHE_LATE.get();
     }
 
-    /** Категории лута проверяются независимо, шансы — в конфиге. */
-    private static List<ItemStack> cacheStacks(RandomSource random) {
-        List<ItemStack> stacks = new ArrayList<>();
-        if (chance(random, Config.CACHE_COMMON_CHANCE.get())) addConfigured(stacks, Config.CACHE_COMMON.get(), random);
-        if (chance(random, Config.CACHE_UNCOMMON_CHANCE.get())) addConfigured(stacks, Config.CACHE_UNCOMMON.get(), random);
-        if (chance(random, Config.CACHE_RARE_CHANCE.get())) addConfigured(stacks, Config.CACHE_RARE.get(), random);
-        if (chance(random, Config.CACHE_EPIC_CHANCE.get())) addConfigured(stacks, Config.CACHE_EPIC.get(), random);
-        if (chance(random, Config.CACHE_LEGENDARY_CHANCE.get())) addConfigured(stacks, Config.CACHE_LEGENDARY.get(), random);
-        return stacks;
-    }
-
-    private static boolean chance(RandomSource random, int percent) {
-        if (percent <= 0) return false;
-        if (percent >= 100) return true;
-        return random.nextInt(100) < percent;
-    }
-
-    private static void addConfigured(List<ItemStack> into, List<? extends String> lines, RandomSource random) {
-        if (lines == null) return;
-        for (String line : lines) {
-            ItemStack stack = fromSpec(line, random);
-            if (!stack.isEmpty()) into.add(stack);
-        }
-    }
-
-    private static ItemStack fromSpec(String raw, RandomSource random) {
-        if (raw == null) return ItemStack.EMPTY;
+    /** Разбор строки пула: id, id*count, id*min-max и вес через собаку. */
+    private static LootEntry entryOf(String raw) {
+        if (raw == null) return null;
         String spec = raw.trim();
-        if (spec.isEmpty()) return ItemStack.EMPTY;
-        int count = 1;
+        if (spec.isEmpty()) return null;
+        int weight = 10;
+        int at = spec.lastIndexOf('@');
+        if (at >= 0) {
+            try {
+                weight = Math.max(1, Integer.parseInt(spec.substring(at + 1).trim()));
+            } catch (NumberFormatException e) {
+                return null;
+            }
+            spec = spec.substring(0, at).trim();
+        }
+        int min = 1;
+        int max = 1;
         int star = spec.indexOf('*');
         if (star >= 0) {
             String num = spec.substring(star + 1).trim();
@@ -2175,26 +2302,64 @@ public final class Minigame {
             try {
                 int dash = num.indexOf('-');
                 if (dash >= 0) {
-                    int min = Integer.parseInt(num.substring(0, dash).trim());
-                    int max = Integer.parseInt(num.substring(dash + 1).trim());
-                    if (max < min) {
-                        int swap = min;
-                        min = max;
-                        max = swap;
-                    }
-                    count = min + (max == min ? 0 : random.nextInt(max - min + 1));
+                    min = Integer.parseInt(num.substring(0, dash).trim());
+                    max = Integer.parseInt(num.substring(dash + 1).trim());
                 } else {
-                    count = Integer.parseInt(num);
+                    min = Integer.parseInt(num);
+                    max = min;
                 }
             } catch (NumberFormatException e) {
-                return ItemStack.EMPTY;
+                return null;
+            }
+            if (max < min) {
+                int swap = min;
+                min = max;
+                max = swap;
             }
         }
         ResourceLocation id = ResourceLocation.tryParse(spec);
-        if (id == null || !ForgeRegistries.ITEMS.containsKey(id)) return ItemStack.EMPTY;
+        if (id == null || !ForgeRegistries.ITEMS.containsKey(id)) return null;
         Item item = ForgeRegistries.ITEMS.getValue(id);
-        if (item == null || item == Items.AIR || count <= 0) return ItemStack.EMPTY;
-        return new ItemStack(item, Math.min(64, count));
+        if (item == null || item == Items.AIR) return null;
+        return new LootEntry(item, Math.max(1, Math.min(64, min)), Math.max(1, Math.min(64, max)), weight);
+    }
+
+    /** Случайная выборка по весам без повторов: чем больше вес строки, тем чаще предмет. */
+    private static List<ItemStack> rollLoot(List<? extends String> lines, int count, RandomSource random) {
+        List<LootEntry> pool = new ArrayList<>();
+        if (lines != null) {
+            for (String line : lines) {
+                LootEntry entry = entryOf(line);
+                if (entry != null) pool.add(entry);
+            }
+        }
+        List<ItemStack> out = new ArrayList<>();
+        for (int i = 0; i < count && !pool.isEmpty(); i++) {
+            int total = 0;
+            for (LootEntry entry : pool) total += entry.weight();
+            int pick = random.nextInt(Math.max(1, total));
+            int idx = 0;
+            for (int j = 0; j < pool.size(); j++) {
+                pick -= pool.get(j).weight();
+                if (pick < 0) {
+                    idx = j;
+                    break;
+                }
+            }
+            LootEntry chosen = pool.remove(idx);
+            int n = chosen.min() == chosen.max()
+                    ? chosen.min()
+                    : chosen.min() + random.nextInt(chosen.max() - chosen.min() + 1);
+            out.add(new ItemStack(chosen.item(), Math.max(1, Math.min(64, n))));
+        }
+        return out;
+    }
+
+    private static void fill(ChestBlockEntity chest, RandomSource random, List<? extends String> pool) {
+        int min = Math.max(1, Config.CACHE_ITEMS_MIN.get());
+        int max = Math.max(min, Config.CACHE_ITEMS_MAX.get());
+        int count = min == max ? min : min + random.nextInt(max - min + 1);
+        addStacks(chest, rollLoot(pool, count, random));
     }
 
     private static void addStacks(RandomizableContainerBlockEntity box, List<ItemStack> stacks) {
