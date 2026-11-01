@@ -89,6 +89,22 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue AIRDROP_INTERVAL_MINUTES;
     public static final ForgeConfigSpec.IntValue AIRDROP_ITEMS;
     public static final ForgeConfigSpec.IntValue BEACON_SHIELD_SECONDS;
+    public static final ForgeConfigSpec.BooleanValue TRACE_SCALE_MAP;
+    public static final ForgeConfigSpec.IntValue TRACE_MAP_REF;
+    public static final ForgeConfigSpec.BooleanValue TRACE_AVERAGE;
+    public static final ForgeConfigSpec.DoubleValue TRACE_BEAM_DEGREES;
+    public static final ForgeConfigSpec.DoubleValue LEAK_PLAYERS_AT;
+    public static final ForgeConfigSpec.DoubleValue LEAK_BEACONS_AT;
+    public static final ForgeConfigSpec.IntValue LEAK_SCATTER_PERCENT;
+    public static final ForgeConfigSpec.IntValue TOWER_COUNT;
+    public static final ForgeConfigSpec.BooleanValue TOWER_LOOT;
+    public static final ForgeConfigSpec.BooleanValue EVENT_ENABLED;
+    public static final ForgeConfigSpec.IntValue EVENT_FIRST_MINUTE;
+    public static final ForgeConfigSpec.IntValue EVENT_INTERVAL_MINUTES;
+    public static final ForgeConfigSpec.BooleanValue AUCTION_ENABLED;
+    public static final ForgeConfigSpec.BooleanValue DEATH_DROP_CONSUMABLES;
+    public static final ForgeConfigSpec.IntValue DEATH_CRYPTO_LOSS_PERCENT;
+    public static final ForgeConfigSpec.IntValue NODE_MINUTES_BEFORE_END;
 
     static {
         ForgeConfigSpec.Builder b = new ForgeConfigSpec.Builder();
@@ -236,6 +252,7 @@ public final class Config {
                 "electrodynamics:circuitbasic*2-4@7",
                 "electrodynamics:platesteel*2-4@7",
                 "blackchannel:field_laptop@3",
+                "blackchannel:defibrillator@4",
                 "minecraft:copper_ingot*24-44@20",
                 "minecraft:coal*8-16@9",
                 "minecraft:flint*4-8@6",
@@ -305,6 +322,7 @@ public final class Config {
                 "nuclearscience:antidote@3",
                 "nuclearscience:geigercounter@3",
                 "blackchannel:deep_vpn@3",
+                "blackchannel:defibrillator@5",
                 "minecraft:copper_block*4-7@10",
                 "minecraft:iron_block*2-3@7",
                 "minecraft:iron_ingot*12-24@14",
@@ -450,13 +468,55 @@ public final class Config {
         b.comment("Отсутствие PvP в начале матча, в секундах: игроки не могут ранить друг друга, удар даже не проходит. Мобы, падение, огонь и лава бьют как обычно. Отсчёт от старта матча, 0 — PvP сразу.");
         PVP_FREE_SECONDS = b.defineInRange("pvpFreeSeconds", 90, 0, 7200);
         FINAL_DURATION_MINUTES = b.defineInRange("finalDurationMinutes", 10, 1, 30);
-        SCORE_KILL = b.defineInRange("scoreKill", 1, 0, 100);
-        SCORE_BED = b.defineInRange("scoreBed", 2, 0, 100);
-        SCORE_BEACON = b.defineInRange("scoreBeacon", 2, 0, 100);
+        b.comment("Очки — это не цель катки, а только способ выбрать победителя, если после финала живы несколько отрядов. Цель — сломать все чужие маяки и выжить.");
+        SCORE_KILL = b.defineInRange("scoreKill", 2, 0, 100);
+        SCORE_BED = b.defineInRange("scoreBed", 3, 0, 100);
+        b.comment("Сломанный маяк стоит дорого: это и есть главная цель катки.");
+        SCORE_BEACON = b.defineInRange("scoreBeacon", 8, 0, 100);
         REVIVE_STAND_SECONDS = b.defineInRange("reviveStandSeconds", 5, 1, 30);
         DOWNED_DURATION_TICKS = b.defineInRange("downedDurationTicks", 200, 40, 1200);
         b.comment("Сколько секунд от старта маяк отряда нельзя сломать: он стоит в бункере под землёй, а это защита от раннего набега. 0 — без щита.");
         BEACON_SHIELD_SECONDS = b.defineInRange("beaconShieldSeconds", 600, 0, 7200);
+        b.comment("Смерть забирает расходники: патроны, еду, аптечки, порох и блоки падают сумкой на месте падения, союзник может подобрать. Оружие, броня, терминалы, SIM и крипта остаются.");
+        DEATH_DROP_CONSUMABLES = b.define("deathDropConsumables", true);
+        b.comment("Сколько процентов кошелька теряется при окончательной смерти (в спектатор). 0 — не терять.");
+        DEATH_CRYPTO_LOSS_PERCENT = b.defineInRange("deathCryptoLossPercent", 25, 0, 100);
+        b.pop();
+
+        b.push("intel");
+        b.comment("TRACE даёт пеленг: направление на источник с угловой погрешностью. Чтобы получить точку, нужно два-три замера с разных мест — они пересекаются.");
+        b.comment("Погрешность TRACE берётся из traceScatter и домножается на корень из (сторона карты / traceMapRefBlocks). false — погрешность одинаковая на любой карте.");
+        TRACE_SCALE_MAP = b.define("traceScaleWithMap", true);
+        b.comment("Размер карты, для которого настроен traceScatter. На 2500 при 1000 погрешность вырастает в 1.58 раза.");
+        TRACE_MAP_REF = b.defineInRange("traceMapRefBlocks", 1000, 200, 8000);
+        b.comment("Ширина пеленга в градусах на карте traceMapRefBlocks: половина угла, в котором лежит цель. 10 — на 800 блоках это ±140.");
+        TRACE_BEAM_DEGREES = b.defineInRange("traceBeamDegrees", 10.0D, 2.0D, 40.0D);
+        b.comment("Повторные TRACE по одной цели усредняются: каждый следующий замер режет погрешность на треть, но не больше четырёх раз. Платить всё равно за каждый.");
+        TRACE_AVERAGE = b.define("traceAveraging", true);
+        b.comment("Доля катки, на которой всем утекают координаты всех игроков с погрешностью (0.5 — половина матча).");
+        LEAK_PLAYERS_AT = b.defineInRange("leakPlayersAt", 0.5D, 0.05D, 1.0D);
+        b.comment("Доля катки, на которой всем утекают координаты всех маяков отрядов с погрешностью (0.75 — три четверти матча).");
+        LEAK_BEACONS_AT = b.defineInRange("leakBeaconsAt", 0.75D, 0.05D, 1.0D);
+        b.comment("Погрешность утечек в процентах от стороны карты: 8 — это ±200 блоков на карте 2500.");
+        LEAK_SCATTER_PERCENT = b.defineInRange("leakScatterPercent", 8, 0, 40);
+        b.pop();
+
+        b.push("towers");
+        b.comment("Вышки связи: высокие мачты на карте, на верхней площадке лежит хороший лут. На них видно половину карты, поэтому за них драка. 0 — не ставить.");
+        TOWER_COUNT = b.defineInRange("towerCount", 6, 0, 12);
+        b.comment("Класть ли на верхнюю площадку вышки контейнер с лутом поздней волны.");
+        TOWER_LOOT = b.define("towerLoot", true);
+        b.pop();
+
+        b.push("events");
+        b.comment("События вечера: раз в eventIntervalMinutes канал объявляет ЭМИ-шторм, тишину, аукцион или сводку. false — не проводить.");
+        EVENT_ENABLED = b.define("eventsEnabled", true);
+        EVENT_FIRST_MINUTE = b.defineInRange("eventFirstMinute", 20, 1, 180);
+        EVENT_INTERVAL_MINUTES = b.defineInRange("eventIntervalMinutes", 18, 5, 180);
+        b.comment("Аукцион: раз в катку на рынок выставляется лот, который никто не видит до покупки. Торгуются вслепую.");
+        AUCTION_ENABLED = b.define("auctionEnabled", true);
+        b.comment("Узел: терминал в центре карты включается за nodeMinutesBeforeEnd минут до конца финала и даёт очки за удержание. 0 — не включать.");
+        NODE_MINUTES_BEFORE_END = b.defineInRange("nodeMinutesBeforeEnd", 10, 0, 60);
         b.pop();
 
         SPEC = b.build();

@@ -8,15 +8,17 @@ import java.util.ArrayList;
 import java.util.List;
 
 public final class Ui {
-    public static final int BG = 0xF0101418;
+    // Палитра «прибор»: графит, кость, янтарь, CRT-зелёный. Пять цветов, как в макете.
+    public static final int BG = 0xF012161A;
     public static final int PANEL = 0xF0161E24;
-    public static final int EDGE = 0xFF2EE6A6;
-    public static final int EDGE_DIM = 0xFF1B6B52;
-    public static final int TEXT = 0xFFD7FFE8;
-    public static final int MUTED = 0xFF7F9A8C;
-    public static final int AMBER = 0xFFFFC14A;
-    public static final int RED = 0xFFFF5A6A;
+    public static final int EDGE = 0xFFE0A72E;
+    public static final int EDGE_DIM = 0xFF4A3B18;
+    public static final int TEXT = 0xFFD9D2C4;
+    public static final int MUTED = 0xFF7A838B;
+    public static final int AMBER = 0xFFE0A72E;
+    public static final int RED = 0xFFD64545;
     public static final int BLUE = 0xFF7EC8FF;
+    public static final int GREEN = 0xFF7FE08A;
 
     private Ui() {}
 
@@ -39,7 +41,7 @@ public final class Ui {
     }
 
     public static void button(GuiGraphics g, Font font, List<Hit> hits, int x, int y, int w, int h, String label, String tip, boolean on, String action, String arg) {
-        g.fill(x, y, x + w, y + h, on ? 0xFF16382C : 0xFF12181C);
+        g.fill(x, y, x + w, y + h, on ? 0xFF2A2213 : 0xFF101518);
         g.fill(x, y, x + w, y + 1, on ? EDGE : EDGE_DIM);
         g.drawString(font, trim(font, label, w - 6), x + 3, y + 3, on ? TEXT : MUTED, false);
         hits.add(new Hit(x, y, w, h, action, arg, tip));
@@ -164,11 +166,35 @@ public final class Ui {
         g.fill(px - 1, py - 1, px + 2, py + 2, color);
     }
 
+    /** Луч пеленга на радаре: точка приёма в мире, направление в градусах. */
+    public static void ray(GuiGraphics g, int cx, int cy, int radius, int range, double oxBlocks, double ozBlocks, double angleDeg, int color) {
+        double sx = oxBlocks / (double) Math.max(1, range);
+        double sz = ozBlocks / (double) Math.max(1, range);
+        double px = cx + sx * (radius - 2);
+        double py = cy + sz * (radius - 2);
+        double dx = Math.cos(Math.toRadians(angleDeg));
+        double dz = Math.sin(Math.toRadians(angleDeg));
+        for (int step = 0; step < 220; step++) {
+            double t = step * 0.9;
+            double x = px + dx * t;
+            double y = py + dz * t;
+            double ddx = x - cx;
+            double ddy = y - cy;
+            if (ddx * ddx + ddy * ddy > (radius - 1) * (radius - 1)) break;
+            g.fill((int) Math.round(x), (int) Math.round(y), (int) Math.round(x) + 1, (int) Math.round(y) + 1, color);
+        }
+        int dotX = (int) Math.round(px);
+        int dotY = (int) Math.round(py);
+        double ddx = dotX - cx;
+        double ddy = dotY - cy;
+        if (ddx * ddx + ddy * ddy <= (radius - 1) * (radius - 1)) g.fill(dotX - 1, dotY - 1, dotX + 2, dotY + 2, color);
+    }
+
     public static int blipColor(String kind) {
         if (kind == null) return RED;
         if (kind.startsWith("own")) return EDGE;
         return switch (kind) {
-            case "friend", "beacon", "radio" -> EDGE;
+            case "friend", "beacon", "radio" -> GREEN;
             case "decoy", "dish", "radar" -> BLUE;
             case "drone", "rack" -> AMBER;
             case "cage" -> MUTED;

@@ -53,6 +53,21 @@ public final class Sync {
         }
         tag.put("intel", intel);
 
+        ListTag beams = new ListTag();
+        for (NetData.Beam beam : profile.beams) {
+            CompoundTag c = new CompoundTag();
+            c.putString("h", beam.handle);
+            c.putInt("ox", beam.ox);
+            c.putInt("oz", beam.oz);
+            c.putDouble("a", beam.angle);
+            c.putDouble("w", beam.alpha);
+            c.putInt("n", beam.samples);
+            c.putInt("age", Math.max(0, (now - beam.tick) / 20));
+            c.putString("dim", Str.dimShort(beam.dim));
+            beams.add(c);
+        }
+        tag.put("beams", beams);
+
         ListTag dean = new ListTag();
         profile.deanons.forEach((handle, name) -> {
             CompoundTag c = new CompoundTag();
@@ -93,7 +108,12 @@ public final class Sync {
             c.putString("seller", listing.sellerHandle);
             c.putInt("price", listing.price);
             c.putBoolean("intel", listing.intel);
-            if (listing.intel) {
+            c.putBoolean("blind", listing.blind);
+            if (listing.blind) {
+                // Вслепую: ни предмета, ни цены на глаз — только цена и «кот в мешке»
+                c.putString("item", "?");
+                c.putInt("count", 1);
+            } else if (listing.intel) {
                 c.putString("desc", listing.handle);
                 c.putString("dim", Str.dimShort(listing.dim));
                 c.putBoolean("stale", listing.stale);

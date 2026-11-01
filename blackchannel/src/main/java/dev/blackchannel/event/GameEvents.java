@@ -116,7 +116,10 @@ public final class GameEvents {
 
     @SubscribeEvent
     public static void useItem(PlayerInteractEvent.RightClickItem event) {
-        if (event.getEntity() instanceof ServerPlayer player && Minigame.isDowned(player)) event.setCanceled(true);
+        if (!(event.getEntity() instanceof ServerPlayer player) || !Minigame.isDowned(player)) return;
+        // Лежачий может дёрнуть дефибриллятор на себе
+        if (Minigame.holdsDefib(player) && Minigame.selfDefib(player)) return;
+        event.setCanceled(true);
     }
 
     @SubscribeEvent

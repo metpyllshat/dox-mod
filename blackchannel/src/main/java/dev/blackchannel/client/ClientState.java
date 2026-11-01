@@ -30,6 +30,7 @@ public final class ClientState {
     public static boolean airplane, dnd, jammed, faraday, uplink, dish, ids, hard, radarHud, rackHackable;
     public static long toastUntil;
     public static final List<IntelRow> intel = new ArrayList<>();
+    public static final List<BeamRow> beams = new ArrayList<>();
     public static final List<ChatRow> chat = new ArrayList<>();
     public static final List<Blip> blips = new ArrayList<>();
     public static final List<ListingRow> listings = new ArrayList<>();
@@ -87,6 +88,7 @@ public final class ClientState {
         rackCharge = tag.getInt("rackCharge");
         rackHackable = tag.getBoolean("rackHackable");
         readIntel(tag.getList("intel", Tag.TAG_COMPOUND));
+        readBeams(tag.getList("beams", Tag.TAG_COMPOUND));
         readChat(tag.getList("chat", Tag.TAG_COMPOUND));
         readListings(tag.getList("listings", Tag.TAG_COMPOUND));
         readTracks(tag.getList("trackers", Tag.TAG_COMPOUND));
@@ -237,6 +239,23 @@ public final class ClientState {
         }
     }
 
+    private static void readBeams(ListTag list) {
+        beams.clear();
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag c = list.getCompound(i);
+            BeamRow row = new BeamRow();
+            row.handle = c.getString("h");
+            row.ox = c.getInt("ox");
+            row.oz = c.getInt("oz");
+            row.angle = c.getDouble("a");
+            row.alpha = c.getDouble("w");
+            row.samples = c.getInt("n");
+            row.age = c.getInt("age");
+            row.dim = c.getString("dim");
+            beams.add(row);
+        }
+    }
+
     private static void readChat(ListTag list) {
         chat.clear();
         for (int i = 0; i < list.size(); i++) {
@@ -322,6 +341,13 @@ public final class ClientState {
             CompoundTag c = list.getCompound(i);
             peek.add(new PeekSlot(c.getInt("i"), c.getString("id"), c.getInt("n"), c.getBoolean("h"), c.getBoolean("lie"), c.getCompound("s")));
         }
+    }
+
+    /** Пеленг: точка приёма, направление и ширина. */
+    public static final class BeamRow {
+        public int ox, oz, age, samples;
+        public double angle, alpha;
+        public String handle = "", dim = "";
     }
 
     public static final class IntelRow {

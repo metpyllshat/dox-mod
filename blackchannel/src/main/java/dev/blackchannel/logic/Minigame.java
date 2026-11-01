@@ -167,6 +167,8 @@ public final class Minigame {
                                 .executes(c -> size(c.getSource(), IntegerArgumentType.getInteger(c, "blocks")))))
                 .then(Commands.literal("cache").requires(Minigame::op).executes(c -> spawnCache(c.getSource())))
                 .then(Commands.literal("start").requires(Minigame::op).executes(c -> start(c.getSource())))
+                .then(Commands.literal("practice").executes(c -> practice(c.getSource())))
+                .then(Commands.literal("city").requires(Minigame::op).executes(c -> city(c.getSource())))
                 .then(Commands.literal("stop").requires(Minigame::op).executes(c -> stop(c.getSource()))));
     }
 
@@ -368,7 +370,12 @@ public final class Minigame {
         return ChatFormatting.WHITE;
     }
 
-    private static String teamLabel(MinecraftServer server, String code) {
+    /** Название отряда для чата и сводок: то же, что в сайдбаре. */
+    public static String teamName(MinecraftServer server, String code) {
+        return teamLabel(server, code);
+    }
+
+    public static String teamLabel(MinecraftServer server, String code) {
         if (code == null || code.isEmpty()) return "";
         Teams.Team team = Teams.byId(code);
         if (team != null) return team.name();
@@ -408,18 +415,29 @@ public final class Minigame {
             checkVictory(server, match);
             if (!match.active) return;
         }
-        // Треть и две трети матча: сначала приблизительные координаты игроков, потом точные маяки
+        // Утечки по расписанию из конфига: половина катки — координаты всех игроков,
+        // три четверти — координаты всех маяков. Обе с погрешностью, обе видны всем.
         long matchLength = Math.max(1L, match.matchEndTick - match.matchStartTick);
-        if (!match.playersLeaked && now >= match.matchStartTick + matchLength / 3L) {
+        if (!match.playersLeaked && now >= match.matchStartTick + (long) (matchLength * Config.LEAK_PLAYERS_AT.get())) {
             match.playersLeaked = true;
             match.setDirty();
             announcePlayerCoords(server, match, level);
         }
-        if (!match.beaconsLeaked && now >= match.matchStartTick + matchLength * 2L / 3L) {
+        if (!match.beaconsLeaked && now >= match.matchStartTick + (long) (matchLength * Config.LEAK_BEACONS_AT.get())) {
             match.beaconsLeaked = true;
             match.setDirty();
-            announceBeaconCoords(server, match);
+            announceBeaconCoords(server, match, level);
         }
+        // Вышки связи строим один раз, после того как разъехались базы
+        if (!match.towersPlaced && DEPLOY.isEmpty() && match.cacheTick > 0) {
+            match.towersPlaced = true;
+            Towers.placeAll(level, match, level.getRandom());
+            match.setDirty();
+        }
+        // События вечера: ЭМИ-шторм, тишина, аукцион, сводка
+        Evening.tick(server, match);
+        // Узел: терминал в центре перед концом финала, за него дают очки
+        tickNode(server, match, level, now);
         // Смена этапа: открываем следующую волну схронов и пишем об этом в чат
         updateCacheWave(server, match, now);
         // Аирдропы: первый через airDropFirstMinute, дальше по интервалу
@@ -482,7 +500,7 @@ public final class Minigame {
      * Погрешность — 10% стороны карты, то есть при 2500 это ±250 блоков.
      */
     private static void announcePlayerCoords(MinecraftServer server, MatchData match, ServerLevel level) {
-        int error = Math.max(8, (int) Math.round(0.10 * Math.max(2, match.size)));
+        int error = Math.max(8, (int) Math.round(Config.LEAK_SCATTER_PERCENT.get() / 100.0 * Math.max(2, match.size)));
         Component header = Component.translatable("blackchannel.minigame.coords_leak_header", error);
         for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
             receiver.sendSystemMessage(Msg.paint(header));
@@ -504,8 +522,10 @@ public final class Minigame {
         }
     }
 
-    /** 2/3 матча: точные координаты маяков отрядов. */
-    private static void announceBeaconCoords(MinecraftServer server, MatchData match) {
+    /** Три четверти катки: координаты всех маяков с погрешностью в процентах от стороны карты. */
+    private static void announceBeaconCoords(MinecraftServer server, MatchData match, ServerLevel level) {
+        int error = Math.max(10, (int) Math.round(Config.LEAK_SCATTER_PERCENT.get() / 100.0 * Math.max(2, match.size)));
+        RandomSource random = level.getRandom();
         Component header = Component.translatable("blackchannel.minigame.beacon_leak_header");
         for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
             receiver.sendSystemMessage(Msg.paint(header));
@@ -514,11 +534,49 @@ public final class Minigame {
         for (Map.Entry<String, BlockPos> entry : match.teamBeacons.entrySet()) {
             BlockPos pos = entry.getValue();
             if (pos == null) continue;
+            int bx = pos.getX() + random.nextInt(error * 2 + 1) - error;
+            int bz = pos.getZ() + random.nextInt(error * 2 + 1) - error;
             Component line = Component.translatable("blackchannel.minigame.beacon_coords",
-                    teamLabel(server, entry.getKey()), pos.getX(), pos.getY(), pos.getZ());
+                    teamLabel(server, entry.getKey()), bx, bz, error);
             for (ServerPlayer receiver : server.getPlayerList().getPlayers()) {
                 receiver.sendSystemMessage(Msg.paint(line));
             }
+        }
+    }
+
+    /**
+     * Узел: за nodeMinutesBeforeEnd минут до конца финала в центре карты включается терминал.
+     * Пока рядом стоит ровно один отряд, он получает по очку каждые десять секунд.
+     */
+    private static void tickNode(MinecraftServer server, MatchData match, ServerLevel level, long now) {
+        int lead = Config.NODE_MINUTES_BEFORE_END.get();
+        if (lead <= 0 || !match.active) return;
+        long openAt = match.finalEndTick - lead * 1200L;
+        if (!match.nodeActive) {
+            if (now < openAt) return;
+            match.nodeActive = true;
+            match.nodeX = match.centerX;
+            match.nodeZ = match.centerZ;
+            match.setDirty();
+            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+                player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.node_open",
+                        match.nodeX, match.nodeZ)));
+                player.playNotifySound(SoundEvents.NOTE_BLOCK_BELL.value(), SoundSource.MASTER, 0.9f, 0.7f);
+            }
+            return;
+        }
+        if (now % 200 != 0) return;
+        java.util.Set<String> near = new java.util.HashSet<>();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            String crew = match.playerCrew.get(player.getUUID());
+            if (crew == null || crew.isEmpty() || match.permanentDead.contains(player.getUUID())) continue;
+            BlockPos at = player.blockPosition();
+            if (at.distSqr(new BlockPos(match.nodeX, at.getY(), match.nodeZ)) > 24 * 24) continue;
+            near.add(crew);
+        }
+        if (near.size() == 1) {
+            match.addScore(near.iterator().next(), 1);
+            match.setDirty();
         }
     }
 
@@ -601,6 +659,18 @@ public final class Minigame {
                 player.playNotifySound(SoundEvents.PLAYER_LEVELUP, SoundSource.MASTER, 1.0f, 1.2f);
             }
         }
+        NetData net = NetData.get(server);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            NetData.Profile prof = net.profile(player.getUUID());
+            prof.crypto = 0;
+            prof.intel.clear();
+            prof.beams.clear();
+        }
+        net.setDirty();
+        match.towersPlaced = false;
+        match.nodeActive = false;
+        match.silenceUntil = 0L;
+        match.nextEventTick = 0L;
         if (wasActive) BlackChannelMod.LOGGER.info("BlackChannel match finished, winner: {}", winnerLabel);
         match.setDirty();
     }
@@ -926,6 +996,13 @@ public final class Minigame {
     }
 
     /** Разбор очереди сундуков: несколько штук за тик, уже в нормальном контексте тика. */
+    /** Поставить сундук в очередь на лут: его наполнят по чуть-чуть, без лага. */
+    public static void queueLoot(BlockPos pos) {
+        if (pos == null) return;
+        if (LOOT_QUEUE.size() >= LOOT_QUEUE_LIMIT) return;
+        LOOT_QUEUE.add(pos);
+    }
+
     private static void lootStep(MatchData match, ServerLevel level) {
         for (int i = 0; i < LOOT_PER_TICK && !LOOT_QUEUE.isEmpty(); i++) {
             BlockPos pos = LOOT_QUEUE.poll();
@@ -939,6 +1016,34 @@ public final class Minigame {
                 BlackChannelMod.LOGGER.warn("field chest skip at {}: {}", pos, e.toString());
             }
         }
+    }
+
+    /** Что остаётся у игрока после смерти: оружие, броня, инструменты, терминалы. Остальное падает. */
+    private static void dropConsumables(ServerPlayer player) {
+        if (!Config.DEATH_DROP_CONSUMABLES.get()) return;
+        net.minecraft.world.entity.player.Inventory inv = player.getInventory();
+        for (int i = 0; i < inv.getContainerSize(); i++) {
+            ItemStack stack = inv.getItem(i);
+            if (stack.isEmpty() || keepsOnDeath(stack)) continue;
+            ItemStack copy = stack.copy();
+            inv.setItem(i, ItemStack.EMPTY);
+            player.drop(copy, true, false);
+        }
+        inv.setChanged();
+    }
+
+    private static boolean keepsOnDeath(ItemStack stack) {
+        net.minecraft.world.item.Item item = stack.getItem();
+        if (item instanceof net.minecraft.world.item.ArmorItem) return true;
+        if (item instanceof net.minecraft.world.item.TieredItem) return true;
+        if (item instanceof net.minecraft.world.item.ShieldItem) return true;
+        if (item instanceof net.minecraft.world.item.PotionItem) return false;
+        net.minecraft.resources.ResourceLocation id = net.minecraftforge.registries.ForgeRegistries.ITEMS.getKey(item);
+        if (id == null) return false;
+        if (id.getNamespace().equals(dev.blackchannel.BlackChannelMod.MODID)) return true;
+        String path = id.getPath();
+        // Стволы TaCZ и навесное не теряются: это оружие, а не расходник
+        return path.contains("gun") || path.contains("attachment") || path.contains("scope");
     }
 
     public static void onDeath(LivingDeathEvent event) {
@@ -955,6 +1060,7 @@ public final class Minigame {
             return;
         }
         String crew = match.playerCrew.getOrDefault(victim.getUUID(), "");
+        dropConsumables(victim);
         // Определяем killer: прямой убийца или тот, кто последним бил (падение, лава, добивание)
         ServerPlayer killer = event.getSource().getEntity() instanceof ServerPlayer sp && sp != victim ? sp : null;
         if (killer == null) killer = lastAttacker(victim, match);
@@ -1037,6 +1143,11 @@ public final class Minigame {
     }
 
     private static void killPermanently(ServerPlayer player, MatchData match, String crew) {
+        NetData.Profile wallet = NetData.get(player).profile(player.getUUID());
+        int loss = Math.max(0, Config.DEATH_CRYPTO_LOSS_PERCENT.get());
+        if (loss > 0 && wallet.crypto > 0) {
+            wallet.crypto -= wallet.crypto * loss / 100;
+        }
         match.permanentDead.add(player.getUUID());
         match.clearDowned(player.getUUID());
         REVIVE.remove(player.getUUID());
@@ -1216,6 +1327,40 @@ public final class Minigame {
         protect(player, player.level().getGameTime() + 100L);
     }
 
+    /**
+     * Разряд дефибриллятора. Свой — поднимает себя прямо там, где лежит.
+     * Тиммейта — мгновенно, без пяти секунд стояния рядом.
+     */
+    public static boolean defib(ServerPlayer patient, ServerPlayer doctor) {
+        MatchData match = MatchData.get(patient.getServer());
+        if (match == null || !match.active) return false;
+        if (!match.downedPlayers.containsKey(patient.getUUID())) return false;
+        if (match.finalActive && match.finalEndTick - patient.level().getGameTime() < 200L) return false;
+        if (!Devices.consume(doctor, ModContent.DEFIB.get(), 1)) return false;
+        REVIVE.remove(patient.getUUID());
+        match.clearDowned(patient.getUUID());
+        match.reviveUsed.add(patient.getUUID());
+        reviveInPlace(patient);
+        patient.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.defib_target",
+                doctor.getGameProfile().getName())));
+        doctor.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.defib_used",
+                patient.getGameProfile().getName())));
+        patient.playNotifySound(SoundEvents.TOTEM_USE, SoundSource.MASTER, 0.8f, 1.6f);
+        patient.getServer().getPlayerList().broadcastSystemMessage(Msg.paint(
+                Component.translatable("blackchannel.minigame.defib_announce", patient.getGameProfile().getName())), false);
+        match.setDirty();
+        return true;
+    }
+
+    /** Поднять себя: срабатывает по правому клику, пока лежишь. */
+    public static boolean selfDefib(ServerPlayer player) {
+        return defib(player, player);
+    }
+
+    public static boolean holdsDefib(ServerPlayer player) {
+        return Devices.count(player, ModContent.DEFIB.get()) > 0;
+    }
+
     /** Игрок сейчас лежит раненым. */
     public static boolean isDowned(ServerPlayer player) {
         if (player == null || player.getServer() == null) return false;
@@ -1367,6 +1512,11 @@ public final class Minigame {
         String playerCrew = match.playerCrew.getOrDefault(player.getUUID(), "");
         String targetCrew = match.playerCrew.getOrDefault(target.getUUID(), "");
         if (playerCrew.isEmpty() || !playerCrew.equals(targetCrew)) return;
+        // Дефибриллятор: поднимает сразу, без пяти секунд
+        if (holdsDefib(player) && !match.reviveUsed.contains(target.getUUID()) && player.distanceToSqr(target) <= 9.0) {
+            defib(target, player);
+            return;
+        }
         // Проверяем: уже использовал воскрешение?
         if (match.reviveUsed.contains(target.getUUID())) {
             player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.revive_already")));
@@ -1796,6 +1946,21 @@ public final class Minigame {
             source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.no_level")));
             return 0;
         }
+        // Каждая катка с чистого листа: новые позывные, пустые кошельки, никаких старых следов.
+        NetData net = NetData.get(server);
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            NetData.Profile prof = net.profile(player.getUUID());
+            prof.crypto = 0;
+            prof.intel.clear();
+            prof.beams.clear();
+            prof.deanons.clear();
+            prof.heard.clear();
+            prof.cdTrace = 0;
+            prof.cdDeanon = 0;
+            prof.cdSwat = 0;
+            prof.cdBomb = 0;
+            prof.handle = net.uniqueHandle(player.getRandom());
+        }
         Map<String, List<ServerPlayer>> groups = new java.util.LinkedHashMap<>();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             String code = NetData.get(server).profile(player.getUUID()).crew;
@@ -1873,6 +2038,12 @@ public final class Minigame {
         match.matchStartTick = startTick;
         match.playersLeaked = false;
         match.beaconsLeaked = false;
+        match.towersPlaced = false;
+        match.towers.clear();
+        match.nodeActive = false;
+        match.nextEventTick = 0L;
+        match.silenceUntil = 0L;
+        match.teamBeacons.clear();
         match.pvpFreeUntil = startTick + Config.PVP_FREE_SECONDS.get() * 20L;
         match.nextAirdropTick = Config.AIRDROP_ENABLED.get()
                 ? startTick + Config.AIRDROP_FIRST_MINUTE.get() * 1200L
@@ -1898,6 +2069,46 @@ public final class Minigame {
         return 1;
     }
 
+    /**
+     * Полигон: маленькая площадка рядом с игроком, чтобы потрогать терминал без катки.
+     * Две смотровые вышки, стойка, экран и полный набор расходников.
+     */
+    private static int practice(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.players_only")));
+            return 0;
+        }
+        ServerLevel level = (ServerLevel) player.level();
+        BlockPos base = player.blockPosition().offset(0, 1, 0);
+        PracticeArena.build(level, base);
+        ItemStack phone = new ItemStack(ModContent.PHONE.get());
+        phone.getOrCreateTag().putInt("Battery", 100);
+        give(player, phone);
+        give(player, new ItemStack(ModContent.LAPTOP.get()));
+        give(player, new ItemStack(ModContent.RACK_ITEM.get()));
+        give(player, new ItemStack(ModContent.DISH_ITEM.get()));
+        give(player, new ItemStack(ModContent.CELL.get(), 3));
+        player.teleportTo(level, base.getX() + 0.5, base.getY(), base.getZ() + 0.5, player.getYRot(), 0f);
+        player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.practice_ready")));
+        player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.practice_how")));
+        return 1;
+    }
+
+    /** Построить город вокруг центра карты: кварталы, пятиэтажки, частный сектор, комбинат. */
+    private static int city(CommandSourceStack source) {
+        MatchData match = MatchData.get(source.getServer());
+        ServerLevel level = Ops.levelOf(source.getServer(), match.dim);
+        if (level == null) level = source.getLevel();
+        ServerPlayer sender = source.getPlayer();
+        int cx = match.centerSet ? match.centerX : (sender == null ? 0 : sender.blockPosition().getX());
+        int cz = match.centerSet ? match.centerZ : (sender == null ? 0 : sender.blockPosition().getZ());
+        int side = match.centerSet ? Math.max(200, match.size) : 400;
+        int total = CityGen.build(level, cx, cz, side, level.getRandom());
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.city_built", total)), true);
+        return 1;
+    }
+
     private static int stop(CommandSourceStack source) {
         MatchData match = MatchData.get(source.getServer());
         if (!match.active) {
@@ -1919,6 +2130,11 @@ public final class Minigame {
         match.matchEndTick = 0;
         match.finalEndTick = 0;
         match.nextAirdropTick = 0;
+        match.nodeActive = false;
+        match.silenceUntil = 0L;
+        match.nextEventTick = 0L;
+        match.towersPlaced = false;
+        match.towers.clear();
         match.finalActive = false;
         match.drops.clear();
         match.anchors.clear();
@@ -2041,11 +2257,7 @@ public final class Minigame {
         player.getFoodData().setFoodLevel(20);
         player.getFoodData().setSaturation(5.0f);
         player.containerMenu.broadcastChanges();
-        if (!Devices.has(player, ModContent.PHONE.get())) {
-            ItemStack phone = new ItemStack(ModContent.PHONE.get());
-            phone.getOrCreateTag().putInt("Battery", 100);
-            give(player, phone);
-        }
+        // Телефона в наборе нет: терминал надо собрать самому, иначе связь не ценность.
         give(player, new ItemStack(ModContent.CELL.get()));
         give(player, new ItemStack(Items.RED_BED));
         give(player, new ItemStack(Items.STONE_SHOVEL));
@@ -2618,7 +2830,7 @@ public final class Minigame {
     }
 
     /** Случайная выборка по весам без повторов: чем больше вес строки, тем чаще предмет. */
-    private static List<ItemStack> rollLoot(List<? extends String> lines, int count, RandomSource random) {
+    public static List<ItemStack> rollLoot(List<? extends String> lines, int count, RandomSource random) {
         List<LootEntry> pool = new ArrayList<>();
         if (lines != null) {
             for (String line : lines) {

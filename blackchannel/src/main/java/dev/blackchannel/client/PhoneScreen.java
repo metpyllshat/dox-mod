@@ -119,9 +119,16 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     private void drawRadar(GuiGraphics g, int x, int y) {
         int cx = x + 58;
         int cy = y + 110;
-        g.fill(cx - 46, cy - 46, cx + 46, cy + 46, 0xFF07110C);
-        g.fill(cx, cy - 46, cx + 1, cy + 46, 0xFF1E4A38);
-        g.fill(cx - 46, cy, cx + 46, cy + 1, 0xFF1E4A38);
+        g.fill(cx - 46, cy - 46, cx + 46, cy + 46, 0xFF0B0F12);
+        g.fill(cx, cy - 46, cx + 1, cy + 46, 0xFF2A2416);
+        g.fill(cx - 46, cy, cx + 46, cy + 1, 0xFF2A2416);
+        if (minecraft != null && minecraft.player != null) {
+            double px = minecraft.player.getX();
+            double pz = minecraft.player.getZ();
+            for (ClientState.BeamRow beam : ClientState.beams) {
+                Ui.ray(g, cx, cy, 46, ClientState.radarR, beam.ox - px, beam.oz - pz, beam.angle, Ui.AMBER);
+            }
+        }
         for (ClientState.Blip blip : ClientState.blips) {
             Ui.blip(g, cx, cy, 46, ClientState.radarR, blip.dx(), blip.dz(), Ui.blipColor(blip.kind()));
         }
@@ -135,6 +142,13 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             ly += 10;
         }
         ly += 4;
+        for (ClientState.BeamRow beam : ClientState.beams) {
+            if (ly > y + 200) break;
+            String line = "ЛУЧ " + beam.handle + " " + Math.round(beam.angle) + "° ±" + Math.round(beam.alpha)
+                    + (beam.samples > 1 ? " x" + beam.samples : "") + " " + beam.age + "с";
+            g.drawString(font, Ui.trim(font, line, 220), x + 8, ly, Ui.AMBER, false);
+            ly += 10;
+        }
         for (ClientState.TrackRow track : ClientState.trackers) {
             if (ly > y + 180) break;
             String line = (track.live() ? "BUG " : "LAST ") + track.dim() + " " + track.x() + " " + track.y() + " " + track.z();
@@ -151,7 +165,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         Ui.button(g, font, hits, x + 6, y + 44, 74, 14, Ui.t("screen.blackchannel.market.shop"), marketTab == 0, "mkt", "0");
         Ui.button(g, font, hits, x + 84, y + 44, 74, 14, Ui.t("screen.blackchannel.market.board"), marketTab == 1, "mkt", "1");
         Ui.button(g, font, hits, x + 162, y + 44, 78, 14, Ui.t("screen.blackchannel.market.auction"), marketTab == 2, "mkt", "2");
-        g.fill(x + 8, y + 60, x + imageWidth - 8, y + 186, 0xFF07110C);
+        g.fill(x + 8, y + 60, x + imageWidth - 8, y + 186, 0xFF0B0F12);
         if (marketTab == 0) drawShop(g, x, y, mx, my);
         else if (marketTab == 1) drawBoard(g, x, y, mx, my);
         else drawAuction(g, x, y, mx, my);
