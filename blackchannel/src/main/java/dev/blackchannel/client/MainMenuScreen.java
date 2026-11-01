@@ -165,10 +165,11 @@ public class MainMenuScreen extends Screen {
         g.pose().pushPose();
         g.pose().translate(w / 2f - tw / 2f, h * 0.17f, 0);
         g.pose().scale(scale, scale, 1f);
-        // Тень и «двойная печать»: заголовок выглядит как штамп на металле
-        this.font.drawShadow(g.pose(), title, 2, 3, 0xFF0A0D0A);
-        this.font.draw(g.pose(), title, 0, 0, withAlpha(0xFFC9D2C4, alpha));
-        this.font.draw(g.pose(), title, 1, 0, withAlpha(0x6640FF9A, alpha));
+        // Тень и «двойная печать»: заголовок выглядит как штамп на металле.
+        // Рисуем через GuiGraphics: он сам применяет масштаб из позы.
+        g.drawString(this.font, title, 2, 3, 0xFF0A0D0A, false);
+        g.drawString(this.font, title, 0, 0, withAlpha(0xFFC9D2C4, alpha), false);
+        g.drawString(this.font, title, 1, 0, withAlpha(0x6640FF9A, alpha), false);
         g.pose().popPose();
 
         String sub = Ui.t("screen.blackchannel.menu.subtitle");
@@ -176,7 +177,7 @@ public class MainMenuScreen extends Screen {
         g.pose().pushPose();
         g.pose().translate(w / 2f - this.font.width(sub) * sc / 2f, h * 0.17f + scale * 10 + 6, 0);
         g.pose().scale(sc, sc, 1f);
-        this.font.draw(g.pose(), sub, 0, 0, withAlpha(0xFF8FD8A0, alpha));
+        g.drawString(this.font, sub, 0, 0, withAlpha(0xFF8FD8A0, alpha), false);
         g.pose().popPose();
 
         String version = Ui.t("screen.blackchannel.menu.version");

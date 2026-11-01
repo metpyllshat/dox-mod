@@ -142,7 +142,7 @@ public final class Admin {
         profile.noise = 0;
         profile.vpn = 0;
         profile.ids = false;
-        profile.hard = false;
+        profile.hardened = false;
         profile.airplane = false;
         profile.dnd = false;
         profile.intel.clear();
