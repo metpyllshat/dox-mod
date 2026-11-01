@@ -89,6 +89,11 @@ public final class Minigame {
     private static final Map<UUID, Long> PVP_WARN = new HashMap<>();
     private static final Map<UUID, Long> ALLY_WARN = new HashMap<>();
     private static final Map<String, Long> BEACON_ALERT = new HashMap<>();
+    /**
+     * Множитель лута: база в конфиге рассчитана на 8 игроков и 14 схронов.
+     * На больших катках схронов на игрока меньше, поэтому вещи и стаки жирнее.
+     */
+    private static double LOOT_SCALE = 1.0;
     /** Полоса сверху: текущий этап катки и сколько до следующего. */
     private static ServerBossEvent stageBar;
     // Схроны: 14 на карту 1000×1000 с четырьмя отрядами, дальше — линейно
@@ -120,6 +125,9 @@ public final class Minigame {
     private static final int CACHE_GAP_TICKS = 20;
     /** Схроны начинаем ставить только после высадки, чтобы первые секунды никто не лагал. */
     private static final int CACHE_START_DELAY = 60;
+    /** Доли волн: ранняя, средняя, остаток — поздняя. */
+    private static final double CACHE_EARLY_SHARE = 0.55;
+    private static final double CACHE_MID_SHARE = 0.30;
     /**
      * Лут в чужие сундуки кладём не в момент загрузки чанка (там нельзя менять мир),
      * а из тика, по нескольку контейнеров за раз.
@@ -389,6 +397,10 @@ public final class Minigame {
 
     private static void tickMatch(MinecraftServer server, MatchData match, ServerLevel level) {
         long now = level.getGameTime();
+        // После рестарта сервера множитель поднимаем из сейва, иначе схроны станут тощими
+        if (match.lootScale > 0.0 && Math.abs(match.lootScale - LOOT_SCALE) > 1.0E-4) {
+            LOOT_SCALE = match.lootScale;
+        }
         // Каждую секунду: скорборд и проверка победы
         if (now % 20 == 0) {
             updateScoreboard(server, match);
@@ -408,6 +420,8 @@ public final class Minigame {
             match.setDirty();
             announceBeaconCoords(server, match);
         }
+        // Смена этапа: открываем следующую волну схронов и пишем об этом в чат
+        updateCacheWave(server, match, now);
         // Аирдропы: первый через airDropFirstMinute, дальше по интервалу
         if (Config.AIRDROP_ENABLED.get() && match.nextAirdropTick > 0L && now >= match.nextAirdropTick) {
             dropAirdrop(server, match, level);
@@ -456,8 +470,9 @@ public final class Minigame {
             deployStep(server, match, level);
             return;
         }
-        // Разбиваем placeCaches на тики (cacheTick хранит индекс следующего схрона)
-        if (match.cacheTick < match.cacheTotal) {
+        // Разбиваем placeCaches на тики (cacheTick хранит индекс следующего схрона).
+        // Ставим только текущую волну: следующая откроется на смене этапа.
+        if (waveOpen(match)) {
             placeCacheStep(server, match, level);
         }
     }
@@ -591,12 +606,12 @@ public final class Minigame {
     }
 
     private static void placeCacheStep(MinecraftServer server, MatchData match, ServerLevel level) {
-        if (match.cacheTick >= match.cacheTotal) return;
+        if (!waveOpen(match)) return;
         if (level.getGameTime() < nextCacheTick) return;
         int index = match.cacheTick;
         if (index < 0 || index >= match.cachePositions.length) {
-            match.cacheTick = match.cacheTotal;
-            announceCaches(server, match);
+            match.cacheTick = waveTarget(match);
+            announceWave(server, match);
             return;
         }
         BlockPos cand = match.cachePositions[index];
@@ -620,13 +635,16 @@ public final class Minigame {
             BlockPos feet = new BlockPos(cand.getX(), y, cand.getZ());
             if (match.inside(feet) && standableHere(level, feet)) placeChest(level, match, feet, level.getRandom());
         }
-        logStep("cache " + match.cacheTick + "/" + match.cacheTotal, started);
-        if (match.cacheTick >= match.cacheTotal) announceCaches(server, match);
+        logStep("cache " + match.cacheTick + "/" + match.cacheTotal + " (волна " + (match.cacheWave + 1) + ")", started);
+        if (!waveOpen(match)) announceWave(server, match);
     }
 
-    private static void announceCaches(MinecraftServer server, MatchData match) {
+    /** Сообщение о том, что волна схронов расставлена: сколько уже в мире и какая это волна. */
+    private static void announceWave(MinecraftServer server, MatchData match) {
+        int done = Math.max(0, Math.min(match.cacheTick, match.cacheTotal));
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.caches_done", match.cacheTotal)));
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.caches_wave",
+                    done, match.cacheTotal)));
         }
     }
 
@@ -759,7 +777,8 @@ public final class Minigame {
         level.setBlock(spot, Blocks.CHEST.defaultBlockState()
                 .setValue(ChestBlock.FACING, Direction.from2DDataValue(random.nextInt(4))), 3);
         if (!(level.getBlockEntity(spot) instanceof ChestBlockEntity chest)) return;
-        addStacks(chest, rollLoot(Config.CACHE_AIRDROP.get(), Config.AIRDROP_ITEMS.get(), random));
+        int airItems = Math.max(1, (int) Math.round(Config.AIRDROP_ITEMS.get() * itemsScale()));
+        addStacks(chest, rollLoot(Config.CACHE_AIRDROP.get(), airItems, random));
         chest.setCustomName(Component.translatable("block.blackchannel.field_cache"));
         chest.getPersistentData().putBoolean("bcLoot", true);
         chest.setChanged();
@@ -1872,7 +1891,10 @@ public final class Minigame {
         if (cramped) source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.cramped", gap)), true);
         announceMatchStart(server, match);
         prepareCaches(level, match);
-        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.caches_prep", match.cacheTotal)), true);
+        computeLootScale(match, server.getPlayerList().getPlayerCount());
+        int firstWave = match.cacheMarks == null || match.cacheMarks.length != 3 ? match.cacheTotal : match.cacheMarks[0];
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.caches_prep",
+                firstWave, match.cacheTotal)), true);
         return 1;
     }
 
@@ -2319,7 +2341,10 @@ public final class Minigame {
      */
     public static int cacheCount(MatchData match, int teams) {
         int side = Math.max(2, match.size);
-        double raw = CACHE_PER_TEAM * Math.max(1, teams) * side / 1000.0;
+        // Чем дольше катка, тем больше схронов: иначе всё найдут в первые полчаса и карта опустеет.
+        // Корень, а не линейно: за 90 минут игрок не успевает обыскать вдвое больше сундуков.
+        double longer = Math.sqrt(Mth.clamp(Config.MATCH_DURATION_MINUTES.get() / 30.0, 0.5, 6.0));
+        double raw = CACHE_PER_TEAM * Math.max(1, teams) * side / 1000.0 * longer;
         return Mth.clamp((int) Math.round(raw), CACHE_MIN, CACHE_MAX);
     }
 
@@ -2343,6 +2368,52 @@ public final class Minigame {
         match.cachePositions = positions.toArray(new BlockPos[0]);
         match.cacheTotal = positions.size();
         match.cacheTick = 0;
+        match.cacheWave = 0;
+        // Волны: 55% схронов в начале, 30% на смене на средний этап, остальное в late.
+        // Раньше все схроны ставились сразу и всегда с ранним лутом, поэтому волн никто не видел.
+        int early = (int) Math.round(match.cacheTotal * CACHE_EARLY_SHARE);
+        int mid = Math.max(early, (int) Math.round(match.cacheTotal * (CACHE_EARLY_SHARE + CACHE_MID_SHARE)));
+        match.cacheMarks = new int[]{Math.min(early, match.cacheTotal), Math.min(mid, match.cacheTotal), match.cacheTotal};
+    }
+
+    /**
+     * Смена этапа по времени, а не по флагу: если сервер перезапустили посреди катки,
+     * волна всё равно поднимется до нужной. Новая волна сразу открывает постановку схронов.
+     */
+    private static void updateCacheWave(MinecraftServer server, MatchData match, long now) {
+        long start = match.matchStartTick;
+        long end = match.matchEndTick;
+        if (end <= start) return;
+        long length = end - start;
+        int wave = now < start + length / 3L ? 0 : (now < start + length * 2L / 3L ? 1 : 2);
+        if (wave <= match.cacheWave) return;
+        int before = waveTarget(match);
+        match.cacheWave = wave;
+        match.setDirty();
+        int after = waveTarget(match);
+        int fresh = Math.max(0, after - before);
+        // Ставим сразу, не дожидаясь общего тика постановки
+        nextCacheTick = Math.min(nextCacheTick, now);
+        String key = wave == 1 ? "blackchannel.minigame.stage_mid" : "blackchannel.minigame.stage_late";
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            player.sendSystemMessage(Msg.paint(Component.translatable(key, fresh)));
+            player.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.MASTER, 0.6f, 1.4f);
+        }
+    }
+
+    /** Сколько схронов ещё не поставлено в текущей волне. */
+    private static int waveTarget(MatchData match) {
+        if (match.cacheMarks == null || match.cacheMarks.length != 3 || match.cacheMarks[2] <= 0) {
+            // Старый мир без меток волн: считаем, что волна одна на все схроны
+            return match.cacheTotal;
+        }
+        int wave = Mth.clamp(match.cacheWave, 0, 2);
+        return match.cacheMarks[wave];
+    }
+
+    /** Доступно ли место в схронах текущей волны: на смене этапа лимит поднимается. */
+    private static boolean waveOpen(MatchData match) {
+        return match.cacheTick < waveTarget(match);
     }
 
     /**
@@ -2572,7 +2643,9 @@ public final class Minigame {
             int n = chosen.min() == chosen.max()
                     ? chosen.min()
                     : chosen.min() + random.nextInt(chosen.max() - chosen.min() + 1);
-            ItemStack stack = new ItemStack(chosen.item(), Math.max(1, Math.min(64, n)));
+            // Стак тоже жирнее на больших катках, но не больше максимума предмета
+            int scaled = (int) Math.round(n * stackScale());
+            ItemStack stack = new ItemStack(chosen.item(), Math.max(1, Math.min(64, scaled)));
             // NBT копируем: у оружия TACZ именно в нём лежит, какой это ствол
             if (chosen.nbt() != null) stack.setTag(chosen.nbt().copy());
             out.add(stack);
@@ -2649,8 +2722,44 @@ public final class Minigame {
     private static void fill(ChestBlockEntity chest, RandomSource random, List<? extends String> pool) {
         int min = Math.max(1, Config.CACHE_ITEMS_MIN.get());
         int max = Math.max(min, Config.CACHE_ITEMS_MAX.get());
-        int count = min == max ? min : min + random.nextInt(max - min + 1);
+        int base = min == max ? min : min + random.nextInt(max - min + 1);
+        // Число вещей растёт медленнее, чем стаки: 27 слотов в сундуке не резиновые
+        int count = Math.max(min, (int) Math.round(base * itemsScale()));
         addStacks(chest, rollLoot(pool, count, random));
+    }
+
+    /** Во сколько раз больше вещей в сундуке. */
+    private static double itemsScale() {
+        return Math.sqrt(LOOT_SCALE);
+    }
+
+    /** Во сколько раз жирнее каждый стак. */
+    private static double stackScale() {
+        return Math.sqrt(LOOT_SCALE);
+    }
+
+    /**
+     * Коэффициент лута: сколько вещей и стаков должно быть на схрон, чтобы каждому игроку
+     * досталось столько же, сколько на эталонной катке 8 игроков / 1000×1000.
+     * Схронов на игрока меньше — сундуки толще; карта больше — ещё немного добавки на дорогу.
+     */
+    private static void computeLootScale(MatchData match, int players) {
+        if (!Config.LOOT_SCALING.get()) {
+            LOOT_SCALE = 1.0;
+            return;
+        }
+        int caches = Math.max(1, match.cacheTotal);
+        double perPlayer = players / (double) caches;
+        double bench = 8.0 / 14.0;
+        double travel = Math.pow(Math.max(0.25, match.size / 1000.0), 0.2);
+        double scale = (perPlayer / bench) * travel;
+        LOOT_SCALE = Mth.clamp(scale, 0.5, Config.LOOT_SCALE_MAX.get());
+        match.lootScale = LOOT_SCALE;
+        logInfo("loot scale " + String.format("%.2f", LOOT_SCALE) + " for " + players + " players, " + caches + " caches");
+    }
+
+    private static void logInfo(String text) {
+        BlackChannelMod.LOGGER.info("BlackChannel: {}", text);
     }
 
     private static void addStacks(RandomizableContainerBlockEntity box, List<ItemStack> stacks) {
