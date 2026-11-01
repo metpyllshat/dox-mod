@@ -188,17 +188,35 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     private void drawBag(GuiGraphics g, int x, int y, int mx, int my) {
         g.drawString(this.font, Ui.t("screen.blackchannel.bag_title"), x + 8, y + 50, Ui.TEXT, false);
-        paragraph(g, Ui.t("screen.blackchannel.bag_note"), x + 8, y + 61, 160, Ui.MUTED, 2);
-        Ui.button(g, this.font, hits, x + 172, y + 50, 80, 13, Ui.t("screen.blackchannel.btn.snap"), tipPeek(), false, Actions.PEEK, "");
+        String selInfo = selected >= 0 ? ClientState.tip("screen.blackchannel.bag.sel", String.valueOf(selected)) : Ui.t("screen.blackchannel.bag.no_sel");
+        g.drawString(this.font, Ui.trim(this.font, selInfo, 160), x + 8, y + 62, selected >= 0 ? Ui.GREEN : Ui.MUTED, false);
+        boolean canSnap = selected >= 0 && !ClientState.intel.isEmpty();
+        Ui.button(g, this.font, hits, x + 172, y + 50, 80, 13, Ui.t("screen.blackchannel.btn.snap"), tipPeek(), canSnap, Actions.PEEK, "");
+        // Mini intel picker inside bag tab: quick select without returning to OPS
+        int iy = y + 72;
+        g.drawString(this.font, Ui.t("screen.blackchannel.bag.pick"), x + 8, iy, Ui.MUTED, false);
+        iy += 10;
+        int shown = 0;
+        for (ClientState.IntelRow row : ClientState.intel) {
+            if (iy > y + 102 || shown >= 3) break;
+            String label = "#" + row.id + " " + row.handle + " \u00B1" + row.err;
+            Ui.row(g, this.font, x + 8, iy, WIDTH - 16, 10, label, null, row.id == selected, row.stale ? Ui.MUTED : Ui.GREEN);
+            hits.add(new Ui.Hit(x + 8, iy, WIDTH - 16, 10, "pick", String.valueOf(row.id), row.handle + " " + row.x + " " + row.z));
+            iy += 11;
+            shown++;
+        }
+        if (shown == 0) g.drawString(this.font, Ui.t("screen.blackchannel.bag.empty"), x + 8, iy, 0xFF3E4A46, false);
         for (int i = 0; i < 36; i++) {
             int col = i % 9;
             int row = i / 9;
-            drawPeek(g, x + 8 + col * 18, y + 84 + row * 18, findPeek(i), mx, my);
+            drawPeek(g, x + 8 + col * 18, y + 108 + row * 18, findPeek(i), mx, my);
         }
         for (int i = 0; i < 9; i++) {
-            drawPeek(g, x + 8 + i * 18, y + 160, findPeek(36 + i), mx, my);
+            drawPeek(g, x + 8 + i * 18, y + 180, findPeek(36 + i), mx, my);
         }
-        paragraph(g, ClientState.resultFor("bag"), x + 8, y + 184, WIDTH - 16, Ui.AMBER, 2);
+        String res = ClientState.resultFor("bag");
+        if (res.isEmpty() && selected < 0) res = Ui.t("screen.blackchannel.bag.hint_empty");
+        paragraph(g, res, x + 8, y + 200, WIDTH - 16, Ui.AMBER, 2);
     }
 
     private void drawPeek(GuiGraphics g, int sx, int sy, ClientState.PeekSlot slot, int mx, int my) {

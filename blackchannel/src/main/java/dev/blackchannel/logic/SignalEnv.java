@@ -359,6 +359,7 @@ public final class SignalEnv {
         int range = structureRange(viewer, self);
         if (range <= 0) return;
         BlockPos origin = viewer.blockPosition();
+        boolean linked = link(viewer, self).mode != Link.Mode.NONE;
         NodeBlockEntity.each(level, be -> {
             if (!be.powered() || out.size() >= 48) return;
             int dist = (int) Math.sqrt(be.getBlockPos().distSqr(origin));
@@ -369,11 +370,15 @@ public final class SignalEnv {
             switch (be.kind()) {
                 case RACK, DISH -> {
                     if (silenced(level, be.getBlockPos())) return;
+                    if (!own && !linked) return;
                     String kind = be.kind() == NodeBlock.Kind.RACK ? "rack" : "dish";
                     out.add(new Blip(dx, dz, dist, own ? "own" + kind : kind, own ? "own" : "?"));
                 }
                 case JAMMER -> out.add(new Blip(dx, dz, dist, "jammer", own ? "own" : "?"));
-                case FARADAY -> out.add(new Blip(dx, dz, dist, "cage", own ? "own" : "?"));
+                case FARADAY -> {
+                    if (!own) return;
+                    out.add(new Blip(dx, dz, dist, "cage", "own"));
+                }
                 default -> { }
             }
         });
@@ -387,6 +392,8 @@ public final class SignalEnv {
             if (dist > range) continue;
             BlockPos pos = new BlockPos(station.x(), station.y(), station.z());
             if (!"jammer".equals(station.kind()) && silenced(level, pos)) continue;
+            if (!linked && ("rack".equals(station.kind()) || "dish".equals(station.kind()))) continue;
+            if ("cage".equals(station.kind())) continue;
             out.add(new Blip((int) dx, (int) dz, dist, station.kind(), station.label()));
         }
     }
