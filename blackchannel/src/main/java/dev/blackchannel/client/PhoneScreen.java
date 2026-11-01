@@ -281,6 +281,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
                 int ndz = ClientState.nodeZ - (int) pz;
                 Ui.blip(g, cx, cy, r, ClientState.radarR, ndx, ndz, Ui.AMBER);
             }
+            for (ClientState.TowerRow tw : ClientState.towers) { int tdx = tw.x - (int) px; int tdz = tw.z - (int) pz; int col = tw.disabled ? Ui.RED : tw.owner.isEmpty() ? Ui.MUTED : Ui.GREEN; Ui.blip(g, cx, cy, r, ClientState.radarR, tdx, tdz, col); }
             Ui.selfArrow(g, cx, cy, this.minecraft.player.getYRot());
         }
         g.drawString(this.font, Ui.t("screen.blackchannel.north"), cx - 2, cy - r + 2, Ui.MUTED, false);
@@ -332,6 +333,18 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
                     + " " + track.x() + " " + track.z();
             g.drawString(this.font, Ui.trim(this.font, text, rw), rx, ly, track.live() ? Ui.AMBER : Ui.MUTED, false);
             ly += 10;
+        }
+        // Вышки на карте
+        if (!ClientState.towers.isEmpty() && ly + 10 <= bottom) {
+            g.drawString(this.font, Ui.t("screen.blackchannel.tower.title"), rx, ly, Ui.MUTED, false);
+            ly += 10;
+            int tn = 0;
+            for (ClientState.TowerRow tw : ClientState.towers) {
+                if (ly > bottom - 10 || tn >= 3) break;
+                String label = tw.owner.isEmpty() ? ClientState.tip("screen.blackchannel.tower.free", tw.x, tw.z) : ClientState.tip("screen.blackchannel.tower.owned", tw.owner, tw.x, tw.z);
+                g.drawString(this.font, Ui.trim(this.font, label, rw), rx, ly, tw.disabled ? Ui.RED : tw.owner.isEmpty() ? Ui.MUTED : Ui.GREEN, false);
+                ly += 10; tn++;
+            }
         }
     }
 
