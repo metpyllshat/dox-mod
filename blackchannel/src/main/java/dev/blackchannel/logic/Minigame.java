@@ -435,6 +435,8 @@ public final class Minigame {
         }
         // События вечера: ЭМИ-шторм, тишина, аукцион, сводка
         Evening.tick(server, match);
+        // Вышки: крипта, сектор, перехват
+        Towers.tick(server, match, level, now);
         // Узел: терминал в центре перед концом финала, за него дают очки
         tickNode(server, match, level, now);
         // Смена этапа: открываем следующую волну схронов и пишем об этом в чат
@@ -1570,6 +1572,7 @@ public final class Minigame {
 
     public static void onUseBlock(PlayerInteractEvent.RightClickBlock event) {
         if (event.getLevel().isClientSide() || !(event.getEntity() instanceof ServerPlayer player)) return;
+        if (Towers.onUse(player.getServer(), player, event.getPos())) { event.setCanceled(true); return; }
         if (isDowned(player)) {
             event.setCanceled(true);
             return;
@@ -2075,6 +2078,7 @@ public final class Minigame {
         match.beaconsLeaked = false;
         match.towersPlaced = false;
         match.towers.clear();
+        match.towerInfos.clear();
         match.nodeActive = false;
         match.nextEventTick = 0L;
         match.silenceUntil = 0L;
@@ -2156,6 +2160,7 @@ public final class Minigame {
         match.nextEventTick = 0L;
         match.towersPlaced = false;
         match.towers.clear();
+        match.towerInfos.clear();
         match.finalActive = false;
         match.drops.clear();
         match.anchors.clear();

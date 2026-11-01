@@ -98,6 +98,14 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue LEAK_SCATTER_PERCENT;
     public static final ForgeConfigSpec.IntValue TOWER_COUNT;
     public static final ForgeConfigSpec.BooleanValue TOWER_LOOT;
+    public static final ForgeConfigSpec.IntValue TOWER_PELENG_RADIUS;
+    public static final ForgeConfigSpec.IntValue TOWER_SECTOR_RADIUS;
+    public static final ForgeConfigSpec.IntValue TOWER_CHAT_RADIUS;
+    public static final ForgeConfigSpec.IntValue TOWER_INTERCEPT_RADIUS;
+    public static final ForgeConfigSpec.IntValue TOWER_CRYPTO_PER_MIN;
+    public static final ForgeConfigSpec.IntValue TOWER_HACK_SECONDS;
+    public static final ForgeConfigSpec.IntValue TOWER_DISABLE_SECONDS;
+    public static final ForgeConfigSpec.IntValue TOWER_SECTOR_SECONDS;
     public static final ForgeConfigSpec.BooleanValue EVENT_ENABLED;
     public static final ForgeConfigSpec.IntValue EVENT_FIRST_MINUTE;
     public static final ForgeConfigSpec.IntValue EVENT_INTERVAL_MINUTES;
@@ -506,6 +514,15 @@ public final class Config {
         TOWER_COUNT = b.defineInRange("towerCount", 6, 0, 12);
         b.comment("Класть ли на верхнюю площадку вышки контейнер с лутом поздней волны.");
         TOWER_LOOT = b.define("towerLoot", true);
+        b.comment("Что даёт вышка: пеленг на любой шум 400, карта сектора 600 раз в 60с, крипта 2/мин, чат отряда 800 без стойки, перехват чужих действий");
+        TOWER_PELENG_RADIUS = b.defineInRange("towerPelengRadius", 400, 32, 2048);
+        TOWER_SECTOR_RADIUS = b.defineInRange("towerSectorRadius", 600, 32, 2048);
+        TOWER_SECTOR_SECONDS = b.defineInRange("towerSectorSeconds", 60, 10, 600);
+        TOWER_CHAT_RADIUS = b.defineInRange("towerChatRadius", 800, 32, 2048);
+        TOWER_INTERCEPT_RADIUS = b.defineInRange("towerInterceptRadius", 400, 32, 2048);
+        TOWER_CRYPTO_PER_MIN = b.defineInRange("towerCryptoPerMin", 2, 0, 100);
+        TOWER_HACK_SECONDS = b.defineInRange("towerHackSeconds", 20, 2, 120);
+        TOWER_DISABLE_SECONDS = b.defineInRange("towerDisableSeconds", 300, 10, 3600);
         b.pop();
 
         b.push("events");

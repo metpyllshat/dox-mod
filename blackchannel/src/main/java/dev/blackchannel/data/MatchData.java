@@ -43,6 +43,17 @@ public class MatchData extends SavedData {
     /** Вышки связи: ставим один раз за матч, чтобы не строить их повторно. */
     public boolean towersPlaced;
     public final java.util.List<BlockPos> towers = new java.util.ArrayList<>();
+    public final java.util.List<TowerInfo> towerInfos = new java.util.ArrayList<>();
+    public static final class TowerInfo {
+        public BlockPos pos;
+        public String owner = "";
+        public long disabledUntil;
+        public long nextCryptoTick;
+        public long nextSectorTick;
+        public long hackStartTick;
+        public String hackCrew = "";
+        public TowerInfo(BlockPos pos) { this.pos = pos; }
+    }
     /** Тик следующего аирдропа. Ноль — аирдропы выключены. */
     public long nextAirdropTick;
     /** Бункеры баз: {x, z, нижний слой, верхний слой}. После матча их засыпаем. */
@@ -115,6 +126,10 @@ public class MatchData extends SavedData {
         data.silenceUntil = tag.getLong("silenceUntil");
         data.towersPlaced = tag.getBoolean("towersPlaced");
         for (long packed : tag.getLongArray("towers")) data.towers.add(BlockPos.of(packed));
+        ListTag ti = tag.getList("towerInfos", Tag.TAG_COMPOUND);
+        for (int i = 0; i < ti.size(); i++) { CompoundTag c = ti.getCompound(i); TowerInfo inf = new TowerInfo(new BlockPos(c.getInt("x"), c.getInt("y"), c.getInt("z"))); inf.owner = c.getString("owner"); inf.disabledUntil = c.getLong("dis"); inf.nextCryptoTick = c.getLong("nc"); inf.nextSectorTick = c.getLong("ns"); inf.hackStartTick = c.getLong("hs"); inf.hackCrew = c.getString("hc"); data.towerInfos.add(inf); }
+        // миграция: если старые towers есть, а infos нет — создать
+        if (data.towerInfos.isEmpty() && !data.towers.isEmpty()) { for (BlockPos pos : data.towers) data.towerInfos.add(new TowerInfo(pos)); }
         data.nextAirdropTick = tag.getLong("nextAirdrop");
         data.bunkers.clear();
         for (Tag element : tag.getList("bunkers", Tag.TAG_INT_ARRAY)) {
@@ -197,6 +212,9 @@ public class MatchData extends SavedData {
         long[] packed = new long[towers.size()];
         for (int i = 0; i < towers.size(); i++) packed[i] = towers.get(i).asLong();
         tag.putLongArray("towers", packed);
+        ListTag tInfos = new ListTag();
+        for (TowerInfo inf : towerInfos) { CompoundTag c = new CompoundTag(); c.putInt("x", inf.pos.getX()); c.putInt("y", inf.pos.getY()); c.putInt("z", inf.pos.getZ()); c.putString("owner", inf.owner == null ? "" : inf.owner); c.putLong("dis", inf.disabledUntil); c.putLong("nc", inf.nextCryptoTick); c.putLong("ns", inf.nextSectorTick); c.putLong("hs", inf.hackStartTick); c.putString("hc", inf.hackCrew == null ? "" : inf.hackCrew); tInfos.add(c); }
+        tag.put("towerInfos", tInfos);
         tag.putLong("nextAirdrop", nextAirdropTick);
         ListTag bunkers = new ListTag();
         for (int[] box : this.bunkers) bunkers.add(new IntArrayTag(box));

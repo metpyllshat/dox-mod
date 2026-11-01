@@ -120,6 +120,10 @@ public final class Ops {
             default -> { }
         }
         noise(profile, noiseOf(action));
+        Towers.onNoise(player.getServer(), player, noiseOf(action));
+        if (action.equals(Actions.BUY) || action.equals(Actions.BUY_LIST) || action.equals(Actions.SELL) || action.equals(Actions.TRACE) || action.equals(Actions.BOMB) || action.equals(Actions.UAV) || action.equals(Actions.WIPE) || action.equals(Actions.SAY) || action.equals(Actions.DM)) {
+            Towers.intercept(player.getServer(), dev.blackchannel.data.MatchData.get(player.getServer()), player, action);
+        }
         data.setDirty();
     }
 
@@ -1001,8 +1005,10 @@ public final class Ops {
             return false;
         }
         if (uplink && SignalEnv.link(player, profile).mode == SignalEnv.Link.Mode.NONE && !free(player)) {
-            result(player, profile, "blackchannel.result.no_uplink");
-            return false;
+            if (!Towers.hasTowerChat(player.getServer(), dev.blackchannel.data.MatchData.get(player.getServer()), player)) {
+                result(player, profile, "blackchannel.result.no_uplink");
+                return false;
+            }
         }
         return true;
     }
@@ -1011,8 +1017,10 @@ public final class Ops {
         if ("local".equals(profile.channel)) return true;
         SignalEnv.Link link = SignalEnv.link(player, profile);
         if (link.mode == SignalEnv.Link.Mode.NONE && !free(player)) {
-            result(player, profile, "blackchannel.result.no_uplink");
-            return false;
+            if (!Towers.hasTowerChat(player.getServer(), dev.blackchannel.data.MatchData.get(player.getServer()), player)) {
+                result(player, profile, "blackchannel.result.no_uplink");
+                return false;
+            }
         }
         if (link.mode == SignalEnv.Link.Mode.SAT && !free(player)) {
             if (profile.satCharges <= 0) {
