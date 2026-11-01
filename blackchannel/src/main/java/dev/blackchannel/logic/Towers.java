@@ -143,7 +143,7 @@ public final class Towers {
         // Если в руке блок — это стройка, не взлом. Взлом только пустой рукой / эксплойтом / шифтом
         if (!player.getMainHandItem().isEmpty() && !hasExploit(player)) {
             // держит блок — отдаём на стройку, не перехватываем
-            if (net.minecraft.world.item.BlockItem.byBlock(player.getMainHandItem().getItem()) != null) return false;
+            if (player.getMainHandItem().getItem() instanceof net.minecraft.world.item.BlockItem) return false;
             // инструмент в руке — тоже не взлом
             String handName = player.getMainHandItem().getItem().toString().toLowerCase();
             if (handName.contains("pick") || handName.contains("shovel") || handName.contains("axe")) return false;

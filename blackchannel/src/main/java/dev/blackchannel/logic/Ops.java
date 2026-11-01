@@ -506,7 +506,7 @@ public final class Ops {
             if (inf.owner != null && inf.owner.equals(profile.crew) && inf.disabledUntil <= now) { towerBeamPos = inf.pos; break; }
         }
         if (towerBeamPos != null && profile.beams.size() < 8) {
-            double tAngle = Bearings.angleTo(towerBeamPos.getX(), towerBeamPos.getZ(), tx, tz);
+            double tAngle = Bearings.angleTo(towerBeamPos.getX(), towerBeamPos.getZ(), x, z);
             if (target.vpn > 0) {
                 double shift = Config.TRACE_BEAM_DEGREES.get() * (target.vpn >= 2 ? 1.1 : 0.6);
                 tAngle += (random.nextDouble() * 2.0 - 1.0) * shift;
