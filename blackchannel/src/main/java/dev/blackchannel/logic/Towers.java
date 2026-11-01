@@ -107,9 +107,11 @@ public final class Towers {
         BlockPos chest = new BlockPos(x + 1, top + 1, z + 1);
         set(level, chest.getX(), chest.getY(), chest.getZ(), Blocks.CHEST.defaultBlockState());
         if (Config.TOWER_LOOT.get()) Minigame.queueLoot(chest);
-        // Терминал — лектерн в центре, на него ПКМ для взлома
+        // Терминал — магнетит (лодстоун) в центре, на него ПКМ пустой рукой для взлома
         BlockPos terminal = new BlockPos(x, top + 1, z);
-        set(level, terminal.getX(), terminal.getY(), terminal.getZ(), Blocks.LECTERN.defaultBlockState());
+        set(level, terminal.getX(), terminal.getY(), terminal.getZ(), Blocks.LODESTONE.defaultBlockState());
+        // табличка-подсказка
+        set(level, x, top + 1, z + 1, Blocks.OAK_WALL_SIGN.defaultBlockState());
         // Маячок цвета владельца — цветной бетон сверху антенны, изначально серый
         set(level, x - 2, top + 6, z - 2, Blocks.GRAY_CONCRETE.defaultBlockState());
     }
@@ -132,14 +134,31 @@ public final class Towers {
         for (MatchData.TowerInfo info : match.towerInfos) {
             BlockPos term = new BlockPos(info.pos.getX(), info.pos.getY() + HEIGHT + 2, info.pos.getZ());
             if (term.equals(pos)) return true;
-            // клик по самой вышке тоже считаем
-            if (info.pos.distSqr(pos) <= 4 && pos.getY() >= info.pos.getY() + HEIGHT - 2) return true;
         }
         return false;
     }
 
-    /** ПКМ по терминалу — начать/продолжить взлом. */
+    /** ПКМ по терминалу — начать/продолжить взлом. Требует пустую руку или эксплойт, чтобы не ломать стройку. */
     public static boolean onUse(MinecraftServer server, ServerPlayer player, BlockPos clicked) {
+        // Если в руке блок — это стройка, не взлом. Взлом только пустой рукой / эксплойтом / шифтом
+        if (!player.getMainHandItem().isEmpty() && !hasExploit(player)) {
+            // держит блок — отдаём на стройку, не перехватываем
+            if (net.minecraft.world.item.BlockItem.byBlock(player.getMainHandItem().getItem()) != null) return false;
+            // инструмент в руке — тоже не взлом
+            String handName = player.getMainHandItem().getItem().toString().toLowerCase();
+            if (handName.contains("pick") || handName.contains("shovel") || handName.contains("axe")) return false;
+        }
+        if (!isTerminal(MatchData.get(server), clicked)) {
+            // клик не по терминалу, а по земле рядом — не взлом
+            // проверяем дистанцию до терминала
+            MatchData mm = MatchData.get(server);
+            boolean nearTerm = false;
+            for (MatchData.TowerInfo inf : mm.towerInfos) {
+                BlockPos term = new BlockPos(inf.pos.getX(), inf.pos.getY() + HEIGHT + 2, inf.pos.getZ());
+                if (term.distSqr(clicked) <= 4) { nearTerm = true; break; }
+            }
+            if (!nearTerm) return false;
+        }
         MatchData match = MatchData.get(server);
         if (!match.active) return false;
         MatchData.TowerInfo info = at(match, clicked);

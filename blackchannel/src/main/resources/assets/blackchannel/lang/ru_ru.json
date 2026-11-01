@@ -496,7 +496,7 @@
   "screen.blackchannel.tip.wipe": "Два клика. Сжигает позывной и следы. Второй клик подтверждает.",
   "screen.blackchannel.tower.empty": "вышек нет — жди расстановки",
   "screen.blackchannel.tower.free": "○ %s %s",
-  "screen.blackchannel.tower.hint": "ПКМ по лектерну на вышке — взлом 20с (12с с эксплойтом), шумит 60 на 400. Даёт 2/мин, пеленг 400, карту 600/60с, чат 800, перехват.",
+  "screen.blackchannel.tower.hint": "ПКМ пустой рукой по магнетиту на вышке — взлом 20с (12с с эксплойтом), шумит 60 на 400. Даёт 2/мин, пеленг 400, карту 600/60с, чат 800, перехват.",
   "screen.blackchannel.tower.owned": "⬢ %s %s %s",
   "screen.blackchannel.tower.title": "ВЫШКИ",
   "screen.blackchannel.track.live": "ЖУК",

@@ -498,7 +498,28 @@ public final class Ops {
         boolean stale = !live;
 
         // Пеленг: луч из точки приёма в сторону цели. Точку даёт только пересечение двух лучей.
+        // Если есть своя вышка — она даёт второй луч удалённо (как по плану «стойка+вышка»).
         NetData.Beam beam = beamFor(profile, handle, player, dim, target, x, z, now);
+        dev.blackchannel.data.MatchData mm = dev.blackchannel.data.MatchData.get(player.getServer());
+        BlockPos towerBeamPos = null;
+        for (dev.blackchannel.data.MatchData.TowerInfo inf : mm.towerInfos) {
+            if (inf.owner != null && inf.owner.equals(profile.crew) && inf.disabledUntil <= now) { towerBeamPos = inf.pos; break; }
+        }
+        if (towerBeamPos != null && profile.beams.size() < 8) {
+            double tAngle = Bearings.angleTo(towerBeamPos.getX(), towerBeamPos.getZ(), tx, tz);
+            if (target.vpn > 0) {
+                double shift = Config.TRACE_BEAM_DEGREES.get() * (target.vpn >= 2 ? 1.1 : 0.6);
+                tAngle += (random.nextDouble() * 2.0 - 1.0) * shift;
+            }
+            NetData.Beam tBeam = new NetData.Beam();
+            tBeam.id = ++profile.intelSeq;
+            tBeam.handle = handle;
+            tBeam.dim = dim;
+            tBeam.ox = towerBeamPos.getX(); tBeam.oy = towerBeamPos.getY() + Towers.HEIGHT + 2; tBeam.oz = towerBeamPos.getZ();
+            tBeam.angle = tAngle; tBeam.alpha = beam.alpha; tBeam.samples = 1; tBeam.tick = now; tBeam.source = "tower";
+            profile.beams.add(tBeam);
+            while (profile.beams.size() > 8) profile.beams.remove(0);
+        }
         double mapFactor = Bearings.mapFactor(player.getServer());
         double alpha = Bearings.alpha(target, beam.samples, mapFactor);
         if (SignalEnv.dishNear(player, profile, 128)) alpha *= 0.6;
@@ -507,6 +528,8 @@ public final class Ops {
         // Чем громче цель в эфире, тем точнее пеленг: болтуна находят быстро
         if (target.noise > 0) alpha *= 1.0 - Math.min(0.35, target.noise / 300.0);
         beam.alpha = Math.max(1.0, alpha);
+        // вторая башня сужает ещё
+        if (towerBeamPos != null) beam.alpha *= 0.7;
 
         double[] fix = Bearings.bestFix(profile, beam);
         profile.cdTrace = now + Config.TRACE_CD.get() * 20;
