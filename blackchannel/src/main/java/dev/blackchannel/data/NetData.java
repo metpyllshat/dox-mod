@@ -122,6 +122,8 @@ public class NetData extends SavedData {
         for (Profile profile : profiles.values()) {
             profile.bugs.removeIf(b -> b.expireTick < tick);
             while (profile.intel.size() > 12) profile.intel.remove(0);
+            profile.beams.removeIf(beam -> tick - beam.tick > 7200L);
+            while (profile.beams.size() > 12) profile.beams.remove(0);
             while (profile.logs.size() > 16) profile.logs.remove(0);
         }
     }
@@ -181,6 +183,7 @@ public class NetData extends SavedData {
         public int chatCount;
         public int intelSeq = 1;
         public final List<Intel> intel = new ArrayList<>();
+        public final List<Beam> beams = new ArrayList<>();
         public final Map<String, String> deanons = new LinkedHashMap<>();
         public final Map<String, String> heard = new LinkedHashMap<>();
         public final List<Bug> bugs = new ArrayList<>();
@@ -237,6 +240,9 @@ public class NetData extends SavedData {
             ListTag intel = new ListTag();
             for (Intel row : this.intel) intel.add(row.save());
             tag.put("intel", intel);
+            ListTag beams = new ListTag();
+            for (Beam beam : this.beams) beams.add(beam.save());
+            tag.put("beams", beams);
             CompoundTag dean = new CompoundTag();
             for (Map.Entry<String, String> e : deanons.entrySet()) dean.putString(e.getKey(), e.getValue());
             tag.put("dean", dean);
@@ -296,6 +302,8 @@ public class NetData extends SavedData {
             profile.intelSeq = Math.max(1, tag.getInt("seq"));
             ListTag intel = tag.getList("intel", Tag.TAG_COMPOUND);
             for (int i = 0; i < intel.size(); i++) profile.intel.add(Intel.load(intel.getCompound(i)));
+            ListTag beams = tag.getList("beams", Tag.TAG_COMPOUND);
+            for (int i = 0; i < beams.size(); i++) profile.beams.add(Beam.load(beams.getCompound(i)));
             CompoundTag dean = tag.getCompound("dean");
             for (String key : dean.getAllKeys()) profile.deanons.put(key, dean.getString(key));
             CompoundTag heard = tag.getCompound("heard");
@@ -324,6 +332,55 @@ public class NetData extends SavedData {
         public void log(String key, String arg, int tick) {
             logs.add(new LogLine(key, arg == null ? "" : arg, tick));
             while (logs.size() > 16) logs.remove(0);
+        }
+    }
+
+    /**
+     * Пеленг: точка приёма, направление на цель и угловая ширина.
+     * Два таких луча с разных мест дают координату, один — только направление.
+     */
+    public static final class Beam {
+        public int id;
+        public String handle = "";
+        public String dim = "";
+        public int ox, oy, oz;
+        public double angle;
+        public double alpha = 10.0;
+        public int samples = 1;
+        public int tick;
+        public String source = "trace";
+
+        public CompoundTag save() {
+            CompoundTag tag = new CompoundTag();
+            tag.putInt("id", id);
+            tag.putBoolean("bl", blind);
+            tag.putString("h", handle);
+            tag.putString("d", dim);
+            tag.putInt("ox", ox);
+            tag.putInt("oy", oy);
+            tag.putInt("oz", oz);
+            tag.putDouble("a", angle);
+            tag.putDouble("w", alpha);
+            tag.putInt("n", samples);
+            tag.putInt("t", tick);
+            tag.putString("s", source);
+            return tag;
+        }
+
+        public static Beam load(CompoundTag tag) {
+            Beam beam = new Beam();
+            beam.id = tag.getInt("id");
+            beam.handle = tag.getString("h");
+            beam.dim = tag.getString("d");
+            beam.ox = tag.getInt("ox");
+            beam.oy = tag.getInt("oy");
+            beam.oz = tag.getInt("oz");
+            beam.angle = tag.getDouble("a");
+            beam.alpha = tag.getDouble("w");
+            beam.samples = Math.max(1, tag.getInt("n"));
+            beam.tick = tag.getInt("t");
+            beam.source = tag.contains("s") ? tag.getString("s") : "trace";
+            return beam;
         }
     }
 
@@ -487,6 +544,8 @@ public class NetData extends SavedData {
         public boolean intel;
         public CompoundTag stack = new CompoundTag();
         public int price;
+        /** Лот вслепую: покупатель платит, не зная, что внутри. */
+        public boolean blind;
         public String handle = "";
         public String dim = "";
         public int x, y, z, err;
@@ -525,6 +584,7 @@ public class NetData extends SavedData {
             listing.z = tag.getInt("z");
             listing.err = tag.getInt("e");
             listing.stale = tag.getBoolean("st");
+            listing.blind = tag.getBoolean("bl");
             return listing;
         }
     }

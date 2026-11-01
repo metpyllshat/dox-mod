@@ -5,6 +5,7 @@ import dev.blackchannel.block.NodeBlock;
 import dev.blackchannel.block.NodeBlockEntity;
 import dev.blackchannel.block.LoggerBlock;
 import dev.blackchannel.block.LoggerBlockEntity;
+import dev.blackchannel.item.DefibItem;
 import dev.blackchannel.item.DeviceItem;
 import dev.blackchannel.item.LoggerItem;
 import dev.blackchannel.item.TagItem;
@@ -56,6 +57,8 @@ public final class ModContent {
     public static final RegistryObject<Item> DECOY_ITEM = blockItem(DECOY);
     public static final RegistryObject<Item> LOGGER_ITEM = ITEMS.register("trace_logger",
             () -> new LoggerItem(LOGGER.get(), new Item.Properties().stacksTo(16)));
+    public static final RegistryObject<Item> DEFIB = ITEMS.register("defibrillator",
+            () -> new DefibItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE)));
     public static final RegistryObject<Item> TAG = ITEMS.register("dog_tag",
             () -> new TagItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON)));
 

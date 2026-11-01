@@ -79,14 +79,14 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         g.fill(x, y + HEIGHT - 1, x + WIDTH, y + HEIGHT, Ui.EDGE_DIM);
         g.fill(x, y, x + 1, y + HEIGHT, Ui.EDGE_DIM);
         g.fill(x + WIDTH - 1, y, x + WIDTH, y + HEIGHT, Ui.EDGE_DIM);
-        g.fill(x + 6, y + 30, x + WIDTH - 6, y + 31, 0xFF1E4A38);
+        g.fill(x + 6, y + 30, x + WIDTH - 6, y + 31, 0xFF2A2416);
         g.fill(x + 6, y + 48, x + WIDTH - 6, y + HEIGHT - 6, 0xFF0C1210);
-        if (page == 0) g.fill(x + 8, y + 106, x + WIDTH - 8, y + 120, 0xFF07110C);
+        if (page == 0) g.fill(x + 8, y + 106, x + WIDTH - 8, y + 120, 0xFF0B0F12);
         if (page == 3) {
-            g.fill(x + PRICE_X, y + PRICE_Y, x + PRICE_X + 56, y + PRICE_Y + 12, 0xFF07110C);
+            g.fill(x + PRICE_X, y + PRICE_Y, x + PRICE_X + 56, y + PRICE_Y + 12, 0xFF0B0F12);
             for (Slot slot : this.menu.slots) {
                 if (!slot.isActive()) continue;
-                g.fill(x + slot.x - 1, y + slot.y - 1, x + slot.x + 17, y + slot.y + 17, 0xFF07110C);
+                g.fill(x + slot.x - 1, y + slot.y - 1, x + slot.x + 17, y + slot.y + 17, 0xFF0B0F12);
                 g.fill(x + slot.x - 1, y + slot.y - 1, x + slot.x + 17, y + slot.y, Ui.EDGE_DIM);
             }
         }
@@ -158,6 +158,17 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         Ui.button(g, this.font, hits, x + 91, y + 68, w, 13, "BOMB", tipBomb(), false, Actions.BOMB, "");
         Ui.button(g, this.font, hits, x + 174, y + 68, w, 13, "UAV", tipUav(), false, Actions.UAV, "");
         paragraph(g, ClientState.resultFor("ops"), x + 8, y + 86, WIDTH - 16, Ui.AMBER, 2);
+        // Пеленги: пока луч один, координаты не показываем — только направление и ширину
+        if (!ClientState.beams.isEmpty()) {
+            int by = y + 112;
+            for (ClientState.BeamRow beam : ClientState.beams) {
+                if (by > y + 126) break;
+                String label = "ЛУЧ " + beam.handle + " " + Math.round(beam.angle) + "° ±" + Math.round(beam.alpha)
+                        + (beam.samples > 1 ? " x" + beam.samples : "");
+                g.drawString(this.font, Ui.trim(this.font, label, WIDTH - 16), x + 8, by, Ui.AMBER, false);
+                by += 9;
+            }
+        }
         g.drawString(this.font, "INTEL", x + 8, y + 126, Ui.MUTED, false);
         g.drawString(this.font, "KNOWN", x + 168, y + 126, Ui.MUTED, false);
         int ly = y + 136;
@@ -191,7 +202,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         for (int gz = 0; gz < Optics.GRID; gz++) {
             for (int gx = 0; gx < Optics.GRID; gx++) {
                 int i = gz * Optics.GRID + gx;
-                int color = 0xFF07110C;
+                int color = 0xFF0B0F12;
                 if (i < colors.length && colors[i] != 0) {
                     color = 0xFF000000 | colors[i];
                     any = true;
@@ -273,7 +284,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     private void drawPeek(GuiGraphics g, int sx, int sy, ClientState.PeekSlot slot, int mx, int my) {
         boolean hidden = slot != null && slot.hidden();
         boolean over = mx >= sx && mx < sx + 16 && my >= sy && my < sy + 16;
-        g.fill(sx, sy, sx + 16, sy + 16, hidden ? 0xFF2A1418 : 0xFF07110C);
+        g.fill(sx, sy, sx + 16, sy + 16, hidden ? 0xFF2A1418 : 0xFF0B0F12);
         if (over) g.fill(sx - 1, sy - 1, sx + 17, sy, Ui.EDGE);
         ItemStack stack = peekStack(slot);
         if (!stack.isEmpty()) {
@@ -310,7 +321,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         g.drawString(this.font, Ui.t("screen.blackchannel.slot_label"), x + 8, y + 74, Ui.MUTED, false);
         g.drawString(this.font, Ui.t("screen.blackchannel.price_label"), x + PRICE_X, y + 74, Ui.MUTED, false);
         syncPriceFromBox();
-        g.fill(x + SLIDER_X, y + SLIDER_Y, x + SLIDER_X + SLIDER_W, y + SLIDER_Y + 4, 0xFF07110C);
+        g.fill(x + SLIDER_X, y + SLIDER_Y, x + SLIDER_X + SLIDER_W, y + SLIDER_Y + 4, 0xFF0B0F12);
         int knob = (int) ((price - 1) / 4999f * (SLIDER_W - 4));
         g.fill(x + SLIDER_X + knob, y + SLIDER_Y - 2, x + SLIDER_X + knob + 4, y + SLIDER_Y + 6, Ui.EDGE);
         Ui.button(g, this.font, hits, x + 8, y + 104, 118, 13, Ui.t("screen.blackchannel.btn.sell_item"), Ui.t("screen.blackchannel.tip.sell_item"), false, "sell-item", "");

@@ -34,6 +34,15 @@ public final class ClientHooks {
         });
         MinecraftForge.EVENT_BUS.addListener(ClientHooks::hud);
         MinecraftForge.EVENT_BUS.addListener(ClientHooks::screen);
+        MinecraftForge.EVENT_BUS.addListener(ClientHooks::menu);
+    }
+
+    /** Ванильный титульный экран подменяем своим: это отдельная игра, а не список кнопок. */
+    public static void menu(ScreenEvent.Opening event) {
+        if (MainMenuScreen.bypass) return;
+        if (event.getCurrentScreen() != null) return;
+        if (!(event.getNewScreen() instanceof TitleScreen)) return;
+        event.setNewScreen(new MainMenuScreen());
     }
 
     public static void screen(ScreenEvent.Render.Post event) {
@@ -75,8 +84,8 @@ public final class ClientHooks {
             int cx = w - 42;
             int cy = 42;
             g.fill(cx - 28, cy - 28, cx + 28, cy + 28, 0xA0101418);
-            g.fill(cx, cy - 28, cx + 1, cy + 28, 0xFF1E4A38);
-            g.fill(cx - 28, cy, cx + 28, cy + 1, 0xFF1E4A38);
+            g.fill(cx, cy - 28, cx + 1, cy + 28, 0xFF2A2416);
+            g.fill(cx - 28, cy, cx + 28, cy + 1, 0xFF2A2416);
             for (ClientState.Blip blip : ClientState.blips) {
                 Ui.blip(g, cx, cy, 26, ClientState.radarR, blip.dx(), blip.dz(), Ui.blipColor(blip.kind()));
             }

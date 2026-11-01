@@ -3,6 +3,7 @@ package dev.blackchannel.logic;
 import dev.blackchannel.BlackChannelMod;
 import dev.blackchannel.Config;
 import dev.blackchannel.block.NodeBlockEntity;
+import dev.blackchannel.data.MatchData;
 import dev.blackchannel.data.NetData;
 import dev.blackchannel.menu.Menus;
 import dev.blackchannel.net.ModNetwork;
@@ -479,28 +480,89 @@ public final class Ops {
             if (online != null) alert(online, player, "blackchannel.chat.ids_trace");
             return;
         }
-        double mul = 1.0;
-        if (target.vpn >= 2) mul = Config.TRACE_VPN_DEEP.get();
-        else if (target.vpn == 1) mul = Config.TRACE_VPN_MUL.get();
-        int err = (int) Math.round(Config.TRACE_BASE.get() * mul);
-        if (err < 0) err = 0;
-        if (SignalEnv.dishNear(player, profile, 128)) err = Math.max(3, (int) (err * 0.55));
-        if (exploit) err = Math.max(2, (int) (err * 0.65));
-        boolean stale = !live;
-        if (stale) err += Config.TRACE_STALE.get();
         int x = live ? online.blockPosition().getX() : target.lastX;
         int y = live ? online.blockPosition().getY() : target.lastY;
         int z = live ? online.blockPosition().getZ() : target.lastZ;
         String dim = live ? Str.dim(online.level()) : target.lastDim;
-        x += random.nextInt(err * 2 + 1) - err;
-        z += random.nextInt(err * 2 + 1) - err;
-        addIntel(profile, handle, dim, x, y, z, err, now, stale);
+        boolean stale = !live;
+
+        // Пеленг: луч из точки приёма в сторону цели. Точку даёт только пересечение двух лучей.
+        NetData.Beam beam = beamFor(profile, handle, player, dim, target, x, z, now);
+        double mapFactor = Bearings.mapFactor(player.getServer());
+        double alpha = Bearings.alpha(target, beam.samples, mapFactor);
+        if (SignalEnv.dishNear(player, profile, 128)) alpha *= 0.6;
+        if (exploit) alpha *= 0.65;
+        if (stale) alpha *= 1.25;
+        beam.alpha = Math.max(1.0, alpha);
+
+        double[] fix = Bearings.bestFix(profile, beam);
         profile.cdTrace = now + Config.TRACE_CD.get() * 20;
-        result(player, profile, stale ? "blackchannel.result.trace_stale" : "blackchannel.result.trace_ok",
-                handle, Str.dimShort(dim), String.valueOf(x), String.valueOf(y), String.valueOf(z), String.valueOf(err));
-        player.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.MASTER, 0.7f, 1.4f);
+        if (fix != null) {
+            int fx = (int) Math.round(fix[0]);
+            int fz = (int) Math.round(fix[1]);
+            int err = (int) Math.round(fix[2]);
+            addIntel(profile, handle, dim, fx, y, fz, err, now, stale);
+            result(player, profile, stale ? "blackchannel.result.trace_stale" : "blackchannel.result.trace_ok",
+                    handle, Str.dimShort(dim), String.valueOf(fx), String.valueOf(y), String.valueOf(fz), String.valueOf(err));
+            player.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.MASTER, 0.7f, 1.4f);
+        } else {
+            result(player, profile, "blackchannel.result.trace_beam", handle,
+                    String.valueOf(Math.round(beam.angle)), String.valueOf(Math.round(beam.alpha * 2.0)),
+                    String.valueOf(beam.samples));
+            player.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.value(), SoundSource.MASTER, 0.6f, 1.2f);
+        }
         if (online != null && (target.ids || random.nextFloat() < 0.4f)) alert(online, player, "blackchannel.chat.ids_trace");
-        if (Config.LOG_OPS.get()) BlackChannelMod.LOGGER.info("TRACE {} -> {} ±{}", player.getGameProfile().getName(), handle, err);
+        if (Config.LOG_OPS.get()) BlackChannelMod.LOGGER.info("TRACE {} -> {} луч {}° ±{}° замеров {}",
+                player.getGameProfile().getName(), handle, Math.round(beam.angle), Math.round(beam.alpha), beam.samples);
+    }
+
+    /**
+     * Замер с текущей точки. Повторный TRACE с того же места не плодит второй луч,
+     * а сужает первый: N замеров подряд дают угол в 0.66^(N-1) раза меньше.
+     * Если у цели уже есть пеленг, второй замер лучше держать с другого места.
+     */
+    private static NetData.Beam beamFor(NetData.Profile profile, String handle, ServerPlayer player, String dim,
+                                        NetData.Profile target, int tx, int tz, int now) {
+        BlockPos here = player.blockPosition();
+        RandomSource random = player.getRandom();
+        double angle = Bearings.angleTo(here.getX(), here.getZ(), tx, tz);
+        if (target.vpn > 0) {
+            // VPN сдвигает пеленг: луч уводит в сторону, и это видно только по второму лучу.
+            double shift = Config.TRACE_BEAM_DEGREES.get() * (target.vpn >= 2 ? 1.1 : 0.6);
+            angle += (random.nextDouble() * 2.0 - 1.0) * shift;
+        }
+        NetData.Beam same = null;
+        for (NetData.Beam old : profile.beams) {
+            if (!old.handle.equals(handle) || !old.dim.equals(dim)) continue;
+            if (Math.hypot(old.ox - here.getX(), old.oz - here.getZ()) > Bearings.MIN_BASE) continue;
+            if (now - old.tick > Config.MEMORY.get() * 20) continue;
+            same = old;
+            break;
+        }
+        if (same != null) {
+            // Усредняем: угол тянем к новому замеру, ширину сужаем.
+            same.angle = (same.angle * same.samples + angle) / (same.samples + 1);
+            same.samples = Math.min(4, same.samples + 1);
+            same.tick = now;
+            same.ox = here.getX();
+            same.oy = here.getY();
+            same.oz = here.getZ();
+            return same;
+        }
+        NetData.Beam beam = new NetData.Beam();
+        beam.id = ++profile.intelSeq;
+        beam.handle = handle;
+        beam.dim = dim;
+        beam.ox = here.getX();
+        beam.oy = here.getY();
+        beam.oz = here.getZ();
+        beam.angle = angle;
+        beam.samples = 1;
+        beam.tick = now;
+        beam.source = "trace";
+        profile.beams.add(beam);
+        while (profile.beams.size() > 8) profile.beams.remove(0);
+        return beam;
     }
 
     private static void deanon(ServerPlayer player, NetData.Profile profile, String arg) {
@@ -926,7 +988,18 @@ public final class Ops {
         return names[idx];
     }
 
+    /** Тишина в эфире: событие вечера глушит всю сеть на полторы минуты. */
+    public static boolean silent(ServerPlayer player) {
+        MatchData match = MatchData.get(player.getServer());
+        if (match == null || !match.active) return false;
+        return match.silenceUntil > player.getServer().getTickCount();
+    }
+
     static boolean gate(ServerPlayer player, NetData.Profile profile, boolean laptop, boolean uplink) {
+        if (silent(player)) {
+            result(player, profile, "blackchannel.result.silence");
+            return false;
+        }
         if (player.isSpectator()) {
             result(player, profile, "blackchannel.result.no_device");
             return false;

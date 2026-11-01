@@ -34,6 +34,15 @@ public class MatchData extends SavedData {
     public boolean playersLeaked;
     /** Публикация точных координат маяков на 2/3 матча. */
     public boolean beaconsLeaked;
+    /** Узел в центре карты: включается перед концом финала и даёт очки за удержание. */
+    public boolean nodeActive;
+    public int nodeX, nodeZ;
+    /** События вечера: когда следующее и до какого тика эфир молчит. */
+    public long nextEventTick;
+    public long silenceUntil;
+    /** Вышки связи: ставим один раз за матч, чтобы не строить их повторно. */
+    public boolean towersPlaced;
+    public final java.util.List<BlockPos> towers = new java.util.ArrayList<>();
     /** Тик следующего аирдропа. Ноль — аирдропы выключены. */
     public long nextAirdropTick;
     /** Бункеры баз: {x, z, нижний слой, верхний слой}. После матча их засыпаем. */
@@ -99,6 +108,13 @@ public class MatchData extends SavedData {
         data.spread = tag.getInt("spread");
         data.playersLeaked = tag.getBoolean("leakPlayers");
         data.beaconsLeaked = tag.getBoolean("leakBeacons");
+        data.nodeActive = tag.getBoolean("nodeActive");
+        data.nodeX = tag.getInt("nodeX");
+        data.nodeZ = tag.getInt("nodeZ");
+        data.nextEventTick = tag.getLong("nextEvent");
+        data.silenceUntil = tag.getLong("silenceUntil");
+        data.towersPlaced = tag.getBoolean("towersPlaced");
+        for (long packed : tag.getLongArray("towers")) data.towers.add(BlockPos.of(packed));
         data.nextAirdropTick = tag.getLong("nextAirdrop");
         data.bunkers.clear();
         for (Tag element : tag.getList("bunkers", Tag.TAG_INT_ARRAY)) {
@@ -172,6 +188,15 @@ public class MatchData extends SavedData {
         tag.putInt("spread", spread);
         tag.putBoolean("leakPlayers", playersLeaked);
         tag.putBoolean("leakBeacons", beaconsLeaked);
+        tag.putBoolean("nodeActive", nodeActive);
+        tag.putInt("nodeX", nodeX);
+        tag.putInt("nodeZ", nodeZ);
+        tag.putLong("nextEvent", nextEventTick);
+        tag.putLong("silenceUntil", silenceUntil);
+        tag.putBoolean("towersPlaced", towersPlaced);
+        long[] packed = new long[towers.size()];
+        for (int i = 0; i < towers.size(); i++) packed[i] = towers.get(i).asLong();
+        tag.putLongArray("towers", packed);
         tag.putLong("nextAirdrop", nextAirdropTick);
         ListTag bunkers = new ListTag();
         for (int[] box : this.bunkers) bunkers.add(new IntArrayTag(box));
