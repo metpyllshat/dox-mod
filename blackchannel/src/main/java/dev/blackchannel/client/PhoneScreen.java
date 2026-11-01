@@ -5,7 +5,6 @@ import dev.blackchannel.logic.Catalog;
 import dev.blackchannel.logic.Teams;
 import dev.blackchannel.menu.Menus;
 import dev.blackchannel.net.ModNetwork;
-import dev.blackchannel.registry.ModContent;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.EditBox;
@@ -23,43 +22,51 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Телефон как прибор: сверху статус-бар (сеть, время, батарея), под ним шум в эфире,
- * внизу четыре вкладки — ЭФИР, КАРТА, СЕТЬ, РЫНОК. Всё остальное живёт внутри них.
+ * Телефон: прибор, а не окно. Сверху статус-бар (сеть, часы, батарея), под ним
+ * шапка с позывным и состоянием эфира, полоса ШУМ и четыре вкладки —
+ * ЭФИР, КАРТА, СЕТЬ, РЫНОК. Внизу поле ввода и строка вкладок.
+ * <p>
+ * Каждая зона знает свои границы: содержимое режется по высоте, поэтому строки
+ * не наезжают друг на друга независимо от того, сколько пришло с сервера.
  */
 public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     private static final int W = 248;
-    private static final int H = 230;
-    private static final int CONTENT_TOP = 66;
-    private static final int TABS_Y = 206;
+    private static final int H = 228;
+    /** Верх зоны содержимого вкладки. */
+    private static final int TOP = 68;
+    /** Низ зоны содержимого вкладки. */
+    private static final int BOTTOM = 184;
+    private static final int TABS_Y = 188;
     private static final int TABS_H = 16;
+    private static final int INPUT_Y = 208;
 
     private final List<Ui.Hit> hits = new ArrayList<>();
+    private final List<Component> hoverLines = new ArrayList<>();
     private EditBox input;
     private int tab;
-    private int scroll;
     private int marketTab;
     private int marketPage;
     private int listPick = -1;
     private String shopPick = "";
-    private String dmTarget = "";
     private ItemStack hoverStack = ItemStack.EMPTY;
-    private final List<Component> hoverLines = new ArrayList<>();
 
     public PhoneScreen(Menus.PhoneMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
         this.imageWidth = W;
         this.imageHeight = H;
+        this.titleLabelY = 10000;
+        this.inventoryLabelY = 10000;
     }
 
     @Override
     protected void init() {
         super.init();
-        input = new EditBox(font, leftPos + 8, topPos + H - 40, W - 76, 12, Component.empty());
+        input = new EditBox(this.font, this.leftPos + 9, this.topPos + INPUT_Y + 3, W - 76, 10, Component.empty());
         input.setMaxLength(160);
         input.setBordered(false);
         input.setTextColor(Ui.TEXT);
+        input.setHint(Component.translatable("screen.blackchannel.send_hint"));
         addRenderableWidget(input);
-        setInitialFocus(input);
     }
 
     @Override
@@ -70,17 +77,18 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
 
     @Override
     public void render(GuiGraphics g, int mx, int my, float pt) {
+        Ui.mouse(mx, my);
         renderBackground(g);
         hits.clear();
         hoverStack = ItemStack.EMPTY;
         hoverLines.clear();
-        boolean typingTab = tab == 0 || tab == 2;
+        boolean typing = tab == 0;
         if (input != null) {
-            input.visible = typingTab;
-            if (!typingTab && input.isFocused()) input.setFocused(false);
+            input.visible = typing;
+            if (!typing && input.isFocused()) input.setFocused(false);
         }
-        int x = leftPos;
-        int y = topPos;
+        int x = this.leftPos;
+        int y = this.topPos;
         Ui.panel(g, x, y, W, H);
         drawStatus(g, x, y);
         drawHead(g, x, y);
@@ -91,242 +99,293 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             case 2 -> drawNet(g, x, y);
             default -> drawMarket(g, x, y, mx, my);
         }
+        drawInput(g, x, y);
         drawTabs(g, x, y);
         for (var renderable : renderables) renderable.render(g, mx, my, pt);
         if (!hoverStack.isEmpty() && !hoverLines.isEmpty()) {
             List<FormattedCharSequence> lines = new ArrayList<>();
-            for (Component line : hoverLines) lines.addAll(font.split(line, 220));
-            if (!lines.isEmpty()) g.renderTooltip(font, lines, mx, my);
-        } else Ui.tips(g, font, hits, mx, my);
+            for (Component line : hoverLines) lines.addAll(this.font.split(line, 200));
+            if (!lines.isEmpty()) g.renderTooltip(this.font, lines, mx, my);
+        } else Ui.tips(g, this.font, hits, mx, my);
     }
 
     // ---------- шапка ----------
 
     private void drawStatus(GuiGraphics g, int x, int y) {
-        // Сеть: четыре столбика, как на трубке
         int bars = Math.max(0, Math.min(4, ClientState.signal));
         for (int i = 0; i < 4; i++) {
-            int bh = 3 + i * 3;
-            int color = i < bars ? Ui.GREEN : Ui.EDGE_DIM;
-            g.fill(x + 8 + i * 6, y + 16 - bh, x + 12 + i * 6, y + 15, color);
+            int barH = 4 + i * 3;
+            g.fill(x + 8 + i * 5, y + 16 - barH, x + 11 + i * 5, y + 16, i < bars ? Ui.GREEN : 0xFF2A3238);
         }
         String clock = String.format("%02d:%02d", LocalTime.now().getHour(), LocalTime.now().getMinute());
-        g.drawString(font, clock, x + W / 2 - font.width(clock) / 2, y + 6, Ui.TEXT, false);
-        // Батарея
-        g.fill(x + W - 40, y + 5, x + W - 10, y + 15, 0xFF000000);
-        g.fill(x + W - 39, y + 6, x + W - 11, y + 14, Ui.EDGE_DIM);
+        g.drawString(this.font, clock, x + W / 2 - this.font.width(clock) / 2, y + 5, Ui.TEXT, false);
         int charge = Math.max(0, Math.min(100, ClientState.battery));
-        int fillW = (int) (26 * charge / 100f);
-        g.fill(x + W - 39, y + 6, x + W - 39 + fillW, y + 14,
-                charge > 50 ? Ui.GREEN : charge > 20 ? Ui.AMBER : Ui.RED);
-        g.fill(x + W - 9, y + 8, x + W - 7, y + 12, Ui.EDGE_DIM);
         String pct = charge + "%";
-        g.drawString(font, pct, x + W - 44 - font.width(pct), y + 6, Ui.MUTED, false);
-        g.fill(x + 6, y + 19, x + W - 6, y + 20, Ui.EDGE_DIM);
+        g.drawString(this.font, pct, x + W - 46 - this.font.width(pct), y + 5, Ui.MUTED, false);
+        int bx = x + W - 42;
+        g.fill(bx, y + 5, bx + 30, y + 16, 0xFF000000);
+        g.fill(bx + 1, y + 6, bx + 29, y + 15, 0xFF12181C);
+        int fill = Math.round(28 * charge / 100f);
+        if (fill > 0) g.fill(bx + 1, y + 6, bx + 1 + fill, y + 15, charge > 50 ? Ui.GREEN : charge > 20 ? Ui.AMBER : Ui.RED);
+        g.fill(bx + 30, y + 8, bx + 32, y + 13, 0xFF2A3238);
+        Ui.divider(g, x + 6, y + 19, W - 12);
     }
 
     private void drawHead(GuiGraphics g, int x, int y) {
         String title = switch (tab) {
-            case 0 -> "ЭФИР";
-            case 1 -> "КАРТА";
-            case 2 -> "СЕТЬ";
-            default -> "РЫНОК";
+            case 0 -> Ui.t("screen.blackchannel.tab.feed");
+            case 1 -> Ui.t("screen.blackchannel.tab.map");
+            case 2 -> Ui.t("screen.blackchannel.tab.net");
+            default -> Ui.t("screen.blackchannel.tab.market_short");
         };
-        g.drawString(font, title, x + 8, y + 24, Ui.TEXT, false);
+        g.drawString(this.font, title, x + 8, y + 24, Ui.TEXT, false);
         String coins = "#" + ClientState.crypto;
-        g.drawString(font, coins, x + W - 8 - font.width(coins), y + 24, Ui.AMBER, false);
+        g.drawString(this.font, coins, x + W - 8 - this.font.width(coins), y + 24, Ui.AMBER, false);
         String handle = ClientState.handle == null || ClientState.handle.isEmpty() ? "—" : ClientState.handle;
-        String crew = ClientState.crew == null || ClientState.crew.isEmpty() ? "-" : Teams.nameOf(ClientState.crew);
-        String state = ClientState.emp > 0 ? "ЭМИ" : ClientState.airplane ? "ВНЕ ЭФИРА"
-                : ClientState.jammed ? "ГЛУШИЛКА" : ClientState.faraday ? "КЛЕТКА"
-                : ClientState.uplink ? (ClientState.dish ? "ТАРЕЛКА" : "СТОЙКА") : "БЕЗ СВЯЗИ";
-        int stateColor = ClientState.emp > 0 || ClientState.jammed ? Ui.RED
-                : ClientState.uplink ? Ui.GREEN : Ui.MUTED;
-        String sub = handle + " · " + crew;
-        g.drawString(font, Ui.trim(font, sub, 150), x + 8, y + 36, Ui.MUTED, false);
-        g.drawString(font, state, x + W - 8 - font.width(state), y + 36, stateColor, false);
+        String crew = ClientState.crew == null || ClientState.crew.isEmpty() ? Ui.t("screen.blackchannel.no_crew") : Teams.nameOf(ClientState.crew);
+        String who = handle + " · " + crew;
+        String state = linkState();
+        int stateW = this.font.width(state);
+        g.drawString(this.font, Ui.trim(this.font, who, W - 24 - stateW), x + 8, y + 35, Ui.MUTED, false);
+        g.drawString(this.font, state, x + W - 8 - stateW, y + 35, linkColor(), false);
+    }
+
+    private String linkState() {
+        if (ClientState.emp > 0) return "ЭМИ";
+        if (ClientState.airplane) return Ui.t("screen.blackchannel.state.air");
+        if (ClientState.jammed) return Ui.t("screen.blackchannel.state.jammed");
+        if (ClientState.faraday) return Ui.t("screen.blackchannel.state.cage");
+        if (ClientState.uplink) return ClientState.dish ? Ui.t("screen.blackchannel.state.dish") : Ui.t("screen.blackchannel.state.rack");
+        return Ui.t("screen.blackchannel.state.none");
+    }
+
+    private int linkColor() {
+        if (ClientState.emp > 0 || ClientState.jammed) return Ui.RED;
+        if (ClientState.uplink) return Ui.GREEN;
+        return Ui.MUTED;
     }
 
     private void drawNoise(GuiGraphics g, int x, int y) {
-        g.drawString(font, "ШУМ", x + 8, y + 50, Ui.MUTED, false);
         int level = Math.max(0, Math.min(100, ClientState.noise));
-        int bars = 12;
+        g.drawString(this.font, Ui.t("screen.blackchannel.noise"), x + 8, y + 46, Ui.MUTED, false);
+        int bars = 14;
         int lit = (int) Math.ceil(level / 100f * bars);
         for (int i = 0; i < bars; i++) {
-            int h = 3 + i * 2;
-            int color = i < lit ? (i > 8 ? Ui.RED : i > 5 ? Ui.AMBER : Ui.GREEN) : Ui.EDGE_DIM;
-            g.fill(x + 36 + i * 8, y + 62 - h, x + 41 + i * 8, y + 62, color);
+            int barH = 3 + i;
+            int color = i < lit ? (i > 10 ? Ui.RED : i > 6 ? Ui.AMBER : Ui.GREEN) : 0xFF23282C;
+            int bx = x + 34 + i * 7;
+            g.fill(bx, y + 60 - barH, bx + 5, y + 60, color);
         }
-        String hint = level >= 75 ? "СЛЫШНО ДАЛЕКО" : level >= 45 ? "СЛЫШНО" : level > 10 ? "шёпот" : "тихо";
-        int color = level >= 75 ? Ui.RED : level >= 45 ? Ui.AMBER : Ui.MUTED;
-        g.drawString(font, hint, x + W - 8 - font.width(hint), y + 50, color, false);
-        g.fill(x + 6, y + 64, x + W - 6, y + 65, Ui.EDGE_DIM);
+        String hint = level >= 75 ? Ui.t("screen.blackchannel.noise.loud")
+                : level >= 45 ? Ui.t("screen.blackchannel.noise.heard")
+                : level > 10 ? Ui.t("screen.blackchannel.noise.quiet") : Ui.t("screen.blackchannel.noise.silent");
+        g.drawString(this.font, hint, x + W - 8 - this.font.width(hint), y + 46,
+                level >= 75 ? Ui.RED : level >= 45 ? Ui.AMBER : Ui.MUTED, false);
+        Ui.divider(g, x + 6, y + 63, W - 12);
     }
 
     // ---------- ЭФИР ----------
 
     private void drawFeed(GuiGraphics g, int x, int y) {
-        int ly = CONTENT_TOP;
-        String result = ClientState.resultFor("ops");
-        String gear = ClientState.resultFor("gear");
-        String chatResult = ClientState.resultFor("chat");
-        String line = !result.isEmpty() ? result : !chatResult.isEmpty() ? chatResult : gear;
-        if (line != null && !line.isEmpty()) {
-            for (String part : Ui.wrap(font, line, W - 20)) {
-                if (ly > TABS_Y - 46) break;
-                g.drawString(font, part, x + 10, ly, Ui.AMBER, false);
+        // Верхняя часть — радиосообщения, нижняя — пеленги и точки
+        int chatTop = y + TOP;
+        int chatBottom = y + 130;
+        int ly = chatTop;
+        String note = ClientState.resultFor("ops");
+        if (!note.isEmpty()) {
+            for (String line : Ui.wrap(this.font, note, W - 20)) {
+                if (ly + 10 > chatTop + 22) break;
+                g.drawString(this.font, line, x + 8, ly, Ui.AMBER, false);
                 ly += 10;
             }
-            ly += 3;
         }
-        // Пеленги: пока луч один, точка не появляется
+        List<ClientState.ChatRow> chat = ClientState.chat;
+        int room = Math.max(0, (chatBottom - ly) / 10);
+        int from = Math.max(0, chat.size() - room);
+        if (chat.isEmpty() && note.isEmpty()) {
+            g.drawString(this.font, Ui.t("screen.blackchannel.feed.empty"), x + 8, ly, Ui.MUTED, false);
+        }
+        // Строка режется целиком: половина строки поверх разделителя выглядит как баг
+        for (int i = from; i < chat.size() && ly + 10 <= chatBottom; i++) {
+            ClientState.ChatRow row = chat.get(i);
+            g.drawString(this.font, Ui.trim(this.font, row.from() + ": " + row.text(), W - 20), x + 8, ly,
+                    row.enc() ? Ui.BLUE : Ui.TEXT, false);
+            ly += 10;
+        }
+        Ui.divider(g, x + 6, y + 132, W - 12);
+
+        // Пеленги
+        int by = y + 136;
+        g.drawString(this.font, Ui.t("screen.blackchannel.beams"), x + 8, by, Ui.MUTED, false);
+        by += 10;
+        int shown = 0;
         for (ClientState.BeamRow beam : ClientState.beams) {
-            if (ly > TABS_Y - 34) break;
-            String text = "ЛУЧ " + beam.handle + " " + Math.round(beam.angle) + "° ±" + Math.round(beam.alpha)
-                    + (beam.samples > 1 ? " x" + beam.samples : "") + " · " + age(beam.age);
-            g.drawString(font, Ui.trim(font, text, W - 20), x + 10, ly, Ui.AMBER, false);
-            ly += 10;
+            if (shown >= 2) break;
+            String text = beam.handle + " " + Math.round(beam.angle) + "° ±" + Math.round(beam.alpha)
+                    + (beam.samples > 1 ? " x" + beam.samples : "");
+            g.drawString(this.font, Ui.trim(this.font, text, W - 20), x + 8, by, Ui.AMBER, false);
+            by += 10;
+            shown++;
         }
-        // Готовые точки
+        if (shown == 0) {
+            g.drawString(this.font, Ui.t("screen.blackchannel.beams.none"), x + 8, by, 0xFF4A545A, false);
+            by += 10;
+        }
+        // Точки
+        int ty = Math.max(by + 2, y + 158);
+        int rows = 0;
         for (ClientState.IntelRow row : ClientState.intel) {
-            if (ly > TABS_Y - 34) break;
-            String text = "ТОЧКА " + row.handle + " ±" + row.err + " · " + age(row.age);
-            g.drawString(font, Ui.trim(font, text, W - 20), x + 10, ly, row.stale ? Ui.MUTED : Ui.GREEN, false);
-            ly += 10;
+            if (ty > y + BOTTOM - 10 || rows >= 2) break;
+            String text = Ui.t("screen.blackchannel.point") + " " + row.handle + " ±" + row.err + " · " + age(row.age);
+            g.drawString(this.font, Ui.trim(this.font, text, W - 20), x + 8, ty, row.stale ? Ui.MUTED : Ui.GREEN, false);
+            ty += 10;
+            rows++;
         }
-        // Последние сообщения
-        int from = Math.max(0, ClientState.chat.size() - 5);
-        for (int i = from; i < ClientState.chat.size(); i++) {
-            if (ly > TABS_Y - 22) break;
-            ClientState.ChatRow row = ClientState.chat.get(i);
-            String text = row.from() + ": " + row.text();
-            g.drawString(font, Ui.trim(font, text, W - 20), x + 10, ly, row.enc() ? Ui.BLUE : Ui.MUTED, false);
-            ly += 10;
-        }
-        if (ly == CONTENT_TOP) {
-            g.drawString(font, "Эфир пуст. Нажми TRACE на ноутбуке.", x + 10, ly, Ui.MUTED, false);
-        }
-        int cardY = TABS_Y - 40;
-        g.fill(x + 6, cardY, x + W - 6, cardY + 1, Ui.EDGE_DIM);
-        String drops = ClientState.matchActive ? "до финала " + clock(ClientState.matchTimeLeftSeconds) : "канал в режиме ожидания";
-        g.drawString(font, Ui.trim(font, drops, W - 20), x + 10, cardY + 5, Ui.TEXT, false);
-        String team = ClientState.crew == null || ClientState.crew.isEmpty() ? "вне отряда" : Teams.nameOf(ClientState.crew);
-        g.drawString(font, Ui.trim(font, "отряд: " + team + " · заряд " + ClientState.sat, W - 20), x + 10, cardY + 15, Ui.MUTED, false);
-        g.drawString(font, Ui.trim(font, "живых " + ClientState.aliveCount, W - 20), x + 10, cardY + 25, Ui.MUTED, false);
     }
 
     // ---------- КАРТА ----------
 
     private void drawMap(GuiGraphics g, int x, int y) {
         int cx = x + 56;
-        int cy = y + CONTENT_TOP + 46;
-        int r = 44;
-        g.fill(cx - r, cy - r, cx + r, cy + r, 0xFF0B0F12);
-        for (int i = -r; i <= r; i += 22) {
-            g.fill(cx - r, cy + i, cx + r, cy + i + 1, 0xFF1E2A24);
-            g.fill(cx + i, cy - r, cx + i + 1, cy + r, 0xFF1E2A24);
+        int cy = y + 124;
+        int r = 48;
+        Ui.well(g, cx - r, cy - r, r * 2, r * 2);
+        for (int i = -r + 24; i < r; i += 24) {
+            g.fill(cx - r, cy + i, cx + r, cy + i + 1, 0xFF1D2A24);
+            g.fill(cx + i, cy - r, cx + i + 1, cy + r, 0xFF1D2A24);
         }
-        if (minecraft != null && minecraft.player != null) {
-            double px = minecraft.player.getX();
-            double pz = minecraft.player.getZ();
+        g.fill(cx - r + r, cy - r, cx - r + r + 1, cy + r, 0xFF2B3A32);
+        g.fill(cx - r, cy, cx + r, cy + 1, 0xFF2B3A32);
+        if (this.minecraft != null && this.minecraft.player != null) {
+            double px = this.minecraft.player.getX();
+            double pz = this.minecraft.player.getZ();
             for (ClientState.BeamRow beam : ClientState.beams) {
-                Ui.ray(g, cx, cy, r, ClientState.radarR, beam.ox - px, beam.oz - pz, beam.angle, Ui.AMBER);
+                Ui.ray(g, cx, cy, r, ClientState.radarR, beam.ox - (int) px, beam.oz - (int) pz, beam.angle, Ui.AMBER);
             }
             for (ClientState.Blip blip : ClientState.blips) {
                 Ui.blip(g, cx, cy, r, ClientState.radarR, blip.dx(), blip.dz(), Ui.blipColor(blip.kind()));
             }
-            Ui.selfArrow(g, cx, cy, minecraft.player.getYRot());
+            Ui.selfArrow(g, cx, cy, this.minecraft.player.getYRot());
         }
-        g.drawString(font, "С", cx - 2, cy - r + 2, Ui.MUTED, false);
-        int ly = y + CONTENT_TOP;
-        int rx = x + 108;
-        int rw = W - 116;
+        g.drawString(this.font, Ui.t("screen.blackchannel.north"), cx - 2, cy - r + 2, Ui.MUTED, false);
+        // Ось расстояния под картой
+        String range = "r " + ClientState.radarR;
+        g.drawString(this.font, range, cx - this.font.width(range) / 2, cy + r + 3, 0xFF4A545A, false);
+
+        // Правая колонка: что видно и что известно
+        int rx = x + 112;
+        int rw = W - 120;
+        int ly = y + TOP;
+        int bottom = y + BOTTOM;
+        g.drawString(this.font, Ui.t("screen.blackchannel.contacts"), rx, ly, Ui.MUTED, false);
+        ly += 10;
         int n = 0;
         for (ClientState.Blip blip : ClientState.blips) {
-            if (n++ >= 6) break;
+            if (n >= 4) break;
             String text = Ui.t("blackchannel.blip." + blip.kind()) + " " + blip.dist() + "м";
-            g.drawString(font, Ui.trim(font, text, rw), rx, ly, Ui.blipColor(blip.kind()), false);
+            g.drawString(this.font, Ui.trim(this.font, text, rw), rx, ly, Ui.blipColor(blip.kind()), false);
             ly += 10;
+            n++;
         }
         if (n == 0) {
-            g.drawString(font, "пусто", rx, ly, Ui.MUTED, false);
+            g.drawString(this.font, Ui.t("screen.blackchannel.empty"), rx, ly, 0xFF4A545A, false);
             ly += 10;
         }
         ly += 4;
         for (ClientState.IntelRow row : ClientState.intel) {
-            if (ly > TABS_Y - 26) break;
-            String text = row.handle + " ±" + row.err;
-            g.drawString(font, Ui.trim(font, text, rw), rx, ly, row.stale ? Ui.MUTED : Ui.GREEN, false);
+            if (ly > bottom - 10) break;
+            g.drawString(this.font, Ui.trim(this.font, row.handle + " ±" + row.err, rw), rx, ly,
+                    row.stale ? Ui.MUTED : Ui.GREEN, false);
             ly += 10;
         }
         for (ClientState.TrackRow track : ClientState.trackers) {
-            if (ly > TABS_Y - 24) break;
-            String text = (track.live() ? "ЖУК " : "БЫЛ ") + track.x() + " " + track.z();
-            g.drawString(font, Ui.trim(font, text, rw), rx, ly, track.live() ? Ui.AMBER : Ui.MUTED, false);
+            if (ly > bottom - 10) break;
+            String text = (track.live() ? Ui.t("screen.blackchannel.track.live") : Ui.t("screen.blackchannel.track.was"))
+                    + " " + track.x() + " " + track.z();
+            g.drawString(this.font, Ui.trim(this.font, text, rw), rx, ly, track.live() ? Ui.AMBER : Ui.MUTED, false);
             ly += 10;
         }
-        Ui.button(g, font, hits, x + 8, TABS_Y - 18, 96, 12, Ui.t("screen.blackchannel.btn.radar_hud"),
-                ClientState.tip("screen.blackchannel.tip.radar_hud", ClientState.cfg("radarPhone", 52), ClientState.cfg("radarLaptop", 110),
-                        ClientState.cfg("structure", 360), ClientState.cfg("dishBonus", 80)),
-                ClientState.radarHud, Actions.RADAR, "");
     }
 
     // ---------- СЕТЬ ----------
 
     private void drawNet(GuiGraphics g, int x, int y) {
-        int ly = CONTENT_TOP;
-        Ui.button(g, font, hits, x + 8, ly, 52, 12, "DARK", "darknet".equals(ClientState.channel), Actions.CHAN, "darknet");
-        Ui.button(g, font, hits, x + 62, ly, 52, 12, "LOCAL", "local".equals(ClientState.channel), Actions.CHAN, "local");
-        Ui.button(g, font, hits, x + 116, ly, 40, 12, "DM", "dm".equals(ClientState.channel), "dm-mode", "");
-        Ui.button(g, font, hits, x + 158, ly, 82, 12, Ui.t("screen.blackchannel.btn.airplane"),
+        int ly = y + TOP;
+        int bottom = y + BOTTOM;
+        Ui.button(g, this.font, hits, x + 8, ly, 84, 13, Ui.t("screen.blackchannel.btn.airplane"),
                 Ui.t("screen.blackchannel.tip.airplane"), ClientState.airplane, Actions.AIR, "");
-        ly += 14;
-        Ui.button(g, font, hits, x + 8, ly, 40, 12, "DND", Ui.t("screen.blackchannel.tip.dnd"), ClientState.dnd, Actions.DND, "");
-        Ui.button(g, font, hits, x + 50, ly, 100, 12, Ui.t("screen.blackchannel.btn.manual"), false, "manual", "");
-        Ui.button(g, font, hits, x + 152, ly, 88, 12, Ui.t("screen.blackchannel.btn.wipe_sim"), Ui.t("screen.blackchannel.tip.wipe"), false, Actions.WIPE, "");
-        ly += 16;
-        int from = Math.max(0, ClientState.chat.size() - 8);
-        for (int i = from; i < ClientState.chat.size(); i++) {
-            if (ly > TABS_Y - 58) break;
-            ClientState.ChatRow row = ClientState.chat.get(i);
-            g.drawString(font, Ui.trim(font, row.from() + ": " + row.text(), W - 20), x + 10, ly, row.enc() ? Ui.BLUE : Ui.TEXT, false);
-            ly += 10;
+        Ui.button(g, this.font, hits, x + 96, ly, 56, 13, "DND", Ui.t("screen.blackchannel.tip.dnd"), ClientState.dnd, Actions.DND, "");
+        Ui.button(g, this.font, hits, x + 156, ly, 84, 13, Ui.t("screen.blackchannel.btn.radar_hud"),
+                ClientState.tip("screen.blackchannel.tip.radar_hud", ClientState.cfg("radarPhone", 52), ClientState.cfg("radarLaptop", 110),
+                        ClientState.cfg("structure", 360), ClientState.cfg("dishBonus", 80)),
+                ClientState.radarHud, Actions.RADAR, "");
+        ly += 17;
+        Ui.button(g, this.font, hits, x + 8, ly, 110, 13, Ui.t("screen.blackchannel.btn.manual"), null, false, "manual", "");
+        Ui.button(g, this.font, hits, x + 122, ly, 118, 13, Ui.t("screen.blackchannel.btn.wipe_sim"),
+                Ui.t("screen.blackchannel.tip.wipe"), false, Actions.WIPE, "");
+        ly += 21;
+
+        // Состояние связи и расходников — строками, без кнопок
+        Ui.well(g, x + 8, ly, W - 16, 54);
+        int ry = ly + 4;
+        line(g, x + 12, ry, Ui.t("screen.blackchannel.net.uplink"), uplinkText(), ClientState.uplink ? Ui.GREEN : Ui.RED);
+        ry += 10;
+        line(g, x + 12, ry, Ui.t("screen.blackchannel.net.vpn"), vpnText(), ClientState.vpn > 0 ? Ui.GREEN : Ui.MUTED);
+        ry += 10;
+        line(g, x + 12, ry, Ui.t("screen.blackchannel.net.ids"), ClientState.ids ? Ui.t("screen.blackchannel.on") : Ui.t("screen.blackchannel.off"),
+                ClientState.ids ? Ui.GREEN : Ui.MUTED);
+        ry += 10;
+        line(g, x + 12, ry, Ui.t("screen.blackchannel.net.hard"), ClientState.hard ? Ui.t("screen.blackchannel.on") : Ui.t("screen.blackchannel.off"),
+                ClientState.hard ? Ui.GREEN : Ui.MUTED);
+        ry += 10;
+        line(g, x + 12, ry, Ui.t("screen.blackchannel.net.sat"), String.valueOf(ClientState.sat), ClientState.sat > 0 ? Ui.AMBER : Ui.MUTED);
+        ly += 60;
+
+        String result = ClientState.resultFor("chat");
+        if (!result.isEmpty()) {
+            for (String part : Ui.wrap(this.font, result, W - 20)) {
+                if (ly > bottom - 10) break;
+                g.drawString(this.font, part, x + 8, ly, Ui.AMBER, false);
+                ly += 10;
+            }
+        } else {
+            g.drawString(this.font, Ui.t("screen.blackchannel.net.hint"), x + 8, ly, 0xFF4A545A, false);
         }
-        // Строка расходников: VPN, IDS, закалка
-        int buffY = TABS_Y - 54;
-        g.fill(x + 6, buffY - 3, x + W - 6, buffY - 2, Ui.EDGE_DIM);
-        String buffs = (ClientState.vpn >= 2 ? "VPN2" : ClientState.vpn == 1 ? "VPN" : "—")
-                + (ClientState.ids ? " · IDS" : "") + (ClientState.hard ? " · закалка" : "");
-        g.drawString(font, Ui.trim(font, buffs, W - 20), x + 10, buffY, ClientState.vpn + (ClientState.ids ? 1 : 0) > 0 ? Ui.GREEN : Ui.MUTED, false);
-        String note = ClientState.resultFor("chat");
-        g.drawString(font, Ui.trim(font, note.isEmpty() ? Ui.t("screen.blackchannel.send_hint") : note, W - 20),
-                x + 10, buffY + 10, note.isEmpty() ? Ui.MUTED : Ui.AMBER, false);
-        // Контакты — по три в ряд
-        int cy = buffY + 22;
-        int i = 0;
-        for (String contact : ClientState.contacts) {
-            if (i >= 9) break;
-            int bx = x + 8 + (i % 3) * 78;
-            int by = cy + (i / 3) * 13;
-            Ui.button(g, font, hits, bx, by, 74, 11, contact, contact.equals(dmTarget), "pick-dm", contact);
-            i++;
-        }
+    }
+
+    private String uplinkText() {
+        if (ClientState.uplink) return ClientState.dish ? Ui.t("screen.blackchannel.state.dish") : Ui.t("screen.blackchannel.state.rack");
+        return Ui.t("screen.blackchannel.state.none");
+    }
+
+    private String vpnText() {
+        return switch (ClientState.vpn) {
+            case 0 -> Ui.t("screen.blackchannel.off");
+            case 1 -> "VPN";
+            case 2 -> "VPN +";
+            default -> "DEEP VPN";
+        };
+    }
+
+    private void line(GuiGraphics g, int x, int y, String label, String value, int color) {
+        g.drawString(this.font, label, x, y, Ui.MUTED, false);
+        g.drawString(this.font, value, x + W - 24 - this.font.width(value), y, color, false);
     }
 
     // ---------- РЫНОК ----------
 
     private void drawMarket(GuiGraphics g, int x, int y, int mx, int my) {
-        int ty = y + CONTENT_TOP;
-        Ui.button(g, font, hits, x + 8, ty, 74, 13, Ui.t("screen.blackchannel.market.shop"), marketTab == 0, "mkt", "0");
-        Ui.button(g, font, hits, x + 86, ty, 74, 13, Ui.t("screen.blackchannel.market.board"), marketTab == 1, "mkt", "1");
-        Ui.button(g, font, hits, x + 164, ty, 76, 13, Ui.t("screen.blackchannel.market.auction"), marketTab == 2, "mkt", "2");
-        g.fill(x + 8, ty + 15, x + W - 8, TABS_Y - 46, 0xFF0B0F12);
+        int ty = y + TOP;
+        int w = (W - 16 - 8) / 3;
+        Ui.tab(g, this.font, hits, x + 8, ty, w, 14, Ui.t("screen.blackchannel.market.shop"), marketTab == 0, "mkt", "0");
+        Ui.tab(g, this.font, hits, x + 8 + w + 4, ty, w, 14, Ui.t("screen.blackchannel.market.board"), marketTab == 1, "mkt", "1");
+        Ui.tab(g, this.font, hits, x + 8 + (w + 4) * 2, ty, w, 14, Ui.t("screen.blackchannel.market.auction"), marketTab == 2, "mkt", "2");
         if (marketTab == 0) drawShop(g, x, ty, mx, my);
         else drawListings(g, x, ty, marketTab == 1, mx, my);
     }
 
     private void drawShop(GuiGraphics g, int x, int ty, int mx, int my) {
-        var entries = Catalog.entries();
+        List<Catalog.Entry> entries = Catalog.entries();
         Catalog.Entry picked = null;
         for (int i = 0; i < 12; i++) {
             int sx = lotX(x, i % 6);
@@ -339,19 +398,19 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             ItemStack stack = new ItemStack(entry.item().get(), Math.max(1, entry.count()));
             boolean on = entry.id().equals(shopPick);
             if (on) picked = entry;
-            if (lot(g, sx, sy, stack, entry.price(), on, mx, my)) {
+            if (lot(g, sx, sy, stack, entry.price(), on)) {
                 hits.add(new Ui.Hit(sx, sy, 36, 38, "mpick", entry.id(), null));
                 armTip(stack, entry.price(), Ui.t("screen.blackchannel.market.vendor"), null);
             }
         }
         if (picked == null) {
-            marketFoot(g, x, ty, ItemStack.EMPTY, null, "", 0, null, "", 1, null);
+            marketFoot(g, x, ty, ItemStack.EMPTY, null, "", 0, null, "", 1);
             return;
         }
         ItemStack stack = new ItemStack(picked.item().get(), Math.max(1, picked.count()));
         String name = stack.getHoverName().getString();
         if (picked.count() > 1) name = name + " x" + picked.count();
-        marketFoot(g, x, ty, stack, name, Ui.t("screen.blackchannel.market.vendor"), picked.price(), Actions.BUY, picked.id(), 1, null);
+        marketFoot(g, x, ty, stack, name, Ui.t("screen.blackchannel.market.vendor"), picked.price(), Actions.BUY, picked.id(), 1);
     }
 
     private void drawListings(GuiGraphics g, int x, int ty, boolean intelBoard, int mx, int my) {
@@ -361,12 +420,13 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         }
         if (rows.isEmpty()) {
             String empty = intelBoard ? Ui.t("screen.blackchannel.market.empty") : Ui.t("screen.blackchannel.market.empty_items");
-            int ly = ty + 44;
-            for (String line : Ui.wrap(font, empty, W - 28)) {
-                g.drawString(font, line, x + 14, ly, Ui.MUTED, false);
+            int ly = ty + 26;
+            for (String line : Ui.wrap(this.font, empty, W - 28)) {
+                if (ly > ty + 86) break;
+                g.drawString(this.font, line, x + 14, ly, Ui.MUTED, false);
                 ly += 10;
             }
-            marketFoot(g, x, ty, ItemStack.EMPTY, "", "", 0, null, "", 1, null);
+            marketFoot(g, x, ty, ItemStack.EMPTY, "", "", 0, null, "", 1);
             return;
         }
         int pages = Math.max(1, (rows.size() + 11) / 12);
@@ -386,7 +446,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             ItemStack stack = listingStack(row);
             boolean on = row.id == listPick;
             if (on) picked = row;
-            if (lot(g, sx, sy, stack, row.price, on, mx, my)) {
+            if (lot(g, sx, sy, stack, row.price, on)) {
                 hits.add(new Ui.Hit(sx, sy, 36, 38, "lpick", String.valueOf(row.id), null));
                 armTip(stack, row.price, row.seller, null);
                 if (row.intel) {
@@ -396,13 +456,13 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             }
         }
         if (picked == null) {
-            marketFoot(g, x, ty, ItemStack.EMPTY, null, "", 0, null, "", pages, null);
+            marketFoot(g, x, ty, ItemStack.EMPTY, null, "", 0, null, "", pages);
             return;
         }
         ItemStack stack = listingStack(picked);
         String name = stack.isEmpty() ? picked.desc : stack.getHoverName().getString();
         if (stack.getCount() > 1) name = name + " x" + stack.getCount();
-        marketFoot(g, x, ty, stack, name, picked.seller, picked.price, Actions.BUY_LIST, String.valueOf(picked.id), pages, null);
+        marketFoot(g, x, ty, stack, name, picked.seller, picked.price, Actions.BUY_LIST, String.valueOf(picked.id), pages);
     }
 
     private int lotX(int x, int col) {
@@ -410,68 +470,68 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     }
 
     private int lotY(int ty, int row) {
-        return ty + 19 + row * 40;
+        return ty + 18 + row * 40;
     }
 
     private void emptyLot(GuiGraphics g, int sx, int sy) {
         g.fill(sx, sy, sx + 36, sy + 38, 0xFF0C1210);
-        g.fill(sx, sy, sx + 36, sy + 1, 0xFF1B3A30);
+        g.fill(sx, sy, sx + 36, sy + 1, 0xFF17251F);
     }
 
-    private boolean lot(GuiGraphics g, int sx, int sy, ItemStack stack, int price, boolean on, int mx, int my) {
-        boolean over = mx >= sx && my >= sy && mx < sx + 36 && my < sy + 38;
-        g.fill(sx, sy, sx + 36, sy + 38, on ? 0xFF2A2213 : 0xFF101614);
+    private boolean lot(GuiGraphics g, int sx, int sy, ItemStack stack, int price, boolean on) {
+        boolean over = Ui.hover(sx, sy, 36, 38);
+        g.fill(sx, sy, sx + 36, sy + 38, on ? Ui.ON_FILL : over ? 0xFF182120 : 0xFF101614);
         g.fill(sx, sy, sx + 36, sy + 1, on ? Ui.EDGE : over ? Ui.AMBER : Ui.EDGE_DIM);
         if (stack != null && !stack.isEmpty()) {
-            g.renderItem(stack, sx + 10, sy + 3);
-            g.renderItemDecorations(font, stack, sx + 10, sy + 3);
+            g.renderItem(stack, sx + 10, sy + 4);
+            g.renderItemDecorations(this.font, stack, sx + 10, sy + 4);
         } else {
-            g.drawString(font, "?", sx + 15, sy + 12, Ui.MUTED, false);
+            g.drawString(this.font, "?", sx + 15, sy + 12, Ui.MUTED, false);
         }
         String label = "#" + price;
-        int pw = font.width(label);
+        int pw = this.font.width(label);
         int color = price > ClientState.crypto ? Ui.RED : Ui.AMBER;
-        g.drawString(font, label, sx + Math.max(2, (36 - pw) / 2), sy + 26, color, false);
+        g.drawString(this.font, label, sx + Math.max(2, (36 - pw) / 2), sy + 27, color, false);
         return over;
     }
 
     private void marketFoot(GuiGraphics g, int x, int ty, ItemStack stack, String title, String meta,
-                            int price, String buyAction, String buyArg, int pages, Component secret) {
-        int fy = TABS_Y - 44;
-        g.fill(x + 6, fy, x + W - 6, fy + 1, Ui.EDGE_DIM);
+                            int price, String buyAction, String buyArg, int pages) {
+        int fy = ty + 99;
+        Ui.divider(g, x + 6, fy - 3, W - 12);
         if (stack == null || stack.isEmpty()) {
-            String note = title == null ? Ui.t("screen.blackchannel.market.pick") : title;
-            int ly = fy + 6;
-            for (String line : Ui.wrap(font, note, W - 24)) {
-                if (ly > fy + 40) break;
-                g.drawString(font, line, x + 12, ly, Ui.MUTED, false);
+            String note = title == null || title.isEmpty() ? Ui.t("screen.blackchannel.market.pick") : title;
+            int ly = fy + 2;
+            for (String line : Ui.wrap(this.font, note, W - 24)) {
+                if (ly > fy + 16) break;
+                g.drawString(this.font, line, x + 10, ly, Ui.MUTED, false);
                 ly += 10;
             }
         } else {
-            g.renderItem(stack, x + 10, fy + 4);
-            g.drawString(font, Ui.trim(font, title, 118), x + 30, fy + 3, Ui.TEXT, false);
-            int priceColor = price > ClientState.crypto ? Ui.RED : Ui.AMBER;
-            String line = (meta == null || meta.isEmpty() ? "" : meta + "  ") + "#" + price;
-            g.drawString(font, Ui.trim(font, line, 118), x + 30, fy + 13, priceColor, false);
+            g.renderItem(stack, x + 9, fy + 2);
+            g.drawString(this.font, Ui.trim(this.font, title, 112), x + 28, fy + 1, Ui.TEXT, false);
+            String lineText = (meta == null || meta.isEmpty() ? "" : meta + " ") + "#" + price;
+            g.drawString(this.font, Ui.trim(this.font, lineText, 112), x + 28, fy + 11,
+                    price > ClientState.crypto ? Ui.RED : Ui.AMBER, false);
             if (buyAction != null) {
-                Ui.button(g, font, hits, x + 160, fy + 4, 76, 14, Ui.t("screen.blackchannel.market.buy"),
+                Ui.button(g, this.font, hits, x + 160, fy + 3, 78, 14, Ui.t("screen.blackchannel.market.buy"),
                         price <= ClientState.crypto, buyAction, buyArg);
             }
         }
         if (pages > 1) {
-            Ui.button(g, font, hits, x + W - 62, fy + 22, 22, 12, "<", marketPage > 0, "mpage", "-1");
-            String p = (marketPage + 1) + "/" + pages;
-            g.drawString(font, p, x + W - 38, fy + 25, Ui.MUTED, false);
-            Ui.button(g, font, hits, x + W - 26, fy + 22, 20, 12, ">", marketPage < pages - 1, "mpage", "1");
+            String page = (marketPage + 1) + "/" + pages + " ·";
+            g.drawString(this.font, page, x + W - 10 - this.font.width(page), fy + 11, Ui.MUTED, false);
         }
         String result = ClientState.resultFor(marketTab == 0 ? "market" : "board");
-        if (!result.isEmpty()) g.drawString(font, Ui.trim(font, result, W - 20), x + 10, fy + 22, Ui.AMBER, false);
+        if (!result.isEmpty()) g.drawString(this.font, Ui.trim(this.font, result, W - 20), x + 10, fy + 15, Ui.AMBER, false);
     }
 
     private void armTip(ItemStack stack, int price, String seller, String extra) {
-        hoverStack = stack == null ? ItemStack.EMPTY : stack;
+        hoverStack = stack;
         hoverLines.clear();
-        if (minecraft != null && hoverStack != null && !hoverStack.isEmpty()) hoverLines.addAll(Screen.getTooltipFromItem(minecraft, hoverStack));
+        if (this.minecraft != null && stack != null && !stack.isEmpty()) {
+            hoverLines.addAll(Screen.getTooltipFromItem(this.minecraft, stack));
+        }
         hoverLines.add(Component.literal("#" + price).withStyle(ChatFormatting.GOLD));
         if (seller != null && !seller.isEmpty()) hoverLines.add(Component.literal(seller).withStyle(ChatFormatting.GRAY));
         if (extra != null && !extra.isEmpty()) hoverLines.add(Component.literal(extra).withStyle(ChatFormatting.DARK_AQUA));
@@ -494,26 +554,30 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         return ItemStack.EMPTY;
     }
 
-    // ---------- вкладки и ввод ----------
+    // ---------- ввод и вкладки ----------
+
+    private void drawInput(GuiGraphics g, int x, int y) {
+        if (tab != 0) return;
+        Ui.well(g, x + 8, y + INPUT_Y, W - 66, 14);
+        g.fill(x + 8, y + INPUT_Y + 13, x + W - 58, y + INPUT_Y + 14, Ui.EDGE_DIM);
+        Ui.button(g, this.font, hits, x + W - 56, y + INPUT_Y, 48, 14, Ui.t("screen.blackchannel.btn.send"), false, "send", "");
+    }
 
     private void drawTabs(GuiGraphics g, int x, int y) {
-        g.fill(x + 6, TABS_Y - 2, x + W - 6, TABS_Y - 1, Ui.EDGE_DIM);
-        String[] names = {Ui.t("screen.blackchannel.tab.feed"), Ui.t("screen.blackchannel.tab.map"),
-                Ui.t("screen.blackchannel.tab.net"), Ui.t("screen.blackchannel.tab.market_short")};
+        String[] names = {
+                Ui.t("screen.blackchannel.tab.feed"),
+                Ui.t("screen.blackchannel.tab.map"),
+                Ui.t("screen.blackchannel.tab.net"),
+                Ui.t("screen.blackchannel.tab.market_short")
+        };
         for (int i = 0; i < 4; i++) {
-            int bx = x + 6 + i * 60;
-            Ui.button(g, font, hits, bx, y + TABS_Y, 58, TABS_H, names[i], tab == i, "tab", String.valueOf(i));
+            Ui.tab(g, this.font, hits, x + 6 + i * 59, y + TABS_Y, 57, TABS_H, names[i], tab == i, "tab", String.valueOf(i));
         }
     }
 
     private String age(int seconds) {
         if (seconds < 60) return seconds + "с";
         return (seconds / 60) + "м" + (seconds % 60) + "с";
-    }
-
-    private String clock(int totalSeconds) {
-        int s = Math.max(0, totalSeconds);
-        return String.format("%d:%02d", s / 60, s % 60);
     }
 
     @Override
@@ -533,15 +597,12 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
                 marketTab = Integer.parseInt(hit.arg());
                 marketPage = 0;
             }
-            case "mpage" -> marketPage = Math.max(0, marketPage + Integer.parseInt(hit.arg()));
             case "mpick" -> shopPick = hit.arg();
             case "lpick" -> listPick = Integer.parseInt(hit.arg());
-            case "pick-dm" -> {
-                dmTarget = hit.arg();
-                send(Actions.CHAN, "dm:" + hit.arg());
+            case "manual" -> {
+                if (this.minecraft != null) this.minecraft.setScreen(new ManualScreen());
             }
-            case "dm-mode" -> send(Actions.CHAN, dmTarget.isEmpty() ? "dm:" : "dm:" + dmTarget);
-            case "manual" -> minecraft.setScreen(new ManualScreen());
+            case "send" -> submit();
             default -> send(hit.action(), hit.arg());
         }
     }
@@ -552,34 +613,37 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             submit();
             return true;
         }
-        if (typing(key, scan)) return true;
+        if (input != null && input.isFocused() && key != 256 && !typingToggle(key, scan)) {
+            input.keyPressed(key, scan, mods);
+            return true;
+        }
         return super.keyPressed(key, scan, mods);
     }
 
-    private boolean typing(int key, int scan) {
-        return input != null && input.isFocused() && minecraft != null && minecraft.options.keyInventory.matches(key, scan);
+    /** Клавиша инвентаря закрывает телефон, даже когда курсор в поле ввода. */
+    private boolean typingToggle(int key, int scan) {
+        return this.minecraft != null && this.minecraft.options.keyInventory.matches(key, scan);
     }
 
     private void submit() {
+        if (input == null) return;
         String text = input.getValue().trim();
         if (text.isEmpty()) return;
         if (text.startsWith("@")) {
-            int sp = text.indexOf(' ');
-            if (sp > 1) {
-                send(Actions.DM, text.substring(1, sp) + " " + text.substring(sp + 1).trim());
+            int space = text.indexOf(' ');
+            if (space > 1) {
+                send(Actions.DM, text.substring(1, space) + " " + text.substring(space + 1).trim());
                 input.setValue("");
                 return;
             }
         }
-        if ("dm".equals(ClientState.channel) && !dmTarget.isEmpty()) send(Actions.DM, dmTarget + " " + text);
-        else send(Actions.SAY, text);
+        send(Actions.SAY, text);
         input.setValue("");
     }
 
     @Override
     public boolean mouseScrolled(double mx, double my, double delta) {
         if (tab == 3) marketPage = Math.max(0, marketPage - (int) Math.signum(delta));
-        else scroll = Math.max(0, scroll - (int) Math.signum(delta));
         return true;
     }
 

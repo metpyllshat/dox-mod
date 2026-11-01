@@ -168,7 +168,6 @@ public final class Minigame {
                 .then(Commands.literal("cache").requires(Minigame::op).executes(c -> spawnCache(c.getSource())))
                 .then(Commands.literal("start").requires(Minigame::op).executes(c -> start(c.getSource())))
                 .then(Commands.literal("practice").executes(c -> practice(c.getSource())))
-                .then(Commands.literal("city").requires(Minigame::op).executes(c -> city(c.getSource())))
                 .then(Commands.literal("stop").requires(Minigame::op).executes(c -> stop(c.getSource()))));
     }
 
@@ -881,7 +880,7 @@ public final class Minigame {
         for (UUID id : base.players()) {
             ServerPlayer player = server.getPlayerList().getPlayer(id);
             if (player == null) continue;
-            BlockPos spot = loadedGround(level, feet.getX(), feet.getZ(), player.getRandom());
+            BlockPos spot = solidGround(level, feet, player.getRandom());
             match.drops.put(id, MatchData.Drop.at(spot.getX(), spot.getY(), spot.getZ(), base.yaw()));
             player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL);
             player.setForcedPose(null);
@@ -909,32 +908,56 @@ public final class Minigame {
     }
 
     /**
-     * Сухая площадка для базы: бункер в океане — это утонувшие игроки и залитый зал,
-     * поэтому воду, лаву и обрывы рядом с точкой отбрасываем и ищем сушу вокруг.
+     * Сухая площадка для базы. Бункер в океане — это утонувшие игроки и залитый зал,
+     * поэтому точку проверяем жёстко: земля выше уровня моря, не океан и не река,
+     * вокруг вода и лавы нет, перепадов высоты нет. Поиск идёт кольцами до 256 блоков,
+     * а не «где-то рядом»: лучше база в стороне, чем база на дне.
      */
     private static BlockPos dryGround(ServerLevel level, int x, int z, RandomSource random) {
+        BlockPos fallback = null;
+        int fallbackY = Integer.MIN_VALUE;
         int loads = 0;
-        for (int radius = 0; radius <= 64; radius += 4) {
-            for (int attempt = 0; attempt < 10; attempt++) {
-                int sx = x + (radius == 0 ? 0 : random.nextInt(radius * 2 + 1) - radius);
-                int sz = z + (radius == 0 ? 0 : random.nextInt(radius * 2 + 1) - radius);
+        for (int radius = 0; radius <= 256; radius = radius == 0 ? 8 : radius + 8) {
+            int attempts = radius == 0 ? 1 : 4;
+            for (int attempt = 0; attempt < attempts; attempt++) {
+                int sx = radius == 0 ? x : x + random.nextInt(radius * 2 + 1) - radius;
+                int sz = radius == 0 ? z : z + random.nextInt(radius * 2 + 1) - radius;
                 if (level.getChunkSource().getChunkNow(sx >> 4, sz >> 4) == null) {
-                    // Всего пара синхронных загрузок на базу: дальше ищем только по готовым чанкам
-                    if (loads >= 8) continue;
+                    // Не больше 16 синхронных загрузок на базу, дальше только готовые чанки
+                    if (loads >= 16) continue;
                     loads++;
                     level.getChunk(sx >> 4, sz >> 4);
                 }
                 int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, sx, sz);
                 BlockPos feet = new BlockPos(sx, y, sz);
                 if (!standable(level, feet)) continue;
+                if (y > fallbackY) {
+                    fallback = feet;
+                    fallbackY = y;
+                }
+                if (!onLand(level, feet)) continue;
                 if (!dryArea(level, feet)) continue;
                 if (radius > 0) BlackChannelMod.LOGGER.info(
                         "BlackChannel: база съехала на {} блоков на сушу {}", radius, feet.toShortString());
                 return feet;
             }
         }
-        BlackChannelMod.LOGGER.warn("blackchannel: сухого места для базы не нашлось около {} {}, база ставится как есть", x, z);
+        if (fallback != null) {
+            BlackChannelMod.LOGGER.warn("BlackChannel: сухой площадки рядом с {} {} нет, база ставится на самое высокое место {}",
+                    x, z, fallback.toShortString());
+            return fallback;
+        }
+        BlackChannelMod.LOGGER.warn("BlackChannel: рядом с {} {} вообще нет твёрдой земли, база ставится как есть", x, z);
         return loadedGround(level, x, z, random);
+    }
+
+    /** Земля, а не вода: выше уровня моря, не океан и не река, под ногами твердь. */
+    private static boolean onLand(ServerLevel level, BlockPos feet) {
+        if (feet.getY() <= level.getSeaLevel() + 1) return false;
+        if (!level.getFluidState(feet).isEmpty() || !level.getFluidState(feet.below()).isEmpty()) return false;
+        String biome = level.getBiome(feet).unwrapKey()
+                .map(key -> key.location().getPath()).orElse("");
+        return !biome.contains("ocean") && !biome.contains("river") && !biome.contains("deep");
     }
 
     /** Площадка 7×7 без воды и лавы: бункер занимает как раз столько места. */
@@ -954,6 +977,18 @@ public final class Minigame {
             }
         }
         return true;
+    }
+
+    /** Точка высадки игрока: рядом с базой, но обязательно на твёрдой земле. */
+    private static BlockPos solidGround(ServerLevel level, BlockPos base, RandomSource random) {
+        for (int attempt = 0; attempt < 24; attempt++) {
+            int sx = base.getX() + (attempt == 0 ? 0 : random.nextInt(9) - 4);
+            int sz = base.getZ() + (attempt == 0 ? 0 : random.nextInt(9) - 4);
+            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, sx, sz);
+            BlockPos feet = new BlockPos(sx, y, sz);
+            if (standable(level, feet)) return feet;
+        }
+        return base;
     }
 
     /** Земля в уже загруженном чанке: перебираем точки, не выходя за загруженные чанки. */
@@ -2095,20 +2130,6 @@ public final class Minigame {
         return 1;
     }
 
-    /** Построить город вокруг центра карты: кварталы, пятиэтажки, частный сектор, комбинат. */
-    private static int city(CommandSourceStack source) {
-        MatchData match = MatchData.get(source.getServer());
-        ServerLevel level = Ops.levelOf(source.getServer(), match.dim);
-        if (level == null) level = source.getLevel();
-        ServerPlayer sender = source.getPlayer();
-        int cx = match.centerSet ? match.centerX : (sender == null ? 0 : sender.blockPosition().getX());
-        int cz = match.centerSet ? match.centerZ : (sender == null ? 0 : sender.blockPosition().getZ());
-        int side = match.centerSet ? Math.max(200, match.size) : 400;
-        int total = CityGen.build(level, cx, cz, side, level.getRandom());
-        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.city_built", total)), true);
-        return 1;
-    }
-
     private static int stop(CommandSourceStack source) {
         MatchData match = MatchData.get(source.getServer());
         if (!match.active) {
@@ -2257,8 +2278,8 @@ public final class Minigame {
         player.getFoodData().setFoodLevel(20);
         player.getFoodData().setSaturation(5.0f);
         player.containerMenu.broadcastChanges();
-        // Телефона в наборе нет: терминал надо собрать самому, иначе связь не ценность.
-        give(player, new ItemStack(ModContent.CELL.get()));
+        // Ни телефона, ни батарейки в наборе нет: терминал и питание надо добыть самому,
+        // иначе связь перестаёт быть ценностью.
         give(player, new ItemStack(Items.RED_BED));
         give(player, new ItemStack(Items.STONE_SHOVEL));
         give(player, new ItemStack(Items.STONE_HOE));
