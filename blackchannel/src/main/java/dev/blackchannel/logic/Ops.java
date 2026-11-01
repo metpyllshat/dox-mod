@@ -86,6 +86,11 @@ public final class Ops {
     }
 
     private static void actionInner(ServerPlayer player, String action, String arg) {
+        // Админ-панель ходит тем же пакетом: права проверяются на сервере, клиенту не верим
+        if (action.startsWith("admin.")) {
+            Admin.handle(player, action, arg);
+            return;
+        }
         NetData data = NetData.get(player);
         NetData.Profile profile = data.profile(player.getUUID());
         int now = player.getServer().getTickCount();

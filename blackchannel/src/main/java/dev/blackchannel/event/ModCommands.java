@@ -10,6 +10,7 @@ import dev.blackchannel.logic.Minigame;
 import dev.blackchannel.logic.Msg;
 import dev.blackchannel.logic.SignalEnv;
 import dev.blackchannel.logic.Str;
+import dev.blackchannel.net.ModNetwork;
 import net.minecraft.commands.CommandSourceStack;
 import net.minecraft.commands.Commands;
 import net.minecraft.commands.arguments.EntityArgument;
@@ -38,9 +39,22 @@ public final class ModCommands {
                         .then(Commands.argument("player", EntityArgument.player())
                                 .then(Commands.argument("amount", IntegerArgumentType.integer(1, 5000))
                                         .executes(c -> give(EntityArgument.getPlayer(c, "player"), IntegerArgumentType.getInteger(c, "amount"), c.getSource())))))
+                .then(Commands.literal("admin").requires(s -> s.hasPermission(2))
+                        .executes(c -> admin(c.getSource())))
                 .then(Commands.literal("reveal").requires(s -> s.hasPermission(2))
                         .then(Commands.argument("player", EntityArgument.player())
                                 .executes(c -> reveal(c.getSource(), EntityArgument.getPlayer(c, "player"))))));
+    }
+
+    /** Панель для теста: открывается только оператору и только игроку. */
+    private static int admin(CommandSourceStack source) {
+        ServerPlayer player = source.getPlayer();
+        if (player == null) {
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.cmd.no_player")));
+            return 0;
+        }
+        ModNetwork.open(player, "admin");
+        return 1;
     }
 
     private static int help(CommandSourceStack source) {

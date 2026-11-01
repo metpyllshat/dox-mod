@@ -40,8 +40,13 @@ public final class ClientHooks {
 
     /** Ванильный титульный экран подменяем своим: это отдельная игра, а не список кнопок. */
     public static void menu(ScreenEvent.Opening event) {
-        if (MainMenuScreen.bypass) return;
-        if (event.getCurrentScreen() != null) return;
+        // Пропуск действует на один переход: иначе после первого же клика
+        // наше меню больше не появилось бы до перезапуска игры
+        if (MainMenuScreen.bypass) {
+            MainMenuScreen.bypass = false;
+            return;
+        }
+        // Ванильный титул меняем всегда: и на старте, и после выхода из мира
         if (!(event.getNewScreen() instanceof TitleScreen)) return;
         event.setNewScreen(new MainMenuScreen());
     }
@@ -53,6 +58,7 @@ public final class ClientHooks {
     public static void open(String id) {
         if ("manual".equals(id)) Minecraft.getInstance().setScreen(new ManualScreen());
         if ("team".equals(id)) Minecraft.getInstance().setScreen(new TeamScreen());
+        if ("admin".equals(id)) Minecraft.getInstance().setScreen(new AdminScreen());
     }
 
     public static void hud(RenderGuiEvent.Post event) {

@@ -52,13 +52,13 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         super.init();
         if (this.leftPos < 2) this.leftPos = 2;
         if (this.topPos < 2) this.topPos = 2;
-        input = new EditBox(this.font, this.leftPos + 10, this.topPos + 109, WIDTH - 20, 12, Component.empty());
+        input = new EditBox(this.font, this.leftPos + 10, this.topPos + 108, WIDTH - 20, 10, Component.empty());
         input.setMaxLength(64);
         input.setBordered(false);
         input.setTextColor(Ui.TEXT);
         input.setHint(Component.translatable("screen.blackchannel.hint.handle"));
         addRenderableWidget(input);
-        priceBox = new EditBox(this.font, this.leftPos + PRICE_X + 2, this.topPos + PRICE_Y + 2, 52, 12, Component.empty());
+        priceBox = new EditBox(this.font, this.leftPos + PRICE_X + 2, this.topPos + PRICE_Y + 2, 52, 10, Component.empty());
         priceBox.setMaxLength(4);
         priceBox.setBordered(false);
         priceBox.setTextColor(Ui.AMBER);
@@ -73,14 +73,10 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     protected void renderBg(GuiGraphics g, float pt, int mx, int my) {
         int x = this.leftPos;
         int y = this.topPos;
-        g.fill(x, y, x + WIDTH, y + HEIGHT, 0xFF101614);
-        g.fill(x, y, x + WIDTH, y + 2, Ui.EDGE);
-        g.fill(x, y + HEIGHT - 1, x + WIDTH, y + HEIGHT, Ui.EDGE_DIM);
-        g.fill(x, y, x + 1, y + HEIGHT, Ui.EDGE_DIM);
-        g.fill(x + WIDTH - 1, y, x + WIDTH, y + HEIGHT, Ui.EDGE_DIM);
-        g.fill(x + 6, y + 30, x + WIDTH - 6, y + 31, 0xFF2A2416);
-        g.fill(x + 6, y + 48, x + WIDTH - 6, y + HEIGHT - 6, 0xFF0C1210);
-        if (page == 0) g.fill(x + 8, y + 106, x + WIDTH - 8, y + 120, 0xFF0B0F12);
+        Ui.panel(g, x, y, WIDTH, HEIGHT);
+        Ui.divider(g, x + 6, y + 26, WIDTH - 12);
+        Ui.well(g, x + 6, y + 46, WIDTH - 12, HEIGHT - 52);
+        if (page == 0) g.fill(x + 8, y + 105, x + WIDTH - 8, y + 119, 0xFF0B0F12);
         if (page == 2) {
             g.fill(x + PRICE_X, y + PRICE_Y, x + PRICE_X + 56, y + PRICE_Y + 12, 0xFF0B0F12);
             for (Slot slot : this.menu.slots) {
@@ -122,56 +118,66 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         int y = this.topPos;
         String handle = Ui.trim(this.font, ClientState.handle, 150);
         String coins = "#" + ClientState.crypto;
-        g.drawString(this.font, handle, x + 8, y + 7, Ui.EDGE, false);
-        g.drawString(this.font, coins, x + WIDTH - 8 - this.font.width(coins), y + 7, Ui.AMBER, false);
+        g.drawString(this.font, handle.isEmpty() ? "—" : handle, x + 8, y + 6, Ui.EDGE, false);
+        g.drawString(this.font, coins, x + WIDTH - 8 - this.font.width(coins), y + 6, Ui.AMBER, false);
         String status = (ClientState.uplink ? (ClientState.dish ? "DISH" : "RACK") : "NO UPLINK")
                 + "  T" + ClientState.cdT + " D" + ClientState.cdD + " S" + ClientState.cdS + " B" + ClientState.cdB;
         int statusW = WIDTH - 16;
         if (page != 2 && !this.menu.getSlot(0).getItem().isEmpty()) {
             String held = Ui.t("screen.blackchannel.slot_held");
             int hw = this.font.width(held);
-            g.drawString(this.font, held, x + WIDTH - 8 - hw, y + 18, Ui.AMBER, false);
+            g.drawString(this.font, held, x + WIDTH - 8 - hw, y + 16, Ui.AMBER, false);
             statusW = WIDTH - 16 - hw - 6;
         }
-        g.drawString(this.font, Ui.trim(this.font, status, statusW), x + 8, y + 18, Ui.MUTED, false);
-        tab(g, x + 8, y + 32, 78, Ui.t("screen.blackchannel.tab.ops"), null, 0);
-        tab(g, x + 90, y + 32, 78, Ui.t("screen.blackchannel.tab.bag"), Ui.t("screen.blackchannel.bag_note"), 1);
-        tab(g, x + 172, y + 32, 80, Ui.t("screen.blackchannel.tab.sell"), Ui.t("screen.blackchannel.tip.sell_item"), 2);
+        g.drawString(this.font, Ui.trim(this.font, status, statusW), x + 8, y + 16, Ui.MUTED, false);
+        tab(g, x + 8, y + 30, 80, Ui.t("screen.blackchannel.tab.ops"), null, 0);
+        tab(g, x + 90, y + 30, 80, Ui.t("screen.blackchannel.tab.bag"), Ui.t("screen.blackchannel.bag_note"), 1);
+        tab(g, x + 172, y + 30, 80, Ui.t("screen.blackchannel.tab.sell"), Ui.t("screen.blackchannel.tip.sell_item"), 2);
         if (page == 0) drawOps(g, x, y);
         else if (page == 1) drawBag(g, x, y, mx, my);
         else drawSell(g, x, y);
     }
 
     private void tab(GuiGraphics g, int x, int y, int w, String label, String tip, int index) {
-        Ui.button(g, this.font, hits, x, y, w, 14, label, tip, page == index, "page", String.valueOf(index));
+        Ui.tab(g, this.font, hits, x, y, w, 14, label, page == index, "page", String.valueOf(index));
+        if (tip != null && page == index) hits.set(hits.size() - 1, new Ui.Hit(x, y, w, 14, "page", String.valueOf(index), tip));
     }
 
     private void drawOps(GuiGraphics g, int x, int y) {
-        int w = 116;
-        Ui.button(g, this.font, hits, x + 8, y + 52, w, 13, "TRACE", tipTrace(), false, Actions.TRACE, "");
-        Ui.button(g, this.font, hits, x + 132, y + 52, w, 13, "WIPE", Ui.t("screen.blackchannel.tip.wipe"), wipeArmed, Actions.WIPE, "");
-        Ui.button(g, this.font, hits, x + 8, y + 68, w, 13, "BOMB", tipBomb(), false, Actions.BOMB, "");
-        Ui.button(g, this.font, hits, x + 132, y + 68, w, 13, "UAV", tipUav(), false, Actions.UAV, "");
-        paragraph(g, ClientState.resultFor("ops"), x + 8, y + 86, WIDTH - 16, Ui.AMBER, 2);
-        // Пеленги: пока луч один, координаты не показываем — только направление и ширину
-        if (!ClientState.beams.isEmpty()) {
-            int by = y + 112;
-            for (ClientState.BeamRow beam : ClientState.beams) {
-                if (by > y + 126) break;
-                String label = "ЛУЧ " + beam.handle + " " + Math.round(beam.angle) + "° ±" + Math.round(beam.alpha)
-                        + (beam.samples > 1 ? " x" + beam.samples : "");
-                g.drawString(this.font, Ui.trim(this.font, label, WIDTH - 16), x + 8, by, Ui.AMBER, false);
-                by += 9;
-            }
+        int w = 118;
+        Ui.button(g, this.font, hits, x + 8, y + 48, w, 13, "TRACE", tipTrace(), false, Actions.TRACE, "");
+        Ui.button(g, this.font, hits, x + 134, y + 48, w, 13, "WIPE", Ui.t("screen.blackchannel.tip.wipe"), wipeArmed, Actions.WIPE, "");
+        Ui.button(g, this.font, hits, x + 8, y + 64, w, 13, "BOMB", tipBomb(), false, Actions.BOMB, "");
+        Ui.button(g, this.font, hits, x + 134, y + 64, w, 13, "UAV", tipUav(), false, Actions.UAV, "");
+        // Результат последней операции: две строки, ниже кнопок и выше поля ввода
+        paragraph(g, ClientState.resultFor("ops"), x + 8, y + 82, WIDTH - 16, Ui.AMBER, 2);
+        g.drawString(this.font, Ui.t("screen.blackchannel.hint.handle"), x + 8, y + 100, 0xFF3E4A46, false);
+        // Следы: направление и ширина луча, без координат
+        g.drawString(this.font, Ui.t("screen.blackchannel.beams"), x + 8, y + 122, Ui.MUTED, false);
+        int by = y + 133;
+        int beams = 0;
+        for (ClientState.BeamRow beam : ClientState.beams) {
+            if (beams >= 2) break;
+            String label = beam.handle + " " + Math.round(beam.angle) + "° ±" + Math.round(beam.alpha)
+                    + (beam.samples > 1 ? " x" + beam.samples : "");
+            g.drawString(this.font, Ui.trim(this.font, label, WIDTH - 16), x + 8, by, Ui.AMBER, false);
+            by += 10;
+            beams++;
         }
-        g.drawString(this.font, "INTEL", x + 8, y + 126, Ui.MUTED, false);
-        int ly = y + 136;
+        if (beams == 0) g.drawString(this.font, Ui.t("screen.blackchannel.beams.none"), x + 8, by, 0xFF3E4A46, false);
+        Ui.divider(g, x + 8, y + 154, WIDTH - 16);
+        g.drawString(this.font, "INTEL", x + 8, y + 157, Ui.MUTED, false);
+        int ly = y + 168;
         for (ClientState.IntelRow row : ClientState.intel) {
-            if (ly > y + 200) break;
+            if (ly > y + 203) break;
             String label = "#" + row.id + " " + row.handle + " ±" + row.err;
             String tip = row.handle + "  " + row.dim + "  " + row.x + " " + row.y + " " + row.z + "  ±" + row.err;
-            Ui.button(g, this.font, hits, x + 8, ly, WIDTH - 16, 11, Ui.trim(this.font, label, WIDTH - 22), tip, row.id == selected, "pick", String.valueOf(row.id));
+            Ui.row(g, this.font, x + 8, ly, WIDTH - 16, 11, label, row.stale ? "?" : null, row.id == selected, row.stale ? Ui.MUTED : Ui.GREEN);
+            hits.add(new Ui.Hit(x + 8, ly, WIDTH - 16, 11, "pick", String.valueOf(row.id), tip));
             ly += 12;
+        }
+        if (ClientState.intel.isEmpty()) {
+            g.drawString(this.font, Ui.t("screen.blackchannel.intel_none"), x + 8, ly, 0xFF3E4A46, false);
         }
     }
 
@@ -181,18 +187,18 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     }
 
     private void drawBag(GuiGraphics g, int x, int y, int mx, int my) {
-        g.drawString(this.font, Ui.t("screen.blackchannel.bag_title"), x + 8, y + 52, Ui.TEXT, false);
-        paragraph(g, Ui.t("screen.blackchannel.bag_note"), x + 8, y + 64, WIDTH - 16, Ui.MUTED, 2);
+        g.drawString(this.font, Ui.t("screen.blackchannel.bag_title"), x + 8, y + 50, Ui.TEXT, false);
+        paragraph(g, Ui.t("screen.blackchannel.bag_note"), x + 8, y + 61, 160, Ui.MUTED, 2);
+        Ui.button(g, this.font, hits, x + 172, y + 50, 80, 13, Ui.t("screen.blackchannel.btn.snap"), tipPeek(), false, Actions.PEEK, "");
         for (int i = 0; i < 36; i++) {
             int col = i % 9;
             int row = i / 9;
-            drawPeek(g, x + 8 + col * 18, y + 88 + row * 18, findPeek(i), mx, my);
+            drawPeek(g, x + 8 + col * 18, y + 84 + row * 18, findPeek(i), mx, my);
         }
-        for (int i = 0; i < 5; i++) {
-            drawPeek(g, x + 8 + i * 18, y + 164, findPeek(36 + i), mx, my);
+        for (int i = 0; i < 9; i++) {
+            drawPeek(g, x + 8 + i * 18, y + 160, findPeek(36 + i), mx, my);
         }
-        Ui.button(g, this.font, hits, x + 180, y + 88, 72, 13, Ui.t("screen.blackchannel.btn.snap"), tipPeek(), false, Actions.PEEK, "");
-        g.drawString(this.font, Ui.trim(this.font, ClientState.resultFor("bag"), WIDTH - 16), x + 8, y + 186, Ui.AMBER, false);
+        paragraph(g, ClientState.resultFor("bag"), x + 8, y + 184, WIDTH - 16, Ui.AMBER, 2);
     }
 
     private void drawPeek(GuiGraphics g, int sx, int sy, ClientState.PeekSlot slot, int mx, int my) {
@@ -231,16 +237,16 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     }
 
     private void drawSell(GuiGraphics g, int x, int y) {
-        paragraph(g, Ui.t("screen.blackchannel.sell_note"), x + 8, y + 52, WIDTH - 16, Ui.MUTED, 2);
-        g.drawString(this.font, Ui.t("screen.blackchannel.slot_label"), x + 8, y + 74, Ui.MUTED, false);
-        g.drawString(this.font, Ui.t("screen.blackchannel.price_label"), x + PRICE_X, y + 74, Ui.MUTED, false);
+        paragraph(g, Ui.t("screen.blackchannel.sell_note"), x + 8, y + 50, WIDTH - 16, Ui.MUTED, 2);
+        g.drawString(this.font, Ui.t("screen.blackchannel.slot_label"), x + 8, y + 72, Ui.MUTED, false);
+        g.drawString(this.font, Ui.t("screen.blackchannel.price_label"), x + PRICE_X, y + 72, Ui.MUTED, false);
         syncPriceFromBox();
         g.fill(x + SLIDER_X, y + SLIDER_Y, x + SLIDER_X + SLIDER_W, y + SLIDER_Y + 4, 0xFF0B0F12);
         int knob = (int) ((price - 1) / 4999f * (SLIDER_W - 4));
         g.fill(x + SLIDER_X + knob, y + SLIDER_Y - 2, x + SLIDER_X + knob + 4, y + SLIDER_Y + 6, Ui.EDGE);
         Ui.button(g, this.font, hits, x + 8, y + 104, 118, 13, Ui.t("screen.blackchannel.btn.sell_item"), Ui.t("screen.blackchannel.tip.sell_item"), false, "sell-item", "");
         Ui.button(g, this.font, hits, x + 132, y + 104, 118, 13, Ui.t("screen.blackchannel.btn.sell_intel"), Ui.t("screen.blackchannel.tip.sell_intel"), false, Actions.SELL, "");
-        g.drawString(this.font, Ui.t("screen.blackchannel.inv_label"), x + 8, y + 120, Ui.MUTED, false);
+        g.drawString(this.font, Ui.t("screen.blackchannel.inv_label"), x + 8, y + 118, Ui.MUTED, false);
         g.drawString(this.font, Ui.trim(this.font, ClientState.resultFor("sell"), WIDTH - 16), x + 8, y + 208, Ui.AMBER, false);
     }
 
