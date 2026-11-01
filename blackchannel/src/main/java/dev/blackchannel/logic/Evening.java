@@ -56,6 +56,8 @@ public final class Evening {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             NetData.Profile profile = NetData.get(player).profile(player.getUUID());
             profile.empUntil = Math.max(profile.empUntil, (int) now + 400);
+            // Шторм обнуляет шум: у всех чистый лист
+            profile.noise = 0;
             player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.MASTER, 0.5f, 1.4f);
             player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.event.storm")
                     .withStyle(ChatFormatting.AQUA)));

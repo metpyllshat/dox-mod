@@ -39,7 +39,7 @@
   "screen.blackchannel.tab.bag": "СУМКА",
   "screen.blackchannel.tab.sell": "ТОРГ",
   "screen.blackchannel.btn.snap": "СНЯТЬ",
-  "screen.blackchannel.map_note": "Земля вокруг выбранного следа. Не карта мира и не камера.",
+  "screen.blackchannel.map_note": "",
   "screen.blackchannel.sell_note": "Перетащи стопку в верхний слот. Цена — ползунок или число, за всю стопку.",
   "screen.blackchannel.tip.trace": "Цена %s. Погрешность: база %s, VPN ×%s, глубокий VPN ×%s. Срыв %s / %s / %s процентов. Своя тарелка сужает след. Старая отметка +%s.",
   "screen.blackchannel.tip.deanon": "Цена %s. Связывает позывной с ником. На твоём радаре VPN этой цели перестаёт сдвигать точку. После смены позывного ник остаётся.",
@@ -378,5 +378,12 @@
   "screen.blackchannel.menu.title": "Чёрный канал",
   "screen.blackchannel.menu.play": "ВКЛЮЧИТЬ КАНАЛ",
   "screen.blackchannel.menu.settings": "НАСТРОЙКИ",
-  "screen.blackchannel.menu.quit": "ВЫЙТИ"
+  "screen.blackchannel.menu.quit": "ВЫЙТИ",
+  "screen.blackchannel.tab.feed": "ЭФИР",
+  "screen.blackchannel.tab.net": "СЕТЬ",
+  "screen.blackchannel.tab.market_short": "РЫНОК",
+  "screen.blackchannel.btn.wipe_sim": "СЖЕЧЬ SIM",
+  "blackchannel.log.body": "Поймал сигнал: %s",
+  "blackchannel.log.tag": "След по %s",
+  "blackchannel.blip.ew": "РЭБ"
 }

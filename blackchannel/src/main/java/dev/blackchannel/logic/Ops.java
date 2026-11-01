@@ -102,8 +102,6 @@ public final class Ops {
             case Actions.RADAR -> { profile.radarHud = !profile.radarHud; result(player, profile, profile.radarHud ? "blackchannel.result.radar_on" : "blackchannel.result.radar_off"); }
             case Actions.TEAM -> Minigame.setTeam(player, arg);
             case Actions.TRACE -> trace(player, profile, arg);
-            case Actions.DEANON -> deanon(player, profile, arg);
-            case Actions.SWAT -> swat(player, profile, arg);
             case Actions.BOMB -> bomb(player, profile, arg);
             case Actions.UAV -> traceUav(player, profile);
             case Actions.WIPE -> wipe(player, profile, "confirm".equals(arg), false);
@@ -111,12 +109,12 @@ public final class Ops {
             case Actions.BUY_LIST -> buyList(player, profile, arg);
             case Actions.SELL -> sell(player, profile, arg);
             case Actions.SELL_BUFF -> sellBuff(player, profile, arg);
-            case Actions.OPTIC -> Optics.optic(player, profile, arg);
             case Actions.PEEK -> Optics.peek(player, profile, arg);
             case Actions.HACK -> hack(player, profile);
             case Actions.KILL -> killSwitch(player, rackPos(player));
             default -> { }
         }
+        noise(profile, noiseOf(action));
         data.setDirty();
     }
 
@@ -359,7 +357,11 @@ public final class Ops {
             SignalEnv.Link link = SignalEnv.link(player, profile);
             if (link.mode == SignalEnv.Link.Mode.SAT && tick % 1200 == 0 && profile.satCharges > 0) profile.satCharges--;
         }
-        if (tick % 20 == 0) hearRadar(player, profile);
+        if (tick % 20 == 0) {
+            hearRadar(player, profile);
+            // Шум гаснет: примерно 100 за минуту, если ничего не делать
+            if (profile.noise > 0) profile.noise = Math.max(0, profile.noise - 2);
+        }
         if (profile.bombUntil > tick && profile.floodPicsFor != profile.bombUntil) {
             profile.floodPicsFor = profile.bombUntil;
             ModNetwork.sendFlood(player);
@@ -493,6 +495,8 @@ public final class Ops {
         if (SignalEnv.dishNear(player, profile, 128)) alpha *= 0.6;
         if (exploit) alpha *= 0.65;
         if (stale) alpha *= 1.25;
+        // Чем громче цель в эфире, тем точнее пеленг: болтуна находят быстро
+        if (target.noise > 0) alpha *= 1.0 - Math.min(0.35, target.noise / 300.0);
         beam.alpha = Math.max(1.0, alpha);
 
         double[] fix = Bearings.bestFix(profile, beam);
@@ -563,96 +567,6 @@ public final class Ops {
         profile.beams.add(beam);
         while (profile.beams.size() > 8) profile.beams.remove(0);
         return beam;
-    }
-
-    private static void deanon(ServerPlayer player, NetData.Profile profile, String arg) {
-        if (!gate(player, profile, true, true)) return;
-        if (!cd(player, profile, profile.cdDeanon)) return;
-        String handle = Str.norm(arg);
-        NetData.Profile target = data(player).byHandle(handle);
-        if (target == null) {
-            result(player, profile, "blackchannel.result.no_target");
-            return;
-        }
-        if (!pay(player, profile, Config.DEANON_COST.get())) return;
-        boolean zero = takeOptional(player, ModContent.ZERO.get());
-        boolean sample = !Devices.takeSample(player, handle, zero, zero).isEmpty() || hasSample(player, handle);
-        boolean traced = false;
-        for (NetData.Intel intel : profile.intel) if (handle.equals(intel.handle)) traced = true;
-        if (target.vpn > 0 && !zero) {
-            profile.cdDeanon = player.getServer().getTickCount() + Config.DEANON_CD.get() * 20;
-            result(player, profile, "blackchannel.result.vpn_blocks");
-            return;
-        }
-        if (!sample && !traced && !zero) {
-            result(player, profile, "blackchannel.result.deanon_need");
-            return;
-        }
-        remember(profile, target);
-        profile.cdDeanon = player.getServer().getTickCount() + Config.DEANON_CD.get() * 20;
-        result(player, profile, "blackchannel.result.deanon_ok", handle, target.lastName.isEmpty() ? "?" : target.lastName);
-        ServerPlayer online = player.getServer().getPlayerList().getPlayer(target.id);
-        if (online != null && target.ids) alert(online, player, "blackchannel.chat.ids_deanon");
-    }
-
-    private static void swat(ServerPlayer player, NetData.Profile profile, String arg) {
-        if (!Config.SWAT_ENABLED.get()) {
-            result(player, profile, "blackchannel.result.swat_disabled");
-            return;
-        }
-        if (!gate(player, profile, true, true)) return;
-        if (!cd(player, profile, profile.cdSwat)) return;
-        int id;
-        try {
-            id = Integer.parseInt(arg.trim());
-        } catch (NumberFormatException e) {
-            result(player, profile, "blackchannel.result.swat_need_intel");
-            return;
-        }
-        NetData.Intel intel = null;
-        for (NetData.Intel row : profile.intel) if (row.id == id) intel = row;
-        if (intel == null) {
-            result(player, profile, "blackchannel.result.swat_need_intel");
-            return;
-        }
-        boolean contract = free(player) || Devices.count(player, ModContent.CONTRACT.get()) > 0;
-        int cost = contract ? Config.SWAT_CONTRACT_COST.get() : Config.SWAT_COST.get();
-        if (!pay(player, profile, cost)) return;
-        if (contract && !free(player)) Devices.consume(player, ModContent.CONTRACT.get(), 1);
-        int now = player.getServer().getTickCount();
-        int age = (now - intel.tick) / 20;
-        boolean stale = intel.stale || age > Config.INTEL_STALE.get();
-        int x = intel.x;
-        int z = intel.z;
-        if (stale) {
-            int extra = 36;
-            x += player.getRandom().nextInt(extra * 2 + 1) - extra;
-            z += player.getRandom().nextInt(extra * 2 + 1) - extra;
-        }
-        NetData.Strike strike = new NetData.Strike();
-        strike.id = data(player).strikeSeq++;
-        strike.attacker = player.getUUID();
-        NetData.Profile target = data(player).byHandle(intel.handle);
-        strike.target = target == null ? new UUID(0, 0) : target.id;
-        strike.handle = intel.handle;
-        strike.dim = intel.dim;
-        strike.x = x;
-        strike.y = intel.y;
-        strike.z = z;
-        strike.ticksLeft = Config.SWAT_DELAY.get() * 20;
-        data(player).strikes.add(strike);
-        profile.cdSwat = now + Config.SWAT_CD.get() * 20;
-        result(player, profile, "blackchannel.result.swat_ok", String.valueOf(Config.SWAT_DELAY.get()), String.valueOf(x), String.valueOf(z));
-        if (target != null) {
-            ServerPlayer online = player.getServer().getPlayerList().getPlayer(target.id);
-            if (online != null) {
-                online.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.strike_target", Config.SWAT_DELAY.get(), x, intel.y, z, Str.dimShort(intel.dim))));
-                online.playNotifySound(SoundEvents.NOTE_BLOCK_BELL.value(), SoundSource.MASTER, 1f, 0.5f);
-            }
-        }
-        if (Config.LOG_OPS.get()) {
-            BlackChannelMod.LOGGER.info("SWAT {} -> {} at {} {} {} {}", player.getGameProfile().getName(), intel.handle, intel.dim, x, intel.y, z);
-        }
     }
 
     private static void bomb(ServerPlayer player, NetData.Profile profile, String arg) {
@@ -986,6 +900,31 @@ public final class Ops {
         String[] names = {"S", "SW", "W", "NW", "N", "NE", "E", "SE"};
         int idx = Math.floorMod((int) Math.round(angle / 45.0), 8);
         return names[idx];
+    }
+
+    /**
+     * Шум от действия в эфире. Ничего не стоит молчать: лишний шум делает тебя
+     * видимым для чужого пеленга, поэтому «проверить на всякий случай» — плохая идея.
+     */
+    private static int noiseOf(String action) {
+        if (action == null) return 0;
+        return switch (action) {
+            case Actions.SAY -> 6;
+            case Actions.DM -> 14;
+            case Actions.TRACE -> 25;
+            case Actions.UAV -> 35;
+            case Actions.BOMB -> 15;
+            case Actions.WIPE -> 20;
+            case Actions.BUY, Actions.SELL, Actions.SELL_BUFF -> 8;
+            case Actions.HACK -> 30;
+            default -> 0;
+        };
+    }
+
+    /** Прибавить шум: 0..100, гаснет сам примерно за минуту. */
+    public static void noise(NetData.Profile profile, int amount) {
+        if (profile == null || amount <= 0) return;
+        profile.noise = Math.min(100, profile.noise + amount);
     }
 
     /** Тишина в эфире: событие вечера глушит всю сеть на полторы минуты. */
