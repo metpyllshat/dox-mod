@@ -83,11 +83,11 @@ public class AdminScreen extends Screen {
 
     private String statusLine() {
         if (!ClientState.matchActive) {
-            return Ui.t("screen.blackchannel.admin.status_idle", ClientState.crypto, ClientState.handle);
+            return ClientState.tip("screen.blackchannel.admin.status_idle", ClientState.crypto, ClientState.handle);
         }
         int left = ClientState.matchTimeLeftSeconds;
         String time = String.format("%d:%02d", left / 60, left % 60);
-        return Ui.t("screen.blackchannel.admin.status_live", time, ClientState.aliveCount, ClientState.noise, ClientState.crypto);
+        return ClientState.tip("screen.blackchannel.admin.status_live", time, ClientState.aliveCount, ClientState.noise, ClientState.crypto);
     }
 
     // ---------- матч ----------
@@ -160,10 +160,10 @@ public class AdminScreen extends Screen {
         g.drawString(this.font, Ui.t("screen.blackchannel.admin.player_state"), x + 8, ly, Ui.MUTED, false);
         ly += 11;
         String[] lines = {
-                Ui.t("screen.blackchannel.admin.line_handle", ClientState.handle, ClientState.crypto),
-                Ui.t("screen.blackchannel.admin.line_signal", ClientState.signal, ClientState.battery, ClientState.noise),
-                Ui.t("screen.blackchannel.admin.line_buffs", ClientState.vpn, ClientState.ids, ClientState.hard),
-                Ui.t("screen.blackchannel.admin.line_link", ClientState.uplink, ClientState.dish, ClientState.sat)
+                ClientState.tip("screen.blackchannel.admin.line_handle", ClientState.handle, ClientState.crypto),
+                ClientState.tip("screen.blackchannel.admin.line_signal", ClientState.signal, ClientState.battery, ClientState.noise),
+                ClientState.tip("screen.blackchannel.admin.line_buffs", ClientState.vpn, ClientState.ids, ClientState.hard),
+                ClientState.tip("screen.blackchannel.admin.line_link", ClientState.uplink, ClientState.dish, ClientState.sat)
         };
         for (String line : lines) {
             if (ly > y + H - 30) break;
