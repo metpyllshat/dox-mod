@@ -1,0 +1,744 @@
+#!/usr/bin/env python3
+"""
+Экономика лута Black Channel: что из чего крафтится и сколько базовых ресурсов
+надо на матч. Скрипт читает jar'ы модов из корня репозитория и рецепты самого мода,
+разворачивает их до сырья и строит таблицу спроса и график.
+
+Запуск:  python3 docs/loot_stats.py
+Выход:   docs/loot-stats.md, docs/loot-demand.png
+"""
+import glob
+import json
+import os
+import re
+import zipfile
+from collections import Counter, defaultdict
+
+ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+OUT_MD = os.path.join(ROOT, 'docs', 'loot-stats.md')
+OUT_PNG = os.path.join(ROOT, 'docs', 'loot-demand.png')
+
+# Ванильные блоки и предметы, которых нет в jar'ах модов, но которые нужны как сырьё
+VANILLA = {
+    'minecraft:iron_block': {'minecraft:iron_ingot': 9},
+    'minecraft:copper_block': {'minecraft:copper_ingot': 9},
+    'minecraft:gold_block': {'minecraft:gold_ingot': 9},
+    'minecraft:redstone_block': {'minecraft:redstone': 9},
+    'minecraft:coal_block': {'minecraft:coal': 9},
+    'minecraft:lapis_block': {'minecraft:lapis_lazuli': 9},
+    'minecraft:diamond_block': {'minecraft:diamond': 9},
+    'minecraft:netherite_block': {'minecraft:netherite_ingot': 9},
+    'minecraft:netherite_ingot': {'minecraft:netherite_scrap': 4, 'minecraft:gold_ingot': 4},
+    'minecraft:copper_ingot': {'minecraft:raw_copper': 1},
+    'minecraft:iron_ingot': {'minecraft:raw_iron': 1},
+    'minecraft:gold_ingot': {'minecraft:raw_gold': 1},
+    'minecraft:glass': {'minecraft:sand': 1},
+    'minecraft:glass_pane': {'minecraft:glass': 1},
+    'minecraft:observer': {'minecraft:cobblestone': 6, 'minecraft:redstone': 2, 'minecraft:quartz': 1},
+    'minecraft:piston': {'minecraft:cobblestone': 4, 'minecraft:iron_ingot': 1, 'minecraft:redstone': 1, 'minecraft:logs': 1},
+    'minecraft:hopper': {'minecraft:iron_ingot': 5, 'minecraft:chest': 1},
+    'minecraft:chest': {'minecraft:logs': 1},
+    'minecraft:crafting_table': {'minecraft:logs': 1},
+    'minecraft:furnace': {'minecraft:cobblestone': 8},
+    'minecraft:repeater': {'minecraft:cobblestone': 3, 'minecraft:redstone': 2},
+    'minecraft:redstone_torch': {'minecraft:redstone': 1, 'minecraft:stick': 1},
+    'minecraft:stick': {'minecraft:logs': 0.25},
+    'minecraft:torch': {'minecraft:coal': 0.25, 'minecraft:stick': 1},
+    'minecraft:lightning_rod': {'minecraft:copper_ingot': 3},
+    'minecraft:iron_bars': {'minecraft:iron_ingot': 0.375},
+    'minecraft:bucket': {'minecraft:iron_ingot': 3},
+    'minecraft:cauldron': {'minecraft:iron_ingot': 7},
+    'minecraft:anvil': {'minecraft:iron_block': 3, 'minecraft:iron_ingot': 4},
+    'minecraft:dispenser': {'minecraft:cobblestone': 7, 'minecraft:redstone': 1, 'minecraft:stick': 1},
+    'minecraft:dropper': {'minecraft:cobblestone': 7, 'minecraft:redstone': 1},
+    'minecraft:red_dye': {'minecraft:poppy': 1},
+    'minecraft:leather': {'minecraft:leather': 1},
+}
+
+# Теги, которых нет в jar'ах: ваниль и общие forge-теги. Значение — список предметов.
+MANUAL_TAGS = {
+    'minecraft:logs': ['minecraft:logs'],
+    'minecraft:planks': ['minecraft:planks'],
+    'minecraft:stone_crafting_materials': ['minecraft:cobblestone'],
+    'minecraft:coals': ['minecraft:coal'],
+    'forge:ingots/iron': ['minecraft:iron_ingot'],
+    'forge:ingots/copper': ['minecraft:copper_ingot'],
+    'forge:ingots/gold': ['minecraft:gold_ingot'],
+    'forge:ingots/steel': ['superbwarfare:steel_ingot'],
+    'forge:ingots/lead': ['superbwarfare:lead_ingot'],
+    'forge:gunpowder': ['minecraft:gunpowder'],
+    'forge:dusts/gunpowder': ['minecraft:gunpowder'],
+    'forge:dusts/redstone': ['minecraft:redstone'],
+    'forge:dusts/glowstone': ['minecraft:glowstone_dust'],
+    'forge:nuggets/iron': ['minecraft:iron_nugget'],
+    'forge:nuggets/gold': ['minecraft:gold_nugget'],
+    'forge:flint': ['minecraft:flint'],
+    'forge:sand': ['minecraft:sand'],
+    'forge:glass': ['minecraft:glass'],
+    'forge:glass_panes': ['minecraft:glass_pane'],
+    'forge:paper': ['minecraft:paper'],
+    'forge:ender_pearls': ['minecraft:ender_pearl'],
+    'forge:diamonds': ['minecraft:diamond'],
+    'forge:storage_blocks/iron': ['minecraft:iron_block'],
+    'forge:storage_blocks/copper': ['minecraft:copper_block'],
+    'forge:storage_blocks/redstone': ['minecraft:redstone_block'],
+    'forge:storage_blocks/coal': ['minecraft:coal_block'],
+    'forge:ores/iron': ['minecraft:iron_ore'],
+    'forge:ores/copper': ['minecraft:copper_ore'],
+    'forge:raw_materials/iron': ['minecraft:raw_iron'],
+    'forge:raw_materials/copper': ['minecraft:raw_copper'],
+    'forge:string': ['minecraft:string'],
+    'forge:slimeballs': ['minecraft:slime_ball'],
+    'forge:rods/wooden': ['minecraft:stick'],
+    'forge:chests/wooden': ['minecraft:chest'],
+    'forge:obsidian': ['minecraft:obsidian'],
+    'forge:gems/quartz': ['minecraft:quartz'],
+    'forge:gems/diamond': ['minecraft:diamond'],
+    'forge:dusts/sulfur': ['electrodynamics:dustsulfur'],
+    'forge:dusts/niter': ['electrodynamics:dustniter'],
+    'forge:circuits/basic': ['electrodynamics:circuitbasic'],
+    'forge:circuits/advanced': ['electrodynamics:circuitadvanced'],
+    'forge:circuits/elite': ['electrodynamics:circuitelite'],
+    'forge:circuits/ultimate': ['electrodynamics:circuitultimate'],
+    'forge:plates/steel': ['electrodynamics:platesteel'],
+    'forge:plates/copper': ['electrodynamics:platecopper'],
+    'forge:plates/iron': ['electrodynamics:plateiron'],
+    'forge:plates/lead': ['electrodynamics:platelead'],
+    'forge:plates/tin': ['electrodynamics:platetin'],
+    'forge:plates/bronze': ['electrodynamics:platebronze'],
+    'forge:leather': ['minecraft:leather'],
+    'forge:dyes/red': ['minecraft:red_dye'],
+    'forge:dyes': ['minecraft:red_dye'],
+    'forge:glow_ink_sacs': ['minecraft:glow_ink_sac'],
+    'forge:ender_eyes': ['minecraft:ender_eye'],
+    'forge:feathers': ['minecraft:feather'],
+}
+
+# Сырьё, которое в игре берут из мира, а не крафтят: рекурсию на нём останавливаем,
+# даже если в каком-то моде есть альтернативный рецепт (порох из серы и натра и т.п.)
+TERMINAL = {
+    'minecraft:copper_ingot', 'minecraft:iron_ingot', 'minecraft:gold_ingot', 'minecraft:coal',
+    'minecraft:redstone', 'minecraft:gunpowder', 'minecraft:quartz', 'minecraft:diamond',
+    'minecraft:lapis_lazuli', 'minecraft:netherite_scrap', 'minecraft:ender_pearl',
+    'minecraft:logs', 'minecraft:cobblestone', 'minecraft:sand', 'minecraft:flint',
+    'minecraft:leather', 'minecraft:paper', 'minecraft:sugar', 'minecraft:slime_ball',
+    'minecraft:string', 'minecraft:amethyst_shard', 'minecraft:clay_ball', 'minecraft:poppy',
+    'minecraft:feather', 'minecraft:glow_ink_sac', 'minecraft:obsidian', 'minecraft:stick',
+    'superbwarfare:lead_ingot', 'superbwarfare:steel_ingot', 'superbwarfare:cemented_carbide_ingot',
+    'superbwarfare:tungsten_ingot', 'superbwarfare:silver_ingot', 'superbwarfare:raw_galena',
+    'electrodynamics:dustsulfur', 'electrodynamics:dustniter', 'electrodynamics:tin_ingot',
+    'electrodynamics:lead_ingot', 'electrodynamics:silver_ingot', 'electrodynamics:aluminum_ingot',
+    'electrodynamics:uranium_ingot', 'electrodynamics:lithium_ingot', 'electrodynamics:bronze_ingot',
+    'nuclearscience:lead_ingot',
+}
+
+# Русские названия сырья для таблиц
+RU = {
+    'minecraft:copper_ingot': 'Медь',
+    'minecraft:iron_ingot': 'Железо',
+    'minecraft:gunpowder': 'Порох',
+    'minecraft:redstone': 'Редстоун',
+    'minecraft:gold_ingot': 'Золото',
+    'minecraft:coal': 'Уголь',
+    'minecraft:raw_copper': 'Медное сырьё',
+    'minecraft:raw_iron': 'Железное сырьё',
+    'minecraft:logs': 'Дерево',
+    'minecraft:iron_nugget': 'Железный самородок',
+    'minecraft:gold_nugget': 'Золотой самородок',
+    'minecraft:flint': 'Кремень',
+    'minecraft:sand': 'Песок',
+    'minecraft:diamond': 'Алмаз',
+    'minecraft:lapis_lazuli': 'Лазурит',
+    'minecraft:netherite_ingot': 'Незерит',
+    'minecraft:netherite_scrap': 'Незеритовый скрап',
+    'minecraft:ender_pearl': 'Эндер-жемчуг',
+    'minecraft:ender_eye': 'Око Эндера',
+    'minecraft:paper': 'Бумага',
+    'minecraft:sugar': 'Сахар',
+    'minecraft:clay_ball': 'Глина',
+    'minecraft:amethyst_shard': 'Аметист',
+    'minecraft:quartz': 'Кварц',
+    'minecraft:string': 'Нить',
+    'minecraft:slime_ball': 'Слизь',
+    'minecraft:lead': 'Свинец',
+    'superbwarfare:lead_ingot': 'Свинец (SBW)',
+    'superbwarfare:steel_ingot': 'Сталь (SBW)',
+    'superbwarfare:cemented_carbide_ingot': 'Карбид (SBW)',
+    'superbwarfare:tungsten_ingot': 'Вольфрам (SBW)',
+    'superbwarfare:silver_ingot': 'Серебро (SBW)',
+    'superbwarfare:raw_galena': 'Галенит (SBW)',
+    'electrodynamics:copper_ingot': 'Медь (Electrodynamics)',
+    'electrodynamics:steel_ingot': 'Сталь (Electrodynamics)',
+    'electrodynamics:tin_ingot': 'Олово',
+    'electrodynamics:bronze_ingot': 'Бронза',
+    'nuclearscience:lead_ingot': 'Свинец (Nuclear)',
+    'ballistix:poisonpowder': 'Яд (Ballistix)',
+    'minecraft:cobblestone': 'Булыжник',
+    'minecraft:iron_nugget': 'Железный самородок',
+    'minecraft:paper': 'Бумага',
+    'minecraft:string': 'Нить',
+    'minecraft:clock': 'Часы',
+    'minecraft:lever': 'Рычаг',
+    'minecraft:glow_ink_sac': 'Светящиеся чернила',
+    'minecraft:lime_stained_glass_pane': 'Стекло (зелёное)',
+    'minecraft:wool_carpets': 'Ковёр',
+    'minecraft:red_dye': 'Красный краситель',
+    'minecraft:poppy': 'Мак',
+    '#minecraft:wool_carpets': 'Ковёр',
+    '#forge:dyes/black': 'Чёрный краситель',
+    'electrodynamics:wireinsulatedcopperblack': 'Провод медный',
+    'electrodynamics:compositeplating': 'Композитная плита',
+    'electrodynamics:sheetplastic': 'Лист пластика',
+    'electrodynamics:wireinsulatedcoppered': 'Провод медный (красный)',
+    'electrodynamics:dustiron': 'Пыль железа',
+}
+
+# Добавляем недостающие русские подписи по ключевым словам
+RU_HINT = [
+    ('copper', 'Медь'), ('iron', 'Железо'), ('gold', 'Золото'), ('steel', 'Сталь'),
+    ('lead', 'Свинец'), ('tin', 'Олово'), ('bronze', 'Бронза'), ('tungsten', 'Вольфрам'),
+    ('silver', 'Серебро'), ('nickel', 'Никель'), ('zinc', 'Цинк'), ('aluminum', 'Алюминий'),
+    ('circuit', 'Схема'), ('plate', 'Пластина'), ('wire', 'Провод'),
+]
+
+
+def fmt(v):
+    if v >= 10:
+        return f'{v:.0f}'
+    if v >= 1:
+        return f'{v:.1f}'.rstrip('0').rstrip('.')
+    return f'{v:.2f}'.rstrip('0').rstrip('.')
+
+
+def pretty(item):
+    if item in RU:
+        return RU[item]
+    path = item.split(':')[-1]
+    words = path.replace('_', ' ')
+    for key, word in RU_HINT:
+        if key in path:
+            return f'{word} ({item.split(":")[0]})'
+    return words
+
+
+def load(jars):
+    recipes, tags, names = [], {}, set()
+    for jar in jars:
+        z = zipfile.ZipFile(jar)
+        for n in z.namelist():
+            if not n.endswith('.json') or '/advancements/' in n:
+                continue
+            if '/recipes/' not in n and '/tags/' not in n:
+                continue
+            try:
+                txt = re.sub(r'^\s*//[^\n]*$', '', z.read(n).decode('utf-8', 'ignore'), flags=re.M)
+                data = json.loads(txt)
+            except Exception:
+                continue
+            if '/recipes/' in n:
+                recipes.append(data)
+            elif n.startswith('data/') and '/tags/' in n:
+                # data/<ns>/tags/items/<path>.json → <ns>:<path>
+                ns = n.split('/', 2)[1]
+                rest = n.split('/tags/', 1)[1]
+                kind, rel = rest.split('/', 1)
+                if kind == 'items':
+                    values = [v if isinstance(v, str) else v.get('id') for v in data.get('values', [])]
+                    tags.setdefault(ns + ':' + rel[:-5], []).extend(v for v in values if v)
+    local = os.path.join(ROOT, 'blackchannel/src/main/resources/data')
+    for path in glob.glob(os.path.join(local, '**', '*.json'), recursive=True):
+        rel = path.replace('\\', '/')
+        try:
+            data = json.load(open(path, encoding='utf-8'))
+        except Exception:
+            continue
+        if '/recipes' in rel:
+            recipes.append(data)
+        elif '/tags/items' in rel:
+            ns = rel.split('/data/', 1)[1].split('/', 1)[0]
+            tag_id = ns + ':' + rel.split('/tags/items/', 1)[1][:-5]
+            values = [v if isinstance(v, str) else v.get('id') for v in data.get('values', [])]
+            tags.setdefault(tag_id, []).extend(v for v in values if v)
+    for tag_id, values in MANUAL_TAGS.items():
+        tags[tag_id] = list(values)
+    return recipes, tags
+
+
+def split_id(raw):
+    """az: 'minecraft:iron_ingot' → (ns, path)."""
+    if ':' in raw:
+        return tuple(raw.split(':', 1))
+    return 'minecraft', raw
+
+
+def ingredient_pairs(value):
+    """Разбор одного ингредиента рецепта в список альтернатив."""
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return sum((ingredient_pairs(v) for v in value), [])
+    if isinstance(value, dict):
+        if 'item' in value:
+            return [value['item']]
+        if 'tag' in value:
+            return ['#' + value['tag']]
+        if 'items' in value:
+            return sum((ingredient_pairs(v) for v in value['items']), [])
+    return []
+
+
+def recipe_entries(recipe):
+    """[(результат, количество, [(альтернативы, количество)...])]"""
+    rtype = recipe.get('type', '')
+    out = []
+    if rtype in ('minecraft:crafting_shaped',):
+        key = recipe.get('key', {})
+        counts = Counter()
+        for row in recipe.get('pattern', []):
+            for ch in row:
+                if ch == ' ':
+                    continue
+                counts[ch] += 1
+        ing = []
+        for ch, n in counts.items():
+            ing.append((ingredient_pairs(key.get(ch, [])), n))
+        out.append((recipe['result'].get('item'), recipe['result'].get('count', 1), ing))
+    elif rtype == 'minecraft:crafting_shapeless':
+        ing = [(ingredient_pairs(v), 1) for v in recipe.get('ingredients', [])]
+        out.append((recipe['result'].get('item'), recipe['result'].get('count', 1), ing))
+    elif rtype == 'tacz:gun_smith_table_crafting':
+        ing = [(ingredient_pairs(m.get('item')), m.get('count', 1)) for m in recipe.get('materials', [])]
+        res = recipe.get('result', {})
+        out.append((res.get('id'), res.get('count', 1), ing))
+    elif rtype in ('minecraft:smelting', 'minecraft:blasting', 'minecraft:smoking', 'minecraft:campfire_cooking'):
+        ing = [(ingredient_pairs(recipe.get('ingredient')), 1)]
+        res = recipe.get('result')
+        if isinstance(res, dict):
+            out.append((res.get('item'), res.get('count', 1), ing))
+        else:
+            out.append((res, 1, ing))
+    return out
+
+
+class Economy:
+    def __init__(self, recipes, tags):
+        self.tags = tags
+        self.variants = defaultdict(list)  # item -> [(count_out, [(alts, n)])]
+        for r in recipes:
+            for item, count, ing in recipe_entries(r):
+                if not item:
+                    continue
+                self.variants[item].append((max(1, count), ing))
+        # Ванильные цепочки (блок → слитки, руда → слиток): только если своего рецепта нет
+        for item, parts in VANILLA.items():
+            if self.variants.get(item):
+                continue
+            self.variants[item].append((1, [([alt], n) for alt, n in parts.items()]))
+        self.cache = {}
+
+    def resolve(self, alt):
+        """
+        Одна альтернатива → конкретный id. Тег раскрывается в один канонический предмет:
+        сначала свой для неймспейса тега, потом minecraft, потом первый нормальный.
+        Иначе в «самый дешёвый» вариант попадает мусор из чужих датапаков.
+        """
+        if not alt.startswith('#'):
+            return alt
+        tag = alt[1:]
+        members = [m for m in self.tags.get(tag, []) if isinstance(m, str)]
+        if not members:
+            return alt
+        members = [m for m in members if not m.startswith('#')] or [self.resolve(m) for m in members]
+        ns = tag.split(':', 1)[0]
+        def score(member):
+            mns = member.split(':', 1)[0]
+            if mns == ns:
+                return 0
+            if mns == 'minecraft':
+                return 1
+            if mns in ('forge', 'electrodynamics', 'superbwarfare', 'nuclearscience', 'ballistix'):
+                return 2
+            return 3
+        members.sort(key=score)
+        return members[0]
+
+    def cost(self, item, depth=0):
+        """Цена в единицах сырья: {сырьё: количество}."""
+        if item in self.cache:
+            return self.cache[item]
+        if item in TERMINAL:
+            self.cache[item] = {item: 1}
+            return self.cache[item]
+        if depth > 8 or item.startswith('#'):
+            return {item: 1}
+        options = self.variants.get(item)
+        if not options:
+            result = {item: 1}
+            self.cache[item] = result
+            return result
+        best = None
+        for count_out, ing in options:
+            need = defaultdict(float)
+            for alts, n in ing:
+                if not alts:
+                    continue
+                concrete = self.resolve(alts[0])
+                for k, v in self.cost(concrete, depth + 1).items():
+                    need[k] += v * n / count_out
+            if best is None or sum(need.values()) < sum(best.values()):
+                best = need
+        result = {k: round(v, 3) for k, v in (best or {}).items() if v > 0}
+        self.cache[item] = result
+        return result
+
+    def batch_cost(self, item):
+        """Цена одного крафта целиком: сколько сырья уходит на весь выход рецепта."""
+        unit = self.cost(item)
+        options = self.variants.get(item) or [(1, [])]
+        count_out = max(1, options[0][0])
+        return {k: v * count_out for k, v in unit.items()}
+
+
+# Сценарий на одного игрока. Обязательное — без этого катка не играется,
+# полезное — то, что реально крафтят в первые полчаса, эндгейм — если сильно захотеть.
+BASKETS = {
+    'Обязательное': {
+        'tacz:gun_smith_table': 1,
+        'blackchannel:uplink_rack': 1,
+        'blackchannel:battery_cell': 3,
+    },
+    'Полезное': {
+        'blackchannel:ids_module': 1,
+        'blackchannel:trace_logger': 1,
+        'blackchannel:burner_sim': 2,
+        'superbwarfare:medical_kit': 2,
+        'superbwarfare:c4_bomb': 2,
+    },
+    'Эндгейм': {
+        'electrodynamics:nightvisiongoggles': 1,
+        'electrodynamics:jetpack': 1,
+        'electrodynamics:compositearmorchestplate': 1,
+        'electrodynamics:compositearmorhelmet': 1,
+    },
+}
+
+# Патроны: два-три боя по 100 выстрелов на игрока. Считаются в штуках, не в крафтах.
+AMMO = {'tacz:9mm': 150, 'tacz:556x45': 120, 'tacz:12g': 24, 'tacz:762x39': 50}
+
+# Сколько базовых единиц каждого ресурса даёт один схрон при текущих весах
+SCENARIO_PLAYERS = 8
+SCENARIO_CACHES = 21
+CACHE_ITEMS = 4.5  # среднее между cacheItemsMin 3 и cacheItemsMax 6
+
+# Ресурсы, которые реально лимитируют игру: их и сравниваем со схронами
+BOTTLENECK = [
+    'minecraft:copper_ingot', 'minecraft:iron_ingot', 'minecraft:gunpowder',
+    'minecraft:redstone', 'minecraft:coal', 'minecraft:quartz',
+    'superbwarfare:steel_ingot', 'superbwarfare:lead_ingot', 'electrodynamics:tin_ingot',
+]
+
+
+def parse_pools():
+    """Пулы из Config.java: имя → [(id, минимум, максимум, вес, nbt)]."""
+    path = os.path.join(ROOT, 'blackchannel/src/main/java/dev/blackchannel/Config.java')
+    src = open(path, encoding='utf-8').read()
+    pools = {}
+    for m in re.finditer(r'CACHE_(EARLY|MID|LATE|AIRDROP|DUNGEON) = b\.defineList\("(\w+)", List\.of\((.*?)\)\, o -> o instanceof String\);', src, re.S):
+        entries = []
+        for raw in re.findall(r'"([^"]+)"', m.group(3)):
+            weight = 10
+            spec = raw
+            if '@' in spec:
+                spec, w = spec.rsplit('@', 1)
+                weight = int(w)
+            if '{' in spec:
+                spec = spec[:spec.index('{')] + spec[spec.index('}') + 1:]
+            lo = hi = 1
+            if '*' in spec:
+                spec, cnt = spec.split('*', 1)
+                if '-' in cnt:
+                    lo, hi = (int(v) for v in cnt.split('-', 1))
+                else:
+                    lo = hi = int(cnt)
+            entries.append((spec.strip(), lo, hi, weight))
+        pools[m.group(1)] = entries
+    return pools
+
+
+# Сколько схронов какой волны и сколько лута: модель на катку 4 отряда × 2 игрока, карта 1000
+MATCH_MODEL = {
+    'caches': 21,
+    'waveShare': {'EARLY': 0.55, 'MID': 0.30, 'LATE': 0.15},
+    'itemsPerCache': 4.5,
+    'airdrops': 3,
+    'airdropItems': 5,
+    'players': 8,
+}
+
+
+def supply(eco, pools):
+    """Сколько базового сырья приносят схроны за одну катку."""
+    got = defaultdict(float)
+    for wave, share in MATCH_MODEL['waveShare'].items():
+        picks = MATCH_MODEL['caches'] * share * MATCH_MODEL['itemsPerCache']
+        entries = pools.get(wave, [])
+        total = sum(e[3] for e in entries) or 1
+        for item, lo, hi, weight in entries:
+            if item.startswith('tacz:'):
+                continue  # стволы, патроны и навесное считаем в штуках отдельно
+            avg = (lo + hi) / 2
+            for mat, v in eco.cost(item).items():
+                got[mat] += v * avg * (weight / total) * picks
+    entries = pools.get('AIRDROP', [])
+    total = sum(e[3] for e in entries) or 1
+    for item, lo, hi, weight in entries:
+        if item.startswith('tacz:'):
+            continue
+        avg = (lo + hi) / 2
+        for mat, v in eco.cost(item).items():
+            got[mat] += v * avg * (weight / total) * MATCH_MODEL['airdrops'] * MATCH_MODEL['airdropItems']
+    return got
+
+
+def main():
+    jars = sorted(glob.glob(os.path.join(ROOT, '*.jar')))
+    recipes, tags = load(jars)
+    eco = Economy(recipes, tags)
+
+    print('рецептов разобрано:', sum(len(v) for v in eco.variants.values()))
+    for target, want in [('tacz:9mm', 50), ('tacz:556x45', 45), ('tacz:gun_smith_table', 1)]:
+        cost = eco.cost(target)
+        top = sorted(cost.items(), key=lambda kv: -kv[1])[:5]
+        print(f'  {target} →', ', '.join(f'{pretty(k)} {v:.1f}' for k, v in top))
+
+    per_basket = {}
+    for name, basket in BASKETS.items():
+        acc = defaultdict(float)
+        for item, n in basket.items():
+            for mat, v in eco.cost(item).items():
+                acc[mat] += v * n
+        per_basket[name] = acc
+
+    # Обязательное и полезное — то, что реально крафтят. Эндгейм-технику чаще находят в луте.
+    totals = defaultdict(float)
+    for name in ('Обязательное', 'Полезное'):
+        for mat, v in per_basket[name].items():
+            totals[mat] += v
+
+    pools = parse_pools()
+    got = supply(eco, pools)
+    cons = consumables(pools)
+
+    # Патроны: схроны дают часть готовыми, остальное крафтят, и только это тянет медь и порох
+    rounds_need_player = sum(AMMO.values())
+    rounds_need = rounds_need_player * SCENARIO_PLAYERS
+    rounds_have = cons['rounds'] + cons.get('rounds_auto', 0)
+    craft_share = max(0.0, min(1.0, 1.0 - rounds_have / rounds_need))
+    ammo_cost = defaultdict(float)
+    for item, n in AMMO.items():
+        for mat, v in eco.cost(item).items():
+            ammo_cost[mat] += v * n * craft_share
+    for mat, v in ammo_cost.items():
+        totals[mat] += v
+
+    print('\nСпрос на одного игрока (топ-12):')
+    for mat, v in sorted(totals.items(), key=lambda kv: -kv[1])[:12]:
+        print(f'  {pretty(mat):32s} {v:8.1f}')
+
+    print('\nПатронов на катку надо', rounds_need, '| схроны дают', round(rounds_have),
+          '| крафтить', f'{100 * craft_share:.0f}%')
+    print('\nПредложение от схронов (топ-12):')
+    for mat, v in sorted(got.items(), key=lambda kv: -kv[1])[:12]:
+        print(f'  {pretty(mat):32s} {v:8.1f}')
+
+    per_match = {k: v * SCENARIO_PLAYERS for k, v in totals.items()}
+    print('\nПокрытие спроса схронами (только лимитирующее сырьё):')
+    rows = []
+    for mat in BOTTLENECK:
+        need = per_match.get(mat, 0.0)
+        have = got.get(mat, 0.0)
+        if need <= 0:
+            continue
+        rows.append((mat, need, have, have / need if need else 0))
+        print(f'  {pretty(mat):28s} надо {need:7.1f}  есть {have:7.1f}  {100 * have / need:5.0f}%')
+
+    print('\nРасходники за катку:', {k: round(v) for k, v in cons.items()})
+
+    draw(totals, per_basket, rows)
+    write_md(totals, per_basket, rows, eco, cons, rounds_need, rounds_have, craft_share)
+
+
+def draw(totals, per_basket, rows):
+    import matplotlib
+    matplotlib.use('Agg')
+    import matplotlib.pyplot as plt
+
+    top = sorted(totals.items(), key=lambda kv: -kv[1])[:12]
+    labels = [pretty(k) for k, _ in top]
+    values = [v for _, v in top]
+
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(14, 6), gridspec_kw={'width_ratios': [1.15, 1]})
+    colors = ['#e8743b', '#8c8c8c', '#5b5b5b', '#c0392b', '#d4ac0d', '#2e4053',
+              '#7f8c8d', '#a04000', '#1b4f72', '#6e2c00', '#b7950b', '#566573']
+    ax1.barh(labels[::-1], values[::-1], color=colors[:len(values)][::-1])
+    ax1.set_xlabel('единиц сырья на одного игрока за катку')
+    ax1.set_title('Спрос на сырьё: что реально надо копать')
+    for i, v in enumerate(values[::-1]):
+        ax1.text(v + max(values) * 0.01, i, f'{v:.0f}', va='center', fontsize=9)
+    ax1.grid(axis='x', alpha=0.25)
+
+    names = list(per_basket.keys())
+    mats = [m for m, _ in sorted(totals.items(), key=lambda kv: -kv[1])[:6]]
+    bottom = [0] * len(names)
+    palette = ['#e8743b', '#8c8c8c', '#5b5b5b', '#c0392b', '#d4ac0d', '#2e4053']
+    for mat, color in zip(mats, palette):
+        vals = [per_basket[n].get(mat, 0) for n in names]
+        ax2.bar(names, vals, bottom=bottom, label=pretty(mat), color=color)
+        bottom = [b + v for b, v in zip(bottom, vals)]
+    ax2.set_ylabel('единиц сырья')
+    ax2.set_title('Куда уходит сырьё')
+    ax2.legend(fontsize=8)
+    ax2.tick_params(axis='x', rotation=12)
+    ax2.grid(axis='y', alpha=0.25)
+    fig.tight_layout()
+    fig.savefig(OUT_PNG, dpi=150)
+
+    # Второй график: спрос против предложения из схронов
+    fig2, ax = plt.subplots(figsize=(11, 6))
+    names = [pretty(m) for m, _, _, _ in rows][::-1]
+    need = [n for _, n, _, _ in rows][::-1]
+    have = [h for _, _, h, _ in rows][::-1]
+    y = range(len(names))
+    ax.barh([i + 0.2 for i in y], need, height=0.38, color='#c0392b', label='надо на катку (8 игроков)')
+    ax.barh([i - 0.2 for i in y], have, height=0.38, color='#2e86c1', label='дают схроны')
+    ax.set_yticks(list(y))
+    ax.set_yticklabels(names)
+    ax.set_xlabel('единиц сырья')
+    ax.set_title('Спрос и предложение: где схроны не закрывают экономику')
+    ax.legend()
+    ax.grid(axis='x', alpha=0.25)
+    fig2.tight_layout()
+    fig2.savefig(OUT_PNG.replace('.png', '-supply.png'), dpi=150)
+    print('график:', OUT_PNG.replace('.png', '-supply.png'))
+    print('\nграфик:', OUT_PNG)
+
+
+def consumables(pools):
+    """Сколько патронов, стволов и аптечек даёт лут за катку — в штуках, а не в сырье."""
+    out = defaultdict(float)
+    for wave, share in MATCH_MODEL['waveShare'].items():
+        picks = MATCH_MODEL['caches'] * share * MATCH_MODEL['itemsPerCache']
+        entries = pools.get(wave, [])
+        total = sum(e[3] for e in entries) or 1
+        for item, lo, hi, weight in entries:
+            avg = (lo + hi) / 2
+            share_of_pick = (weight / total) * picks
+            if item == 'tacz:ammo':
+                out['rounds'] += avg * share_of_pick
+            elif item == 'tacz:modern_kinetic_gun':
+                out['guns'] += share_of_pick
+                out['rounds_auto'] += 24 * share_of_pick
+            elif item == 'tacz:attachment':
+                out['attachments'] += share_of_pick
+            elif 'medical_kit' in item:
+                out['medkits'] += avg * share_of_pick
+    entries = pools.get('AIRDROP', [])
+    total = sum(e[3] for e in entries) or 1
+    picks = MATCH_MODEL['airdrops'] * MATCH_MODEL['airdropItems']
+    for item, lo, hi, weight in entries:
+        avg = (lo + hi) / 2
+        share_of_pick = (weight / total) * picks
+        if item == 'tacz:ammo':
+            out['rounds'] += avg * share_of_pick
+        elif item == 'tacz:modern_kinetic_gun':
+            out['guns'] += share_of_pick
+            out['rounds_auto'] += 24 * share_of_pick
+        elif item == 'tacz:attachment':
+            out['attachments'] += share_of_pick
+        elif 'medical_kit' in item:
+            out['medkits'] += avg * share_of_pick
+    return out
+
+
+KEY_ITEMS = [
+    ('tacz:gun_smith_table', 'Стол оружейника (патроны)'),
+    ('tacz:9mm', 'Крафт 9 мм (50 шт)'),
+    ('tacz:556x45', 'Крафт 5.56 (45 шт)'),
+    ('tacz:12g', 'Крафт 12 калибра (12 шт)'),
+    ('blackchannel:uplink_rack', 'Стойка-аплинк'),
+    ('blackchannel:battery_cell', 'Элемент питания'),
+    ('blackchannel:ids_module', 'IDS'),
+    ('superbwarfare:medical_kit', 'Аптечка SBW'),
+    ('superbwarfare:c4_bomb', 'C4'),
+    ('electrodynamics:nightvisiongoggles', 'ПНВ'),
+    ('electrodynamics:compositearmorchestplate', 'Композитная броня'),
+    ('electrodynamics:jetpack', 'Джетпак'),
+]
+
+
+def write_md(totals, per_basket, rows, eco, cons, rounds_need, rounds_have, craft_share):
+    lines = ['# Экономика лута Black Channel', '',
+             'Сгенерировано `docs/loot_stats.py`: скрипт читает рецепты всех модов из корня',
+             'репозитория (2 100+ рецептов), разворачивает их до сырья и сравнивает с тем,',
+             'что дают схроны. Пересобрать: `python3 docs/loot_stats.py`.', '',
+             '## Коротко', '',
+             '- Лимитируют игру **железо, порох и редстоун**, а не «редкие» вещи из пулов.',
+             '- Медь нужна в основном на патроны: один крафт 5.56 — это 15 меди и 3 пороха.',
+             '- Стволы TaCZ верстаком не крафтятся вообще, поэтому схроны — их единственный источник.',
+             '- Ствол без патронов бесполезен, поэтому к каждому выпавшему оружию добивается стак патронов.',
+             '', '![Спрос на сырьё](loot-demand.png)', '',
+             '![Спрос и предложение](loot-demand-supply.png)', '',
+             '## Что из чего крафтится', '',
+             '| Предмет | Что нужно (в сумме) |', '|---|---|']
+    for item, label in KEY_ITEMS:
+        cost = eco.batch_cost(item)
+        parts = ', '.join(f'{pretty(k)} {fmt(v)}' for k, v in sorted(cost.items(), key=lambda kv: -kv[1])[:5])
+        lines.append(f'| {label} | {parts or "—"} |')
+
+    lines += ['', '## Спрос на одного игрока за катку', '',
+              'Обязательное (стол оружейника, аплинк, три элемента питания), полезное (IDS,',
+              'трекер-логгер, две аптечки, две C4) и патроны — за вычетом того, что дали схроны.', '',
+              '| Сырьё | Сколько |', '|---|---:|']
+    for mat, v in sorted(totals.items(), key=lambda kv: -kv[1])[:12]:
+        lines.append(f'| {pretty(mat)} | {v:.0f} |')
+
+    lines += ['', '## Спрос и предложение на катку', '',
+              'Модель: 8 игроков, 21 схрон (карта 1000, 4 отряда), 4–6 вещей в схроне,',
+              'волны 55% / 30% / 15%, три аирдропа. Покрытие ниже 100% — остальное игрок',
+              'добывает сам, это и есть смысл копать.', '',
+              '| Сырьё | Надо | Дают схроны | Покрытие |', '|---|---:|---:|---:|']
+    for mat, need, have, cover in rows:
+        lines.append(f'| {pretty(mat)} | {need:.0f} | {have:.0f} | {100 * cover:.0f}% |')
+
+    lines += ['', '## Расходники за катку (в штуках)', '',
+              '| Что | Даёт лут | Надо на 8 игроков |', '|---|---:|---:|',
+              f'| Патроны из пулов | {cons["rounds"]:.0f} | {rounds_need} |',
+              f'| Патроны, добитые к стволам | {cons.get("rounds_auto", 0):.0f} | — |',
+              f'| Патроны всего | {cons["rounds"] + cons.get("rounds_auto", 0):.0f} '
+              f'({100 * (1 - craft_share):.0f}%) | {rounds_need} |',
+              f'| Стволы TaCZ | {cons["guns"]:.0f} | 16 |',
+              f'| Навесное | {cons["attachments"]:.0f} | 16 |',
+              f'| Аптечки | {cons["medkits"]:.0f} | 16 |', '',
+              'Остальные патроны (%.0f%%) игроки крафтят на столе оружейника из меди и пороха —'
+              % (100 * craft_share),
+              'это и есть планомерная часть: схроны дают ствол и первый боезапас,', 'а не бесконечные патроны.', '',
+              '## Что и почему изменено', '',
+              '| Правка | Было | Стало | Причина |', '|---|---|---|---|',
+              '| Патроны 9 мм | 24–48 | 48–96 | патроны — самый нужный расходник, их не хватало втрое |',
+              '| Патроны 5.56 | 20–40 | 40–80 | то же, это основной калибр средней волны |',
+              '| Патроны 7.62 | 20–40 | 40–80 | АК и СКС — самые частые стволы |',
+              '| Патроны .308 | 10–20 | 20–40 | поздняя волна и аирдроп |',
+              '| Медь | 8–16 @12 | 28–56 @22 | медь уходит на каждый крафт патронов |',
+              '| Железо | 4–8 @12 | 8–16 @18 + 12–24 @14 в средней | стол оружейника и аплинк — 18 железа на игрока |',
+              '| Порох | 4–8 @8 | 10–18 @22 + 12–24 @14 | порох нужен на каждый крафт патронов |',
+              '| Редстоун | 6–10 @8 | 8–14 @11 | аплинк, IDS, ПНВ, техника Electrodynamics |',
+              '| Волны схронов | 100% сразу | 55% / 30% / 15% | раньше все схроны ставились на старте |', '',
+              'Почему не «положить всего побольше»: если схроны закрывают 100% спроса, копать',
+              'становится незачем, и карта превращается в гонку по сундукам. Цель — 60–75%:',
+              'схроны снимают нужду, но медь, железо и порох всё ещё надо добывать.', '']
+    open(OUT_MD, 'w', encoding='utf-8').write('\n'.join(lines))
+    print('таблица:', OUT_MD)
+
+
+if __name__ == '__main__':
+    main()

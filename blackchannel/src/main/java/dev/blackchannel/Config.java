@@ -34,6 +34,7 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue FARADAY_RANGE;
     public static final ForgeConfigSpec.IntValue RADAR_PHONE;
     public static final ForgeConfigSpec.IntValue RADAR_LAPTOP;
+    public static final ForgeConfigSpec.BooleanValue RADAR_NEEDS_UPLINK;
     public static final ForgeConfigSpec.IntValue CRYPTO_PER_MIN;
     public static final ForgeConfigSpec.IntValue RACK_MINT_RANGE;
     public static final ForgeConfigSpec.IntValue TRACE_BASE;
@@ -134,6 +135,10 @@ public final class Config {
         FARADAY_RANGE = b.defineInRange("faradayRange", 8, 2, 32);
         RADAR_PHONE = b.defineInRange("radarPhone", 52, 8, 256);
         RADAR_LAPTOP = b.defineInRange("radarLaptop", 110, 16, 512);
+        b.comment("Радар видит игроков только при живой сети: стойка-аплинк рядом, тарелка или спутник. "
+                + "Без сети телефон ловит только чужие узлы и структуры. false — старое поведение, "
+                + "когда хватало одного заряженного телефона.");
+        RADAR_NEEDS_UPLINK = b.define("radarNeedsUplink", true);
         b.comment("Поставленный блок приманки пишет позывные в этом радиусе. Координат не даёт.");
         LOGGER_RADIUS = b.defineInRange("loggerRadius", 50, 8, 128);
         DISH_RADAR_BONUS = b.defineInRange("dishRadarBonus", 80, 0, 512);
@@ -210,16 +215,16 @@ public final class Config {
                 "tacz:modern_kinetic_gun{GunId=tacz:m870}@5",
                 "tacz:modern_kinetic_gun{GunId=tacz:sks_tactical}@4",
                 "tacz:modern_kinetic_gun{GunId=tacz:kar98}@3",
-                "tacz:ammo{AmmoId=tacz:9mm}*24-48@16",
-                "tacz:ammo{AmmoId=tacz:45acp}*16-32@11",
-                "tacz:ammo{AmmoId=tacz:12g}*8-16@10",
-                "tacz:ammo{AmmoId=tacz:762x39}*10-20@8",
-                "tacz:ammo{AmmoId=tacz:22wmr}*12-24@5",
+                "tacz:ammo{AmmoId=tacz:9mm}*48-96@16",
+                "tacz:ammo{AmmoId=tacz:45acp}*32-64@11",
+                "tacz:ammo{AmmoId=tacz:12g}*16-32@10",
+                "tacz:ammo{AmmoId=tacz:762x39}*20-40@8",
+                "tacz:ammo{AmmoId=tacz:22wmr}*24-48@5",
                 "tacz:ammo{AmmoId=tacz:792x57}*5-10@3",
                 "minecraft:bread*2-4@14",
-                "minecraft:iron_ingot*4-8@12",
-                "minecraft:gunpowder*4-8@8",
-                "minecraft:redstone*6-10@8",
+                "minecraft:iron_ingot*8-16@18",
+                "minecraft:gunpowder*10-18@22",
+                "minecraft:redstone*8-14@11",
                 "minecraft:sugar*3-6@6",
                 "superbwarfare:medical_kit@6",
                 "superbwarfare:heal_clip@7",
@@ -229,7 +234,7 @@ public final class Config {
                 "electrodynamics:circuitbasic*2-4@7",
                 "electrodynamics:platesteel*2-4@7",
                 "blackchannel:field_laptop@3",
-                "minecraft:copper_ingot*8-16@12",
+                "minecraft:copper_ingot*28-56@22",
                 "minecraft:coal*8-16@9",
                 "minecraft:flint*4-8@6",
                 "minecraft:golden_apple*1-2@4",
@@ -260,12 +265,12 @@ public final class Config {
                 "tacz:modern_kinetic_gun{GunId=tacz:m1014}@4",
                 "tacz:modern_kinetic_gun{GunId=tacz:deagle}@4",
                 "tacz:modern_kinetic_gun{GunId=tacz:rhino357}@3",
-                "tacz:ammo{AmmoId=tacz:556x45}*20-40@15",
-                "tacz:ammo{AmmoId=tacz:762x39}*20-40@13",
-                "tacz:ammo{AmmoId=tacz:9mm}*24-48@10",
-                "tacz:ammo{AmmoId=tacz:45acp}*16-32@9",
-                "tacz:ammo{AmmoId=tacz:308}*10-20@8",
-                "tacz:ammo{AmmoId=tacz:12g}*8-16@8",
+                "tacz:ammo{AmmoId=tacz:556x45}*40-80@15",
+                "tacz:ammo{AmmoId=tacz:762x39}*40-80@13",
+                "tacz:ammo{AmmoId=tacz:9mm}*48-96@10",
+                "tacz:ammo{AmmoId=tacz:45acp}*32-64@9",
+                "tacz:ammo{AmmoId=tacz:308}*40-80@8",
+                "tacz:ammo{AmmoId=tacz:12g}*16-32@8",
                 "tacz:ammo{AmmoId=tacz:57x28}*20-40@4",
                 "tacz:ammo{AmmoId=tacz:58x42}*20-40@4",
                 "tacz:ammo{AmmoId=tacz:50ae}*7-14@3",
@@ -298,8 +303,11 @@ public final class Config {
                 "nuclearscience:antidote@3",
                 "nuclearscience:geigercounter@3",
                 "blackchannel:deep_vpn@3",
-                "minecraft:copper_block*1-2@5",
-                "minecraft:iron_block*1-2@5",
+                "minecraft:copper_block*4-7@10",
+                "minecraft:iron_block*2-3@9",
+                "minecraft:iron_ingot*12-24@14",
+                "minecraft:gunpowder*12-24@14",
+                "minecraft:redstone*10-18@8",
                 "tacz:attachment{AttachmentId=tacz:scope_acog_ta31}@4",
                 "tacz:attachment{AttachmentId=tacz:scope_elcan_4x}@4",
                 "tacz:attachment{AttachmentId=tacz:muzzle_silencer_knight_qd}@4",
@@ -327,8 +335,8 @@ public final class Config {
                 "tacz:ammo{AmmoId=tacz:50bmg}*5-10@6",
                 "tacz:ammo{AmmoId=tacz:30_06}*10-20@7",
                 "tacz:ammo{AmmoId=tacz:308}*20-40@8",
-                "tacz:ammo{AmmoId=tacz:556x45}*30-60@8",
-                "tacz:ammo{AmmoId=tacz:12g}*12-24@6",
+                "tacz:ammo{AmmoId=tacz:556x45}*60-120@8",
+                "tacz:ammo{AmmoId=tacz:12g}*24-48@6",
                 "tacz:ammo{AmmoId=tacz:rpg_rocket}*1-2@4",
                 "tacz:ammo{AmmoId=tacz:40mm}*2-4@4",
                 "tacz:ammo{AmmoId=tacz:500mag}*5-10@3",
@@ -356,6 +364,9 @@ public final class Config {
                 "ballistix:defuser@3",
                 "sbw_ew_addon:electromagnetic_gun@2",
                 "sbw_ew_addon:advanced_drone@2",
+                "minecraft:iron_ingot*20-40@12",
+                "minecraft:gunpowder*16-32@12",
+                "minecraft:copper_ingot*32-64@12",
                 "minecraft:netherite_ingot@2",
                 "minecraft:diamond_block@2",
                 "minecraft:enchanted_golden_apple@1",
@@ -376,11 +387,11 @@ public final class Config {
                 "tacz:modern_kinetic_gun{GunId=tacz:rpg7}@5",
                 "tacz:modern_kinetic_gun{GunId=tacz:aa12}@4",
                 "tacz:modern_kinetic_gun{GunId=tacz:timeless50}@3",
-                "tacz:ammo{AmmoId=tacz:338}*20-40@8",
+                "tacz:ammo{AmmoId=tacz:338}*30-60@8",
                 "tacz:ammo{AmmoId=tacz:50bmg}*10-20@6",
                 "tacz:ammo{AmmoId=tacz:rpg_rocket}*2-3@6",
-                "tacz:ammo{AmmoId=tacz:556x45}*60-90@7",
-                "tacz:ammo{AmmoId=tacz:308}*40-60@6",
+                "tacz:ammo{AmmoId=tacz:556x45}*90-150@7",
+                "tacz:ammo{AmmoId=tacz:308}*60-100@6",
                 "tacz:ammo{AmmoId=tacz:40mm}*3-6@5",
                 "superbwarfare:thermal_imaging_goggles@6",
                 "superbwarfare:medical_kit*2-3@8",

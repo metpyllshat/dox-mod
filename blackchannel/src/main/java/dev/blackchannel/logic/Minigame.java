@@ -120,6 +120,9 @@ public final class Minigame {
     private static final int CACHE_GAP_TICKS = 20;
     /** Схроны начинаем ставить только после высадки, чтобы первые секунды никто не лагал. */
     private static final int CACHE_START_DELAY = 60;
+    /** Доли волн: ранняя, средняя, остаток — поздняя. */
+    private static final double CACHE_EARLY_SHARE = 0.55;
+    private static final double CACHE_MID_SHARE = 0.30;
     /**
      * Лут в чужие сундуки кладём не в момент загрузки чанка (там нельзя менять мир),
      * а из тика, по нескольку контейнеров за раз.
@@ -408,6 +411,8 @@ public final class Minigame {
             match.setDirty();
             announceBeaconCoords(server, match);
         }
+        // Смена этапа: открываем следующую волну схронов и пишем об этом в чат
+        updateCacheWave(server, match, now);
         // Аирдропы: первый через airDropFirstMinute, дальше по интервалу
         if (Config.AIRDROP_ENABLED.get() && match.nextAirdropTick > 0L && now >= match.nextAirdropTick) {
             dropAirdrop(server, match, level);
@@ -456,8 +461,9 @@ public final class Minigame {
             deployStep(server, match, level);
             return;
         }
-        // Разбиваем placeCaches на тики (cacheTick хранит индекс следующего схрона)
-        if (match.cacheTick < match.cacheTotal) {
+        // Разбиваем placeCaches на тики (cacheTick хранит индекс следующего схрона).
+        // Ставим только текущую волну: следующая откроется на смене этапа.
+        if (waveOpen(match)) {
             placeCacheStep(server, match, level);
         }
     }
@@ -591,12 +597,12 @@ public final class Minigame {
     }
 
     private static void placeCacheStep(MinecraftServer server, MatchData match, ServerLevel level) {
-        if (match.cacheTick >= match.cacheTotal) return;
+        if (!waveOpen(match)) return;
         if (level.getGameTime() < nextCacheTick) return;
         int index = match.cacheTick;
         if (index < 0 || index >= match.cachePositions.length) {
-            match.cacheTick = match.cacheTotal;
-            announceCaches(server, match);
+            match.cacheTick = waveTarget(match);
+            announceWave(server, match);
             return;
         }
         BlockPos cand = match.cachePositions[index];
@@ -620,13 +626,16 @@ public final class Minigame {
             BlockPos feet = new BlockPos(cand.getX(), y, cand.getZ());
             if (match.inside(feet) && standableHere(level, feet)) placeChest(level, match, feet, level.getRandom());
         }
-        logStep("cache " + match.cacheTick + "/" + match.cacheTotal, started);
-        if (match.cacheTick >= match.cacheTotal) announceCaches(server, match);
+        logStep("cache " + match.cacheTick + "/" + match.cacheTotal + " (волна " + (match.cacheWave + 1) + ")", started);
+        if (!waveOpen(match)) announceWave(server, match);
     }
 
-    private static void announceCaches(MinecraftServer server, MatchData match) {
+    /** Сообщение о том, что волна схронов расставлена: сколько уже в мире и какая это волна. */
+    private static void announceWave(MinecraftServer server, MatchData match) {
+        int done = Math.max(0, Math.min(match.cacheTick, match.cacheTotal));
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.caches_done", match.cacheTotal)));
+            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.caches_wave",
+                    done, match.cacheTotal)));
         }
     }
 
@@ -1872,7 +1881,9 @@ public final class Minigame {
         if (cramped) source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.cramped", gap)), true);
         announceMatchStart(server, match);
         prepareCaches(level, match);
-        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.caches_prep", match.cacheTotal)), true);
+        int firstWave = match.cacheMarks == null || match.cacheMarks.length != 3 ? match.cacheTotal : match.cacheMarks[0];
+        source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.caches_prep",
+                firstWave, match.cacheTotal)), true);
         return 1;
     }
 
@@ -2343,6 +2354,52 @@ public final class Minigame {
         match.cachePositions = positions.toArray(new BlockPos[0]);
         match.cacheTotal = positions.size();
         match.cacheTick = 0;
+        match.cacheWave = 0;
+        // Волны: 55% схронов в начале, 30% на смене на средний этап, остальное в late.
+        // Раньше все схроны ставились сразу и всегда с ранним лутом, поэтому волн никто не видел.
+        int early = (int) Math.round(match.cacheTotal * CACHE_EARLY_SHARE);
+        int mid = Math.max(early, (int) Math.round(match.cacheTotal * (CACHE_EARLY_SHARE + CACHE_MID_SHARE)));
+        match.cacheMarks = new int[]{Math.min(early, match.cacheTotal), Math.min(mid, match.cacheTotal), match.cacheTotal};
+    }
+
+    /**
+     * Смена этапа по времени, а не по флагу: если сервер перезапустили посреди катки,
+     * волна всё равно поднимется до нужной. Новая волна сразу открывает постановку схронов.
+     */
+    private static void updateCacheWave(MinecraftServer server, MatchData match, long now) {
+        long start = match.matchStartTick;
+        long end = match.matchEndTick;
+        if (end <= start) return;
+        long length = end - start;
+        int wave = now < start + length / 3L ? 0 : (now < start + length * 2L / 3L ? 1 : 2);
+        if (wave <= match.cacheWave) return;
+        int before = waveTarget(match);
+        match.cacheWave = wave;
+        match.setDirty();
+        int after = waveTarget(match);
+        int fresh = Math.max(0, after - before);
+        // Ставим сразу, не дожидаясь общего тика постановки
+        nextCacheTick = Math.min(nextCacheTick, now);
+        String key = wave == 1 ? "blackchannel.minigame.stage_mid" : "blackchannel.minigame.stage_late";
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            player.sendSystemMessage(Msg.paint(Component.translatable(key, fresh)));
+            player.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.MASTER, 0.6f, 1.4f);
+        }
+    }
+
+    /** Сколько схронов ещё не поставлено в текущей волне. */
+    private static int waveTarget(MatchData match) {
+        if (match.cacheMarks == null || match.cacheMarks.length != 3 || match.cacheMarks[2] <= 0) {
+            // Старый мир без меток волн: считаем, что волна одна на все схроны
+            return match.cacheTotal;
+        }
+        int wave = Mth.clamp(match.cacheWave, 0, 2);
+        return match.cacheMarks[wave];
+    }
+
+    /** Доступно ли место в схронах текущей волны: на смене этапа лимит поднимается. */
+    private static boolean waveOpen(MatchData match) {
+        return match.cacheTick < waveTarget(match);
     }
 
     /**

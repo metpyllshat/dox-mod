@@ -294,8 +294,7 @@
   "blackchannel.result.net_named": "В сети: %s = %s",
   "screen.blackchannel.market.auction": "АУКЦИОН",
   "screen.blackchannel.market.empty_items": "Аукцион пуст. Лоты выставляются с ноутбука.",
-  "blackchannel.minigame.caches_prep": "Генерация схронов: %s. Они появятся под слоем каменистой земли.",
-  "blackchannel.minigame.caches_done": "Все схроны размещены: %s.",
+  "blackchannel.minigame.caches_prep": "Схроны: первая волна %s из %s. Средняя и поздняя волны откроются на смене этапа — в чат придёт сообщение.",
   "blackchannel.minigame.match_start": "Матч начался! Длительность: %s минут. Кровати и маяки отряда дают респаун.",
   "blackchannel.minigame.final_start": "⚠ ФИНАЛЬНЫЕ %s МИНУТ! Кровати и маяки отряда отключены. Смерть перманентная!",
   "blackchannel.minigame.downed": "Вы ранены. Лежите %s секунд: тиммейт может вас поднять.",
@@ -356,5 +355,8 @@
   "blackchannel.minigame.phase_mid": "Средний этап",
   "blackchannel.minigame.phase_late": "Поздний этап",
   "blackchannel.minigame.phase_final": "Финал",
-  "blackchannel.minigame.stage_bar": "%s · до смены этапа %s"
+  "blackchannel.minigame.stage_bar": "%s · до смены этапа %s",
+  "blackchannel.minigame.caches_wave": "Схроны расставлены: %s из %s. Остальные появятся на следующем этапе.",
+  "blackchannel.minigame.stage_mid": "Средний этап. В схронах теперь автоматы, ПП и броня — плюс %s новых схронов.",
+  "blackchannel.minigame.stage_late": "Поздний этап. В схронах снайперки, пулемёты и РПГ — плюс %s новых схронов."
 }

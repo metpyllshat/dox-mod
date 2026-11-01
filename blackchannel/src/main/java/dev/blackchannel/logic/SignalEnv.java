@@ -293,6 +293,13 @@ public final class SignalEnv {
         if (range <= 0 || self.airplane || emp(self, viewer.getServer())) return out;
         ServerLevel level = viewer.serverLevel();
         if (jammed(level, viewer.blockPosition()) || faraday(level, viewer.blockPosition())) return out;
+        // Игроков ловит только тот, у кого есть сеть: стойка-аплинк, тарелка или спутник.
+        // Телефон сам по себе — приёмник без канала, он видит лишь чужие узлы.
+        boolean linked = link(viewer, self).mode != Link.Mode.NONE;
+        if (!linked && Config.RADAR_NEEDS_UPLINK.get()) {
+            addStructures(out, viewer, self, viewer.getServer(), level);
+            return out.size() > 48 ? out.subList(0, 48) : out;
+        }
         long r2 = (long) range * range;
         MinecraftServer server = viewer.getServer();
         for (ServerPlayer other : level.players()) {

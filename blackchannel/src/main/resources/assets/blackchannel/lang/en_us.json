@@ -294,8 +294,7 @@
   "blackchannel.result.net_named": "On the net: %s = %s",
   "screen.blackchannel.market.auction": "AUCTION",
   "screen.blackchannel.market.empty_items": "Auction is empty. Items are posted from the laptop trade tab.",
-  "blackchannel.minigame.caches_prep": "Generating caches: %s. They will appear under coarse dirt.",
-  "blackchannel.minigame.caches_done": "All caches placed: %s.",
+  "blackchannel.minigame.caches_prep": "Caches: first wave %s of %s. Mid and late waves open at stage changes — you'll get a chat message.",
   "blackchannel.minigame.match_start": "Match started! Duration: %s minutes. Beds and team beacons enable respawn.",
   "blackchannel.minigame.final_start": "⚠ FINAL %s MINUTES! Beds and team beacons disabled. Death is permanent!",
   "blackchannel.minigame.downed": "You are downed. Lie still for %s seconds: a teammate can pick you up.",
@@ -356,5 +355,8 @@
   "blackchannel.minigame.phase_mid": "Mid stage",
   "blackchannel.minigame.phase_late": "Late stage",
   "blackchannel.minigame.phase_final": "Final",
-  "blackchannel.minigame.stage_bar": "%s · next stage in %s"
+  "blackchannel.minigame.stage_bar": "%s · next stage in %s",
+  "blackchannel.minigame.caches_wave": "Caches placed: %s of %s. The rest appear at the next stage.",
+  "blackchannel.minigame.stage_mid": "Mid stage. Caches now hold rifles, SMGs and armor — plus %s new caches.",
+  "blackchannel.minigame.stage_late": "Late stage. Caches now hold sniper rifles, machine guns and RPGs — plus %s new caches."
 }

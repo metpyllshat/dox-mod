@@ -71,6 +71,10 @@ public class MatchData extends SavedData {
     // Пошаговое размещение схронов
     public int cacheTick;
     public int cacheTotal;
+    /** Текущая волна схронов: 0 — ранняя, 1 — средняя, 2 — поздняя. */
+    public int cacheWave;
+    /** Границы волн в массиве cachePositions: {конец ранней, конец средней, конец поздней}. */
+    public int[] cacheMarks = new int[]{0, 0, 0};
     public BlockPos[] cachePositions = new BlockPos[0];
     /** Поставленные модом схроны: после матча их надо убрать из мира. */
     public final List<BlockPos> cacheChests = new ArrayList<>();
@@ -130,6 +134,11 @@ public class MatchData extends SavedData {
         readUUIDIntMap(tag.getList("pcolors", Tag.TAG_COMPOUND), data.playerColorIdx);
         data.cacheTick = tag.getInt("cacheTick");
         data.cacheTotal = tag.getInt("cacheTotal");
+        data.cacheWave = tag.getInt("cacheWave");
+        if (tag.contains("cacheMarks")) {
+            int[] marks = tag.getIntArray("cacheMarks");
+            if (marks.length == 3) data.cacheMarks = marks;
+        }
         ListTag cpos = tag.getList("cachePos", Tag.TAG_COMPOUND);
         data.cachePositions = new BlockPos[cpos.size()];
         for (int i = 0; i < cpos.size(); i++) {
@@ -201,6 +210,8 @@ public class MatchData extends SavedData {
         tag.put("pcolors", writeUUIDIntMap(playerColorIdx));
         tag.putInt("cacheTick", cacheTick);
         tag.putInt("cacheTotal", cacheTotal);
+        tag.putInt("cacheWave", cacheWave);
+        tag.putIntArray("cacheMarks", cacheMarks);
         ListTag cpos = new ListTag();
         for (BlockPos p : cachePositions) {
             if (p == null) {
