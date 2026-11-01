@@ -116,6 +116,8 @@ public final class Ops {
             case Actions.SELL_BUFF -> sellBuff(player, profile, arg);
             case Actions.PEEK -> Optics.peek(player, profile, arg);
             case Actions.HACK -> hack(player, profile);
+            case Actions.TOWER_CAM -> Towers.camera(player, profile);
+            case Actions.TOWER_SCAN -> Towers.scan(player, profile);
             case Actions.KILL -> killSwitch(player, rackPos(player));
             default -> { }
         }
