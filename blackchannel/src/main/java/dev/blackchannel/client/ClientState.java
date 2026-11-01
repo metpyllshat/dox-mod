@@ -26,6 +26,8 @@ public final class ClientState {
     public static String toastLine = "";
     public static String strikeDim = "";
     public static int crypto, vpn, battery, signal, emp, bomb, cdT, cdD, cdS, cdB, radarR = 52;
+    /** Текущий шум в эфире, 0..100: рисуем полоску на телефоне. */
+    public static int noise;
     public static int strikeT, strikeX, strikeY, strikeZ, ownStrikeT, toastId, seenToast, sat, rackCharge;
     public static boolean airplane, dnd, jammed, faraday, uplink, dish, ids, hard, radarHud, rackHackable;
     public static long toastUntil;
@@ -163,6 +165,7 @@ public final class ClientState {
         vpn = tag.getInt("vpn");
         battery = tag.getInt("battery");
         signal = tag.getInt("signal");
+        noise = tag.getInt("noise");
         emp = tag.getInt("emp");
         bomb = tag.getInt("bomb");
         airplane = tag.getBoolean("airplane");

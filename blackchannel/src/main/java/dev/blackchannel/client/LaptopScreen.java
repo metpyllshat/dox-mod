@@ -1,7 +1,6 @@
 package dev.blackchannel.client;
 
 import dev.blackchannel.logic.Actions;
-import dev.blackchannel.logic.Optics;
 import dev.blackchannel.menu.Menus;
 import dev.blackchannel.net.ModNetwork;
 import net.minecraft.client.gui.GuiGraphics;
@@ -82,7 +81,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         g.fill(x + 6, y + 30, x + WIDTH - 6, y + 31, 0xFF2A2416);
         g.fill(x + 6, y + 48, x + WIDTH - 6, y + HEIGHT - 6, 0xFF0C1210);
         if (page == 0) g.fill(x + 8, y + 106, x + WIDTH - 8, y + 120, 0xFF0B0F12);
-        if (page == 3) {
+        if (page == 2) {
             g.fill(x + PRICE_X, y + PRICE_Y, x + PRICE_X + 56, y + PRICE_Y + 12, 0xFF0B0F12);
             for (Slot slot : this.menu.slots) {
                 if (!slot.isActive()) continue;
@@ -128,20 +127,18 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         String status = (ClientState.uplink ? (ClientState.dish ? "DISH" : "RACK") : "NO UPLINK")
                 + "  T" + ClientState.cdT + " D" + ClientState.cdD + " S" + ClientState.cdS + " B" + ClientState.cdB;
         int statusW = WIDTH - 16;
-        if (page != 3 && !this.menu.getSlot(0).getItem().isEmpty()) {
+        if (page != 2 && !this.menu.getSlot(0).getItem().isEmpty()) {
             String held = Ui.t("screen.blackchannel.slot_held");
             int hw = this.font.width(held);
             g.drawString(this.font, held, x + WIDTH - 8 - hw, y + 18, Ui.AMBER, false);
             statusW = WIDTH - 16 - hw - 6;
         }
         g.drawString(this.font, Ui.trim(this.font, status, statusW), x + 8, y + 18, Ui.MUTED, false);
-        tab(g, x + 8, y + 32, 58, Ui.t("screen.blackchannel.tab.ops"), null, 0);
-        tab(g, x + 70, y + 32, 58, Ui.t("screen.blackchannel.tab.map"), Ui.t("screen.blackchannel.map_note"), 1);
-        tab(g, x + 132, y + 32, 58, Ui.t("screen.blackchannel.tab.bag"), Ui.t("screen.blackchannel.bag_note"), 2);
-        tab(g, x + 194, y + 32, 58, Ui.t("screen.blackchannel.tab.sell"), Ui.t("screen.blackchannel.tip.sell_item"), 3);
+        tab(g, x + 8, y + 32, 78, Ui.t("screen.blackchannel.tab.ops"), null, 0);
+        tab(g, x + 90, y + 32, 78, Ui.t("screen.blackchannel.tab.bag"), Ui.t("screen.blackchannel.bag_note"), 1);
+        tab(g, x + 172, y + 32, 80, Ui.t("screen.blackchannel.tab.sell"), Ui.t("screen.blackchannel.tip.sell_item"), 2);
         if (page == 0) drawOps(g, x, y);
-        else if (page == 1) drawArea(g, x, y);
-        else if (page == 2) drawBag(g, x, y, mx, my);
+        else if (page == 1) drawBag(g, x, y, mx, my);
         else drawSell(g, x, y);
     }
 
@@ -150,13 +147,11 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     }
 
     private void drawOps(GuiGraphics g, int x, int y) {
-        int w = 78;
+        int w = 116;
         Ui.button(g, this.font, hits, x + 8, y + 52, w, 13, "TRACE", tipTrace(), false, Actions.TRACE, "");
-        Ui.button(g, this.font, hits, x + 91, y + 52, w, 13, "DEANON", tipDeanon(), false, Actions.DEANON, "");
-        Ui.button(g, this.font, hits, x + 174, y + 52, w, 13, "WIPE", Ui.t("screen.blackchannel.tip.wipe"), wipeArmed, Actions.WIPE, "");
-        Ui.button(g, this.font, hits, x + 8, y + 68, w, 13, "SWAT", tipSwat(), false, Actions.SWAT, "");
-        Ui.button(g, this.font, hits, x + 91, y + 68, w, 13, "BOMB", tipBomb(), false, Actions.BOMB, "");
-        Ui.button(g, this.font, hits, x + 174, y + 68, w, 13, "UAV", tipUav(), false, Actions.UAV, "");
+        Ui.button(g, this.font, hits, x + 132, y + 52, w, 13, "WIPE", Ui.t("screen.blackchannel.tip.wipe"), wipeArmed, Actions.WIPE, "");
+        Ui.button(g, this.font, hits, x + 8, y + 68, w, 13, "BOMB", tipBomb(), false, Actions.BOMB, "");
+        Ui.button(g, this.font, hits, x + 132, y + 68, w, 13, "UAV", tipUav(), false, Actions.UAV, "");
         paragraph(g, ClientState.resultFor("ops"), x + 8, y + 86, WIDTH - 16, Ui.AMBER, 2);
         // Пеленги: пока луч один, координаты не показываем — только направление и ширину
         if (!ClientState.beams.isEmpty()) {
@@ -170,95 +165,14 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
             }
         }
         g.drawString(this.font, "INTEL", x + 8, y + 126, Ui.MUTED, false);
-        g.drawString(this.font, "KNOWN", x + 168, y + 126, Ui.MUTED, false);
         int ly = y + 136;
         for (ClientState.IntelRow row : ClientState.intel) {
             if (ly > y + 200) break;
             String label = "#" + row.id + " " + row.handle + " ±" + row.err;
             String tip = row.handle + "  " + row.dim + "  " + row.x + " " + row.y + " " + row.z + "  ±" + row.err;
-            Ui.button(g, this.font, hits, x + 8, ly, 152, 11, Ui.trim(this.font, label, 146), tip, row.id == selected, "pick", String.valueOf(row.id));
+            Ui.button(g, this.font, hits, x + 8, ly, WIDTH - 16, 11, Ui.trim(this.font, label, WIDTH - 22), tip, row.id == selected, "pick", String.valueOf(row.id));
             ly += 12;
         }
-        int ry = y + 136;
-        for (ClientState.DeanonRow row : ClientState.deanons) {
-            if (ry > y + 204) break;
-            g.drawString(this.font, Ui.trim(this.font, row.handle() + "=" + row.name(), 84), x + 168, ry, Ui.BLUE, false);
-            ry += 10;
-        }
-    }
-
-    private void drawArea(GuiGraphics g, int x, int y) {
-        g.drawString(this.font, Ui.t("screen.blackchannel.area_title"), x + 8, y + 50, Ui.TEXT, false);
-        boolean shot = ClientState.optic != null && ClientState.optic.length > 0;
-        paragraph(g, shot ? areaAbout() : areaNeed(), x + 8, y + 60, WIDTH - 16, Ui.MUTED, 3);
-        int cell = 5;
-        int grid = Optics.GRID * cell;
-        int ox = x + 8;
-        int oy = y + 92;
-        g.fill(ox - 1, oy - 1, ox + grid + 1, oy + grid + 1, Ui.EDGE_DIM);
-        byte[] cells = ClientState.optic == null ? new byte[0] : ClientState.optic;
-        int[] colors = ClientState.opticColor == null ? new int[0] : ClientState.opticColor;
-        boolean any = false;
-        for (int gz = 0; gz < Optics.GRID; gz++) {
-            for (int gx = 0; gx < Optics.GRID; gx++) {
-                int i = gz * Optics.GRID + gx;
-                int color = 0xFF0B0F12;
-                if (i < colors.length && colors[i] != 0) {
-                    color = 0xFF000000 | colors[i];
-                    any = true;
-                } else if (i < cells.length && cells[i] != 0) {
-                    color = 0xFF000000 | (80 + cells[i]) * 0x010101;
-                    any = true;
-                }
-                g.fill(ox + gx * cell, oy + gz * cell, ox + gx * cell + cell - 1, oy + gz * cell + cell - 1, color);
-            }
-        }
-        g.drawString(this.font, Ui.t("screen.blackchannel.area_north"), ox + grid / 2 - 2, oy + 1, Ui.AMBER, true);
-        if (ClientState.opticHx >= 0) {
-            int px = ox + ClientState.opticHx * cell;
-            int py = oy + ClientState.opticHz * cell;
-            g.fill(px, py, px + 3, py + 3, Ui.RED);
-        }
-        if (!any) paragraph(g, Ui.t("screen.blackchannel.no_shot"), ox + 3, oy + 12, grid - 6, Ui.MUTED, 4);
-        Ui.button(g, this.font, hits, ox, oy + grid + 4, grid, 13, Ui.t("screen.blackchannel.btn.snap"), tipOptic(), false, Actions.OPTIC, "");
-        int rx = ox + grid + 8;
-        int rw = x + WIDTH - 8 - rx;
-        if (rw < 36) return;
-        g.drawString(this.font, Ui.trim(this.font, "CONF " + ClientState.opticConf, rw), rx, oy, Ui.MUTED, false);
-        paragraph(g, Ui.t("screen.blackchannel.area_legend"), rx, oy + 10, rw, Ui.MUTED, 3);
-        paragraph(g, areaVerdict(), rx, oy + 42, rw, Ui.AMBER, 4);
-        String biome = biomeName();
-        if (!biome.isEmpty()) g.drawString(this.font, Ui.trim(this.font, biome, rw), rx, oy + 84, Ui.BLUE, false);
-        g.drawString(this.font, Ui.trim(this.font, ClientState.resultFor("area"), rw), rx, oy + 94, Ui.AMBER, false);
-    }
-
-    private String areaNeed() {
-        ClientState.IntelRow row = picked();
-        if (row == null) return Ui.t("screen.blackchannel.area_need");
-        return ClientState.tip("screen.blackchannel.area_pick", row.handle, String.valueOf(row.err));
-    }
-
-    private String areaAbout() {
-        String who = ClientState.opticHandle == null || ClientState.opticHandle.isEmpty() ? "?" : ClientState.opticHandle;
-        return ClientState.tip("screen.blackchannel.area_about", who, String.valueOf(Math.max(0, ClientState.opticErr)));
-    }
-
-    private String areaVerdict() {
-        if (ClientState.optic == null || ClientState.optic.length == 0) return "";
-        if (ClientState.opticHx >= 0) return Ui.t("screen.blackchannel.area_dot");
-        if (ClientState.opticBearing != null && !ClientState.opticBearing.isEmpty()) {
-            return ClientState.tip("screen.blackchannel.area_bear", ClientState.opticBearing);
-        }
-        return Ui.t("screen.blackchannel.area_ground");
-    }
-
-    private String biomeName() {
-        String id = ClientState.opticBiome;
-        if (id == null || id.isEmpty()) return "";
-        ResourceLocation loc = ResourceLocation.tryParse(id);
-        if (loc == null) return id;
-        String name = Component.translatable("biome." + loc.getNamespace() + "." + loc.getPath()).getString();
-        return ClientState.tip("screen.blackchannel.area_biome", name);
     }
 
     private ClientState.IntelRow picked() {
@@ -357,7 +271,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     }
 
     private void layoutSlots() {
-        this.menu.showSlots = page == 3;
+        this.menu.showSlots = page == 2;
     }
 
     private void syncWidgets() {
@@ -366,8 +280,8 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
             if (page != 0 && input.isFocused()) input.setFocused(false);
         }
         if (priceBox != null) {
-            priceBox.visible = page == 3;
-            if (page != 3 && priceBox.isFocused()) priceBox.setFocused(false);
+            priceBox.visible = page == 2;
+            if (page != 2 && priceBox.isFocused()) priceBox.setFocused(false);
         }
     }
 
@@ -388,15 +302,6 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         return whole + "." + (frac < 10 ? "0" : "") + frac;
     }
 
-    private String tipDeanon() {
-        return ClientState.tip("screen.blackchannel.tip.deanon", ClientState.cfg("deanonCost", 4));
-    }
-
-    private String tipSwat() {
-        return ClientState.tip("screen.blackchannel.tip.swat", ClientState.cfg("swatCost", 40),
-                ClientState.cfg("swatContract", 8), ClientState.cfg("swatDelay", 50));
-    }
-
     private String tipBomb() {
         return ClientState.tip("screen.blackchannel.tip.bomb", ClientState.cfg("bombCost", 3));
     }
@@ -406,17 +311,13 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
                 ClientState.cfg("uavRange", 96), ClientState.cfg("uavError", 30));
     }
 
-    private String tipOptic() {
-        return ClientState.tip("screen.blackchannel.tip.optic", ClientState.cfg("opticCost", 6));
-    }
-
     private String tipPeek() {
         return ClientState.tip("screen.blackchannel.tip.peek", ClientState.cfg("peekCost", 8));
     }
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
-        if (page == 3 && mx >= this.leftPos + SLIDER_X && mx <= this.leftPos + SLIDER_X + SLIDER_W
+        if (page == 2 && mx >= this.leftPos + SLIDER_X && mx <= this.leftPos + SLIDER_X + SLIDER_W
                 && my >= this.topPos + SLIDER_Y - 4 && my <= this.topPos + SLIDER_Y + 10) {
             dragPrice = true;
             setPriceFromMouse(mx);
@@ -438,9 +339,8 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
                 return true;
             }
             String arg = input == null ? "" : input.getValue().trim();
-            if (Actions.SWAT.equals(hit.action()) || Actions.OPTIC.equals(hit.action()) || Actions.PEEK.equals(hit.action())) {
-                arg = String.valueOf(selected);
-            }
+            // Сканер сумки работает по выбранному следу
+            if (Actions.PEEK.equals(hit.action())) arg = String.valueOf(selected);
             if ("sell-item".equals(hit.action())) {
                 send(Actions.SELL, "item " + readPrice());
                 return true;

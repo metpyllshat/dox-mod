@@ -659,14 +659,14 @@ public final class Minigame {
                 player.playNotifySound(SoundEvents.PLAYER_LEVELUP, SoundSource.MASTER, 1.0f, 1.2f);
             }
         }
-        NetData net = NetData.get(server);
+        NetData netData = NetData.get(server);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            NetData.Profile prof = net.profile(player.getUUID());
+            NetData.Profile prof = netData.profile(player.getUUID());
             prof.crypto = 0;
             prof.intel.clear();
             prof.beams.clear();
         }
-        net.setDirty();
+        netData.setDirty();
         match.towersPlaced = false;
         match.nodeActive = false;
         match.silenceUntil = 0L;
@@ -1947,9 +1947,9 @@ public final class Minigame {
             return 0;
         }
         // Каждая катка с чистого листа: новые позывные, пустые кошельки, никаких старых следов.
-        NetData net = NetData.get(server);
+        NetData netData = NetData.get(server);
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            NetData.Profile prof = net.profile(player.getUUID());
+            NetData.Profile prof = netData.profile(player.getUUID());
             prof.crypto = 0;
             prof.intel.clear();
             prof.beams.clear();
@@ -1959,7 +1959,7 @@ public final class Minigame {
             prof.cdDeanon = 0;
             prof.cdSwat = 0;
             prof.cdBomb = 0;
-            prof.handle = net.uniqueHandle(player.getRandom());
+            prof.handle = netData.uniqueHandle(player.getRandom());
         }
         Map<String, List<ServerPlayer>> groups = new java.util.LinkedHashMap<>();
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {

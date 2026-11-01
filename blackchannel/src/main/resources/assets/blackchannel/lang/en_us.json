@@ -378,5 +378,12 @@
   "screen.blackchannel.menu.title": "Black Channel",
   "screen.blackchannel.menu.play": "OPEN THE CHANNEL",
   "screen.blackchannel.menu.settings": "SETTINGS",
-  "screen.blackchannel.menu.quit": "QUIT"
+  "screen.blackchannel.menu.quit": "QUIT",
+  "screen.blackchannel.tab.feed": "AIR",
+  "screen.blackchannel.tab.net": "NET",
+  "screen.blackchannel.tab.market_short": "MARKET",
+  "screen.blackchannel.btn.wipe_sim": "BURN SIM",
+  "blackchannel.log.body": "Signal caught: %s",
+  "blackchannel.log.tag": "Trace on %s",
+  "blackchannel.blip.ew": "EW"
 }

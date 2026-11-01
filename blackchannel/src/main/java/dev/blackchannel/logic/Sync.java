@@ -33,6 +33,7 @@ public final class Sync {
         tag.putString("channel", profile.channel);
         tag.putString("dm", profile.dm == null ? "" : profile.dm);
         tag.putInt("sat", profile.satCharges);
+        tag.putInt("noise", Math.max(0, Math.min(100, profile.noise)));
         tag.putString("crew", profile.crew == null ? "" : profile.crew);
         tag.putBoolean("ids", profile.ids);
         tag.putBoolean("hard", profile.hardened);
@@ -203,6 +204,7 @@ public final class Sync {
         tag.putBoolean("dnd", profile.dnd);
         tag.putInt("battery", Devices.battery(player));
         tag.putInt("signal", SignalEnv.signalBars(player, profile));
+        tag.putInt("noise", Math.max(0, Math.min(100, profile.noise)));
         tag.putInt("emp", Math.max(0, profile.empUntil - now));
         tag.putInt("bomb", Math.max(0, profile.bombUntil - now));
         tag.putBoolean("jammed", SignalEnv.jammed(player.serverLevel(), player.blockPosition()));

@@ -151,6 +151,8 @@ public class NetData extends SavedData {
         public boolean hardened;
         public boolean radarHud;
         public int satCharges;
+        /** Шум в эфире: 0..100. Растёт от действий, падает со временем. Чем громче, тем легче тебя найти. */
+        public int noise;
         public String crew = "";
         public String channel = "darknet";
         public String dm = "";
@@ -206,6 +208,7 @@ public class NetData extends SavedData {
             tag.putBoolean("hard", hardened);
             tag.putBoolean("radar", radarHud);
             tag.putInt("sat", satCharges);
+            tag.putInt("noise", noise);
             tag.putString("crew", crew);
             tag.putString("chan", channel);
             tag.putString("dm", dm);
@@ -270,6 +273,7 @@ public class NetData extends SavedData {
             profile.hardened = tag.getBoolean("hard");
             profile.radarHud = tag.getBoolean("radar");
             profile.satCharges = tag.getInt("sat");
+            profile.noise = tag.getInt("noise");
             profile.crew = tag.getString("crew");
             profile.channel = tag.contains("chan") ? tag.getString("chan") : "darknet";
             profile.dm = tag.getString("dm");
@@ -353,7 +357,6 @@ public class NetData extends SavedData {
         public CompoundTag save() {
             CompoundTag tag = new CompoundTag();
             tag.putInt("id", id);
-            tag.putBoolean("bl", blind);
             tag.putString("h", handle);
             tag.putString("d", dim);
             tag.putInt("ox", ox);
@@ -557,6 +560,7 @@ public class NetData extends SavedData {
             tag.putUUID("s", seller);
             tag.putString("sh", sellerHandle);
             tag.putBoolean("i", intel);
+            tag.putBoolean("bl", blind);
             tag.put("stack", stack);
             tag.putInt("p", price);
             tag.putString("h", handle);
