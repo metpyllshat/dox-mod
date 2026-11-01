@@ -89,6 +89,11 @@ public final class Minigame {
     private static final Map<UUID, Long> PVP_WARN = new HashMap<>();
     private static final Map<UUID, Long> ALLY_WARN = new HashMap<>();
     private static final Map<String, Long> BEACON_ALERT = new HashMap<>();
+    /**
+     * Множитель лута: база в конфиге рассчитана на 8 игроков и 14 схронов.
+     * На больших катках схронов на игрока меньше, поэтому вещи и стаки жирнее.
+     */
+    private static double LOOT_SCALE = 1.0;
     /** Полоса сверху: текущий этап катки и сколько до следующего. */
     private static ServerBossEvent stageBar;
     // Схроны: 14 на карту 1000×1000 с четырьмя отрядами, дальше — линейно
@@ -392,6 +397,10 @@ public final class Minigame {
 
     private static void tickMatch(MinecraftServer server, MatchData match, ServerLevel level) {
         long now = level.getGameTime();
+        // После рестарта сервера множитель поднимаем из сейва, иначе схроны станут тощими
+        if (match.lootScale > 0.0 && Math.abs(match.lootScale - LOOT_SCALE) > 1.0E-4) {
+            LOOT_SCALE = match.lootScale;
+        }
         // Каждую секунду: скорборд и проверка победы
         if (now % 20 == 0) {
             updateScoreboard(server, match);
@@ -768,7 +777,8 @@ public final class Minigame {
         level.setBlock(spot, Blocks.CHEST.defaultBlockState()
                 .setValue(ChestBlock.FACING, Direction.from2DDataValue(random.nextInt(4))), 3);
         if (!(level.getBlockEntity(spot) instanceof ChestBlockEntity chest)) return;
-        addStacks(chest, rollLoot(Config.CACHE_AIRDROP.get(), Config.AIRDROP_ITEMS.get(), random));
+        int airItems = Math.max(1, (int) Math.round(Config.AIRDROP_ITEMS.get() * itemsScale()));
+        addStacks(chest, rollLoot(Config.CACHE_AIRDROP.get(), airItems, random));
         chest.setCustomName(Component.translatable("block.blackchannel.field_cache"));
         chest.getPersistentData().putBoolean("bcLoot", true);
         chest.setChanged();
@@ -1881,6 +1891,7 @@ public final class Minigame {
         if (cramped) source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.cramped", gap)), true);
         announceMatchStart(server, match);
         prepareCaches(level, match);
+        computeLootScale(match, server.getPlayerList().getPlayerCount());
         int firstWave = match.cacheMarks == null || match.cacheMarks.length != 3 ? match.cacheTotal : match.cacheMarks[0];
         source.sendSuccess(() -> Msg.paint(Component.translatable("blackchannel.minigame.caches_prep",
                 firstWave, match.cacheTotal)), true);
@@ -2629,7 +2640,9 @@ public final class Minigame {
             int n = chosen.min() == chosen.max()
                     ? chosen.min()
                     : chosen.min() + random.nextInt(chosen.max() - chosen.min() + 1);
-            ItemStack stack = new ItemStack(chosen.item(), Math.max(1, Math.min(64, n)));
+            // Стак тоже жирнее на больших катках, но не больше максимума предмета
+            int scaled = (int) Math.round(n * stackScale());
+            ItemStack stack = new ItemStack(chosen.item(), Math.max(1, Math.min(64, scaled)));
             // NBT копируем: у оружия TACZ именно в нём лежит, какой это ствол
             if (chosen.nbt() != null) stack.setTag(chosen.nbt().copy());
             out.add(stack);
@@ -2706,8 +2719,44 @@ public final class Minigame {
     private static void fill(ChestBlockEntity chest, RandomSource random, List<? extends String> pool) {
         int min = Math.max(1, Config.CACHE_ITEMS_MIN.get());
         int max = Math.max(min, Config.CACHE_ITEMS_MAX.get());
-        int count = min == max ? min : min + random.nextInt(max - min + 1);
+        int base = min == max ? min : min + random.nextInt(max - min + 1);
+        // Число вещей растёт медленнее, чем стаки: 27 слотов в сундуке не резиновые
+        int count = Math.max(min, (int) Math.round(base * itemsScale()));
         addStacks(chest, rollLoot(pool, count, random));
+    }
+
+    /** Во сколько раз больше вещей в сундуке. */
+    private static double itemsScale() {
+        return Math.sqrt(LOOT_SCALE);
+    }
+
+    /** Во сколько раз жирнее каждый стак. */
+    private static double stackScale() {
+        return Math.sqrt(LOOT_SCALE);
+    }
+
+    /**
+     * Коэффициент лута: сколько вещей и стаков должно быть на схрон, чтобы каждому игроку
+     * досталось столько же, сколько на эталонной катке 8 игроков / 1000×1000.
+     * Схронов на игрока меньше — сундуки толще; карта больше — ещё немного добавки на дорогу.
+     */
+    private static void computeLootScale(MatchData match, int players) {
+        if (!Config.LOOT_SCALING.get()) {
+            LOOT_SCALE = 1.0;
+            return;
+        }
+        int caches = Math.max(1, match.cacheTotal);
+        double perPlayer = players / (double) caches;
+        double bench = 8.0 / 14.0;
+        double travel = Math.pow(Math.max(0.25, match.size / 1000.0), 0.2);
+        double scale = (perPlayer / bench) * travel;
+        LOOT_SCALE = Mth.clamp(scale, 0.5, Config.LOOT_SCALE_MAX.get());
+        match.lootScale = LOOT_SCALE;
+        logInfo("loot scale " + String.format("%.2f", LOOT_SCALE) + " for " + players + " players, " + caches + " caches");
+    }
+
+    private static void logInfo(String text) {
+        BlackChannelMod.LOGGER.info("BlackChannel: {}", text);
     }
 
     private static void addStacks(RandomizableContainerBlockEntity box, List<ItemStack> stacks) {

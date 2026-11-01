@@ -52,7 +52,17 @@ VANILLA = {
     'minecraft:dispenser': {'minecraft:cobblestone': 7, 'minecraft:redstone': 1, 'minecraft:stick': 1},
     'minecraft:dropper': {'minecraft:cobblestone': 7, 'minecraft:redstone': 1},
     'minecraft:red_dye': {'minecraft:poppy': 1},
+    'minecraft:sugar_cane': {'minecraft:sugar_cane': 1},
+    'minecraft:charcoal': {'minecraft:charcoal': 1},
     'minecraft:leather': {'minecraft:leather': 1},
+    # Сталь Electrodynamics: одна прокалка железа, без машин
+    'electrodynamics:ingotsteel': {'minecraft:iron_ingot': 1},
+    'minecraft:sugar': {'minecraft:sugar_cane': 1},
+    'minecraft:lapis_block': {'minecraft:lapis_lazuli': 9},
+    'minecraft:tin_ingot': {'minecraft:raw_tin': 1},
+    'minecraft:tnt': {'minecraft:gunpowder': 5, 'minecraft:sand': 4},
+    'minecraft:lava_bucket': {'minecraft:lava_bucket': 1},
+    'electrodynamics:ingottin': {'electrodynamics:raworetin': 1},
 }
 
 # Теги, которых нет в jar'ах: ваниль и общие forge-теги. Значение — список предметов.
@@ -64,7 +74,8 @@ MANUAL_TAGS = {
     'forge:ingots/iron': ['minecraft:iron_ingot'],
     'forge:ingots/copper': ['minecraft:copper_ingot'],
     'forge:ingots/gold': ['minecraft:gold_ingot'],
-    'forge:ingots/steel': ['superbwarfare:steel_ingot'],
+    # В сборке два вида стали: дешёвая electrodynamics (прокалка железа) и дорогая SBW из пыли.
+    'forge:ingots/steel': ['electrodynamics:ingotsteel'],
     'forge:ingots/lead': ['superbwarfare:lead_ingot'],
     'forge:gunpowder': ['minecraft:gunpowder'],
     'forge:dusts/gunpowder': ['minecraft:gunpowder'],
@@ -107,6 +118,7 @@ MANUAL_TAGS = {
     'forge:plates/tin': ['electrodynamics:platetin'],
     'forge:plates/bronze': ['electrodynamics:platebronze'],
     'forge:leather': ['minecraft:leather'],
+    'forge:storage_blocks/lapis': ['minecraft:lapis_block'],
     'forge:dyes/red': ['minecraft:red_dye'],
     'forge:dyes': ['minecraft:red_dye'],
     'forge:glow_ink_sacs': ['minecraft:glow_ink_sac'],
@@ -191,6 +203,14 @@ RU = {
     'electrodynamics:sheetplastic': 'Лист пластика',
     'electrodynamics:wireinsulatedcoppered': 'Провод медный (красный)',
     'electrodynamics:dustiron': 'Пыль железа',
+    'minecraft:tnt': 'ТНТ',
+    'minecraft:rotten_flesh': 'Гнилая плоть',
+    'minecraft:lava_bucket': 'Ведро лавы',
+    'minecraft:water_bucket': 'Ведро воды',
+    'ballistix:poisonpowder': 'Ядовитый порошок',
+    'electrodynamics:dustsulfur': 'Серная пыль',
+    'minecraft:sand': 'Песок',
+    'minecraft:quartz': 'Кварц',
 }
 
 # Добавляем недостающие русские подписи по ключевым словам
@@ -660,6 +680,42 @@ def consumables(pools):
     return out
 
 
+# Оружие TaCZ: цена крафта на столе оружейника. Читается из рецептов мода напрямую.
+def gun_prices():
+    import zipfile
+    prices = []
+    for jar in glob.glob(os.path.join(ROOT, 'tacz*.jar')):
+        z = zipfile.ZipFile(jar)
+        for n in z.namelist():
+            if '/recipes/gun/' not in n or not n.endswith('.json'):
+                continue
+            try:
+                d = json.loads(re.sub(r'^\s*//[^\n]*$', '', z.read(n).decode('utf-8', 'ignore'), flags=re.M))
+            except Exception:
+                continue
+            mats = {}
+            for m in d.get('materials', []):
+                key = m['item'].get('tag') or m['item'].get('item') or '?'
+                mats[key] = m.get('count', 1)
+            prices.append((d['result']['id'].split(':')[-1], mats))
+    prices.sort(key=lambda r: r[1].get('forge:ingots/iron', 0))
+    return prices
+
+
+# Часовая «зарплата» одного игрока. Оценка, не замер: шахта на y=-16..0, туннели через 2 блока,
+# железная кирка, без PvP-помех, плюс 15 минут Незера на кварц.
+HOUR_BUDGET = {
+    'minecraft:iron_ingot': 45,
+    'minecraft:copper_ingot': 110,
+    'minecraft:redstone': 55,
+    'minecraft:gold_ingot': 18,
+    'minecraft:quartz': 60,
+    'minecraft:diamond': 4,
+    'minecraft:lapis_lazuli': 40,
+    'minecraft:logs': 60,
+    'minecraft:gunpowder': 24,
+}
+
 KEY_ITEMS = [
     ('tacz:gun_smith_table', 'Стол оружейника (патроны)'),
     ('tacz:9mm', 'Крафт 9 мм (50 шт)'),
@@ -684,8 +740,9 @@ def write_md(totals, per_basket, rows, eco, cons, rounds_need, rounds_have, craf
              '## Коротко', '',
              '- Лимитируют игру **железо, порох и редстоун**, а не «редкие» вещи из пулов.',
              '- Медь нужна в основном на патроны: один крафт 5.56 — это 15 меди и 3 пороха.',
-             '- Стволы TaCZ верстаком не крафтятся вообще, поэтому схроны — их единственный источник.',
+             '- Стволы TaCZ крафтятся на столе оружейника, но дорого: пистолет 16 железа, АК 38, AWP 200.',
              '- Ствол без патронов бесполезен, поэтому к каждому выпавшему оружию добивается стак патронов.',
+             '- Ядерный заряд в игре собирается по-настоящему, но это проект на 4–8 часов, не на катку.',
              '', '![Спрос на сырьё](loot-demand.png)', '',
              '![Спрос и предложение](loot-demand-supply.png)', '',
              '## Что из чего крафтится', '',
@@ -736,8 +793,134 @@ def write_md(totals, per_basket, rows, eco, cons, rounds_need, rounds_have, craf
               'Почему не «положить всего побольше»: если схроны закрывают 100% спроса, копать',
               'становится незачем, и карта превращается в гонку по сундукам. Цель — 60–75%:',
               'схроны снимают нужду, но медь, железо и порох всё ещё надо добывать.', '']
+
+    lines += hourly_section(eco)
+    lines += gun_section()
+    lines += nuclear_section(eco)
+    lines += scale_section()
     open(OUT_MD, 'w', encoding='utf-8').write('\n'.join(lines))
     print('таблица:', OUT_MD)
+
+
+def fits(cost, budget, slack=1.3):
+    """Влезает ли набор в часовой бюджет: по каждому ресурсу не больше чем budget × slack."""
+    for mat, v in cost.items():
+        if mat in budget and v > budget[mat] * slack:
+            return False
+    return True
+
+
+def hourly_section(eco):
+    goals = [
+        ('tacz:gun_smith_table', 'Стол оружейника'),
+        ('tacz:9mm', 'Крафт 9 мм (50 шт)'),
+        ('tacz:556x45', 'Крафт 5.56 (45 шт)'),
+        ('blackchannel:uplink_rack', 'Стойка-аплинк'),
+        ('electrodynamics:mineralgrinder', 'Дробилка'),
+        ('electrodynamics:coalgenerator', 'Генератор на угле'),
+        ('electrodynamics:circuitbasic', 'Базовая схема'),
+        ('superbwarfare:c4_bomb', 'C4'),
+        ('electrodynamics:nightvisiongoggles', 'ПНВ'),
+        ('electrodynamics:jetpack', 'Джетпак'),
+        ('nuclearscience:chemicalextractor', 'Хим. экстрактор'),
+        ('nuclearscience:gascentrifuge', 'Газ. центрифуга'),
+        ('nuclearscience:nuclearboiler', 'Ядерный бойлер'),
+        ('ballistix:nuclear', 'Ядерный заряд Ballistix'),
+    ]
+    lines = ['## Что можно скрафтить за час', '',
+             'Оценка бюджета одного игрока за час: ~45 железа, ~110 меди, ~55 редстоуна,',
+             '~18 золота, ~4 алмаза, ~60 кварца (с заходом в Незер на 15 минут).',
+             'Это прикидка темпа шахты, а не замер: реальные числа зависят от карты и PvP.',
+             'Колонка «хватает сырья» — только про ресурсы: машинам ещё нужна энергосеть и время', '',
+             '| Цель | Что нужно | Хватает сырья |', '|---|---|---|']
+    for item, label in goals:
+        cost = eco.batch_cost(item)
+        parts = ', '.join(f'{pretty(k)} {fmt(v)}' for k, v in sorted(cost.items(), key=lambda kv: -kv[1])[:4])
+        ok = 'да' if fits(cost, HOUR_BUDGET) else 'нет'
+        lines.append(f'| {label} | {parts} | {ok} |')
+    lines.append('')
+    return lines
+
+
+def gun_section():
+    prices = gun_prices()
+    if not prices:
+        return []
+    alias = {'forge:ingots/iron': 'железо', 'forge:ingots/gold': 'золото', 'forge:gems/diamond': 'алмазы',
+             'forge:gems/lapis': 'лазурит', 'minecraft:logs': 'дерево', 'forge:rods/blaze': 'стержни ифрита',
+             'forge:gems/quartz': 'кварц', 'forge:ingots/netherite': 'незерит', 'forge:gems/amethyst': 'аметист'}
+    iron_budget = HOUR_BUDGET['minecraft:iron_ingot']
+    lines = ['## Оружие TaCZ: сколько стоит скрафтить ствол', '',
+             'Стволы делаются на столе оружейника (tacz:gun_smith_table). Цена в рецепте —',
+             'это железо, золото, алмазы и лазурит, без навесного. Час шахты — примерно',
+             f'{iron_budget} железа, поэтому граница «своими руками за катку» проходит около 40–50 железа.', '',
+             '| Ствол | Железо | Золото | Алмазы | Лазурит | Прочее | За час |',
+             '|---|---:|---:|---:|---:|---|---|']
+    for gid, mats in prices:
+        f = lambda k: mats.get(k, 0)
+        other = ', '.join(f'{alias.get(k, k)} {v}' for k, v in mats.items()
+                          if k not in ('forge:ingots/iron', 'forge:ingots/gold', 'forge:gems/diamond',
+                                       'forge:gems/lapis', 'minecraft:logs'))
+        ok = 'да' if f('forge:ingots/iron') <= iron_budget * 1.1 else 'нет'
+        lines.append(f'| {gid} | {f("forge:ingots/iron")} | {f("forge:ingots/gold")} | '
+                     f'{f("forge:gems/diamond")} | {f("forge:gems/lapis")} | {other or "—"} | {ok} |')
+    lines.append('')
+    return lines
+
+
+def nuclear_section(eco):
+    charge = eco.batch_cost('ballistix:nuclear')
+    parts = sorted(charge.items(), key=lambda kv: -kv[1])[:8]
+    machines = [
+        ('nuclearscience:chemicalextractor', 'Хим. экстрактор: сырьё → жёлтый кек'),
+        ('nuclearscience:nuclearboiler', 'Ядерный бойлер: кек → гексафторид урана'),
+        ('nuclearscience:gascentrifuge', 'Газ. центрифуга: разделение U-235 и U-238'),
+    ]
+    lines = ['## Можно ли сделать ядерный заряд', '',
+             'Цепочка целиком, по рецептам из jar\'ов:', '',
+             '1. Руда урана (Electrodynamics) → хим. экстрактор → жёлтый кек.',
+             '2. Ядерный бойлер → гексафторид урана.',
+             '3. Газ. центрифуга → U-235 и U-238 (передел без JSON-рецепта, внутри машины).',
+             '4. Стекло + U-235 + U-238 → топливный стержень HEUO2.',
+             '5. 4 термобарических заряда + 4 базовые схемы + стержень → ballistix:nuclear.',
+             '', 'Машины, без которых шаг не пройти:', '',
+             '| Машина | Зачем | Что нужно |', '|---|---|---|']
+    for item, why in machines:
+        cost = eco.batch_cost(item)
+        lines.append(f'| {pretty(item)} | {why} | '
+                     + ', '.join(f'{pretty(k)} {fmt(v)}' for k, v in sorted(cost.items(), key=lambda kv: -kv[1])[:4])
+                     + ' |')
+    lines += ['', 'Сам заряд в сырье:', '',
+              '| Ресурс | Сколько |', '|---|---:|']
+    for k, v in parts:
+        lines.append(f'| {pretty(k)} | {fmt(v)} |')
+    lines += ['', 'Вывод: **в принципе да**, всё крафтится, ничего не заблокировано. Практически —',
+              'нет: это 4–8 часов промышленной игры на команду (энергосеть, дробилка, три ядерные',
+              'машины, добыча урана, центрифугирование, плюс ~340 пороха в эквиваленте на сам заряд).',
+              'В часовую катку это не влезает даже у скиллового игрока, и это нормально:',
+              'ядерка — витрина мода, а не оружие катки.', '']
+    return lines
+
+
+def scale_section():
+    lines = ['## Коэффициент лута под размер катки', '',
+             'База в конфиге — эталон: 8 игроков и 14 схронов на карте 1000×1000.',
+             'Дальше применяется коэффициент K = (игроков / схронов) / (8/14) × (сторона/1000)^0.2,',
+             'вещи в сундуке и стаки домножаются на √K (чтобы сундук не распухал), K ограничен',
+             'сверху lootScaleMax (по умолчанию 3). Выключается ключом lootScaling = false.', '',
+             '| Катка | Схронов | K | Вещей в сундуке | Стак × |', '|---|---:|---:|---:|---:|']
+    import math
+    def caches(teams, side):
+        return max(8, min(56, round(3.5 * teams * side / 1000)))
+    rows = [(8, 4, 1000), (12, 3, 1000), (16, 4, 1000), (16, 8, 1000), (24, 6, 1500), (32, 8, 2500), (8, 2, 1000)]
+    for players, teams, side in rows:
+        c = caches(teams, side)
+        k = (players / c) / (8 / 14) * (side / 1000) ** 0.2
+        k = max(0.5, min(3.0, k))
+        lines.append(f'| {players} игроков / {teams} отряда / {side} | {c} | {k:.2f} | '
+                     f'{4.5 * math.sqrt(k):.1f} | {math.sqrt(k):.2f} |')
+    lines.append('')
+    return lines
 
 
 if __name__ == '__main__':

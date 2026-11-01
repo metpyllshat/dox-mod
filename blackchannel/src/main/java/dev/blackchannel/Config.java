@@ -80,6 +80,8 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue REVIVE_STAND_SECONDS;
     public static final ForgeConfigSpec.IntValue DOWNED_DURATION_TICKS;
     public static final ForgeConfigSpec.IntValue PVP_FREE_SECONDS;
+    public static final ForgeConfigSpec.BooleanValue LOOT_SCALING;
+    public static final ForgeConfigSpec.DoubleValue LOOT_SCALE_MAX;
     public static final ForgeConfigSpec.IntValue CACHE_ITEMS_MIN;
     public static final ForgeConfigSpec.IntValue CACHE_ITEMS_MAX;
     public static final ForgeConfigSpec.BooleanValue AIRDROP_ENABLED;
@@ -423,6 +425,12 @@ public final class Config {
                 "tacz:ammo{AmmoId=tacz:556x45}*8-16@8"
         ), o -> o instanceof String);
         b.comment("Сколько предметов выпадает в одном схроне: случайное число от минимума до максимума.");
+        b.comment("Базовые значения выше — это эталон: 8 игроков, 14 схронов на карте 1000×1000. "
+                + "На больших катках лут домножается на коэффициент от числа игроков и размера карты, "
+                + "иначе на 16 игроков те же 14 схронов кормят вдвое больше народу. false — масштаб не применяется.");
+        LOOT_SCALING = b.define("lootScaling", true);
+        b.comment("Верхний предел коэффициента: во столько раз максимум дороже может стать схрон.");
+        LOOT_SCALE_MAX = b.defineInRange("lootScaleMax", 3.0D, 1.0D, 6.0D);
         CACHE_ITEMS_MIN = b.defineInRange("cacheItemsMin", 3, 1, 12);
         CACHE_ITEMS_MAX = b.defineInRange("cacheItemsMax", 6, 1, 12);
         b.comment("Аирдропы: сброс в случайную точку карты с координатами для всех. Первый — через airDropFirstMinute минут, дальше каждые airDropIntervalMinutes.");

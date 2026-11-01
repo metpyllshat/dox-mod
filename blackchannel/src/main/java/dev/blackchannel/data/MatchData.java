@@ -71,6 +71,8 @@ public class MatchData extends SavedData {
     // Пошаговое размещение схронов
     public int cacheTick;
     public int cacheTotal;
+    /** Множитель лута под размер катки: 1.0 — эталон 8 игроков и 14 схронов. */
+    public double lootScale = 1.0;
     /** Текущая волна схронов: 0 — ранняя, 1 — средняя, 2 — поздняя. */
     public int cacheWave;
     /** Границы волн в массиве cachePositions: {конец ранней, конец средней, конец поздней}. */
@@ -135,6 +137,7 @@ public class MatchData extends SavedData {
         data.cacheTick = tag.getInt("cacheTick");
         data.cacheTotal = tag.getInt("cacheTotal");
         data.cacheWave = tag.getInt("cacheWave");
+        data.lootScale = tag.contains("lootScale") ? tag.getDouble("lootScale") : 1.0;
         if (tag.contains("cacheMarks")) {
             int[] marks = tag.getIntArray("cacheMarks");
             if (marks.length == 3) data.cacheMarks = marks;
@@ -211,6 +214,7 @@ public class MatchData extends SavedData {
         tag.putInt("cacheTick", cacheTick);
         tag.putInt("cacheTotal", cacheTotal);
         tag.putInt("cacheWave", cacheWave);
+        tag.putDouble("lootScale", lootScale);
         tag.putIntArray("cacheMarks", cacheMarks);
         ListTag cpos = new ListTag();
         for (BlockPos p : cachePositions) {
