@@ -105,6 +105,8 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue TOWER_CRYPTO_PER_MIN;
     public static final ForgeConfigSpec.IntValue TOWER_HACK_SECONDS;
     public static final ForgeConfigSpec.IntValue TOWER_DISABLE_SECONDS;
+    public static final ForgeConfigSpec.IntValue TOWER_CAM_COST;
+    public static final ForgeConfigSpec.IntValue TOWER_SCAN_COST;
     public static final ForgeConfigSpec.IntValue TOWER_SECTOR_SECONDS;
     public static final ForgeConfigSpec.BooleanValue EVENT_ENABLED;
     public static final ForgeConfigSpec.IntValue EVENT_FIRST_MINUTE;
@@ -523,6 +525,9 @@ public final class Config {
         TOWER_CRYPTO_PER_MIN = b.defineInRange("towerCryptoPerMin", 2, 0, 100);
         TOWER_HACK_SECONDS = b.defineInRange("towerHackSeconds", 20, 2, 120);
         TOWER_DISABLE_SECONDS = b.defineInRange("towerDisableSeconds", 300, 10, 3600);
+        b.comment("Платные действия с вышки: камера и скан");
+        TOWER_CAM_COST = b.defineInRange("towerCamCost", 6, 0, 100);
+        TOWER_SCAN_COST = b.defineInRange("towerScanCost", 4, 0, 100);
         b.pop();
 
         b.push("events");

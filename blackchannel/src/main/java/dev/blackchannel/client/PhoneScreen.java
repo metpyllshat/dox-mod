@@ -380,7 +380,14 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
                 ClientState.hard ? Ui.GREEN : Ui.MUTED);
         ry += 10;
         line(g, x + 12, ry, Ui.t("screen.blackchannel.net.sat"), String.valueOf(ClientState.sat), ClientState.sat > 0 ? Ui.AMBER : Ui.MUTED);
-        ly += 60;
+        // Кнопки вышки: камера и скан (платно) — только если есть своя
+        boolean hasOwn = anyOwnTower();
+        if (bottom - ly >= 30) {
+            Ui.button(g, this.font, hits, x + 8, ly, 112, 12, Ui.t("screen.blackchannel.btn.tower_cam"), ClientState.tip("screen.blackchannel.tip.tower_cam", ClientState.cfg("towerCam",6)), hasOwn, "tower_cam", "");
+            Ui.button(g, this.font, hits, x + 124, ly, 112, 12, Ui.t("screen.blackchannel.btn.tower_scan"), ClientState.tip("screen.blackchannel.tip.tower_scan", ClientState.cfg("towerScan",4)), hasOwn, "tower_scan", "");
+            ly += 16;
+        }
+        ly += 2;
         if (!ClientState.heard.isEmpty()) {
             g.drawString(this.font, Ui.t("screen.blackchannel.net.heard"), x + 8, ly, Ui.MUTED, false);
             ly += 10;
