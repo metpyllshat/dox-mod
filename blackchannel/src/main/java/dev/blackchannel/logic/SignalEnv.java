@@ -162,6 +162,20 @@ public final class SignalEnv {
             });
         }
         if (link.mode == Link.Mode.NONE && profile.satCharges > 0) link.mode = Link.Mode.SAT;
+        // Вышка даёт связь как аплинк+тарелка: если рядом своя вышка — есть сеть
+        if (link.mode == Link.Mode.NONE) {
+            try {
+                dev.blackchannel.data.MatchData match = dev.blackchannel.data.MatchData.get(player.getServer());
+                for (dev.blackchannel.data.MatchData.TowerInfo inf : match.towerInfos) {
+                    if (inf.owner == null || !inf.owner.equals(profile.crew) || inf.disabledUntil > player.getServer().getTickCount()) continue;
+                    if (pos.distSqr(inf.pos) <= (long) dev.blackchannel.Config.TOWER_CHAT_RADIUS.get() * dev.blackchannel.Config.TOWER_CHAT_RADIUS.get()) {
+                        link.mode = Link.Mode.RACK;
+                        link.dish = true;
+                        break;
+                    }
+                }
+            } catch (Exception ignored) {}
+        }
         link.dish = link.dish || dishNear(player, profile, 96);
         return link;
     }
