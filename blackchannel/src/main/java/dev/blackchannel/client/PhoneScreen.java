@@ -44,6 +44,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     private final List<Component> hoverLines = new ArrayList<>();
     private EditBox input;
     private int tab;
+    private int chatScroll;
     private int marketTab;
     private int marketPage;
     private int listPick = -1;
@@ -181,13 +182,13 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
                 : level > 10 ? Ui.t("screen.blackchannel.noise.quiet") : Ui.t("screen.blackchannel.noise.silent");
         g.drawString(this.font, hint, x + W - 8 - this.font.width(hint), y + 46,
                 level >= 75 ? Ui.RED : level >= 45 ? Ui.AMBER : Ui.MUTED, false);
+        hits.add(new Ui.Hit(x + 8, y + 42, W - 16, 22, "noop", "", Ui.t("screen.blackchannel.tip.noise")));
         Ui.divider(g, x + 6, y + 63, W - 12);
     }
 
     // ---------- ЭФИР ----------
 
     private void drawFeed(GuiGraphics g, int x, int y) {
-        // Верхняя часть — радиосообщения, нижняя — пеленги и точки
         int chatTop = y + TOP;
         int chatBottom = y + 130;
         int ly = chatTop;
@@ -201,16 +202,26 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         }
         List<ClientState.ChatRow> chat = ClientState.chat;
         int room = Math.max(0, (chatBottom - ly) / 10);
-        int from = Math.max(0, chat.size() - room);
+        if (room > 0 && chat.size() > room) {
+            int maxScroll = chat.size() - room;
+            if (chatScroll > maxScroll) chatScroll = maxScroll;
+            if (chatScroll < 0) chatScroll = 0;
+        } else chatScroll = 0;
+        int from = Math.max(0, chat.size() - room - chatScroll);
+        int to = Math.min(chat.size(), from + room);
         if (chat.isEmpty() && note.isEmpty()) {
             g.drawString(this.font, Ui.t("screen.blackchannel.feed.empty"), x + 8, ly, Ui.MUTED, false);
         }
-        // Строка режется целиком: половина строки поверх разделителя выглядит как баг
-        for (int i = from; i < chat.size() && ly + 10 <= chatBottom; i++) {
+        for (int i = from; i < to && ly + 10 <= chatBottom; i++) {
             ClientState.ChatRow row = chat.get(i);
             g.drawString(this.font, Ui.trim(this.font, row.from() + ": " + row.text(), W - 20), x + 8, ly,
                     row.enc() ? Ui.BLUE : Ui.TEXT, false);
             ly += 10;
+        }
+        if (chat.size() > room) {
+            String scrollHint = chatScroll > 0 ? "\u25B2 " + (chat.size() - to) + " \u25BC " + chatScroll : "";
+            if (!scrollHint.isEmpty()) g.drawString(this.font, scrollHint, x + W - 8 - this.font.width(scrollHint), y + 132 - 10, Ui.MUTED, false);
+            hits.add(new Ui.Hit(x + 8, y + TOP, W - 16, y + 132 - (y + TOP), "noop", "", Ui.t("screen.blackchannel.tip.scroll")));
         }
         Ui.divider(g, x + 6, y + 132, W - 12);
 
@@ -265,6 +276,11 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             for (ClientState.Blip blip : ClientState.blips) {
                 Ui.blip(g, cx, cy, r, ClientState.radarR, blip.dx(), blip.dz(), Ui.blipColor(blip.kind()));
             }
+            if (ClientState.nodeActive) {
+                int ndx = ClientState.nodeX - (int) px;
+                int ndz = ClientState.nodeZ - (int) pz;
+                Ui.blip(g, cx, cy, r, ClientState.radarR, ndx, ndz, Ui.AMBER);
+            }
             Ui.selfArrow(g, cx, cy, this.minecraft.player.getYRot());
         }
         g.drawString(this.font, Ui.t("screen.blackchannel.north"), cx - 2, cy - r + 2, Ui.MUTED, false);
@@ -272,6 +288,18 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         String range = "r " + ClientState.radarR;
         g.drawString(this.font, range, cx - this.font.width(range) / 2, cy + r + 3, 0xFF4A545A, false);
 
+        if (!ClientState.uplink) {
+            g.drawString(this.font, Ui.t("screen.blackchannel.radar.no_link"), x + 8, cy + r + 12, Ui.AMBER, false);
+        }
+        if (ClientState.nodeActive) {
+            int dist = 0;
+            if (this.minecraft != null && this.minecraft.player != null) {
+                int px = this.minecraft.player.blockPosition().getX();
+                int pz = this.minecraft.player.blockPosition().getZ();
+                dist = (int) Math.sqrt((ClientState.nodeX - px) * (ClientState.nodeX - px) + (ClientState.nodeZ - pz) * (ClientState.nodeZ - pz));
+            }
+            g.drawString(this.font, ClientState.tip("screen.blackchannel.node.line", ClientState.nodeX, ClientState.nodeZ, dist), x + 8, cy + r + 20, Ui.GREEN, false);
+        }
         // Правая колонка: что видно и что известно
         int rx = x + 112;
         int rw = W - 120;
@@ -340,7 +368,19 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         ry += 10;
         line(g, x + 12, ry, Ui.t("screen.blackchannel.net.sat"), String.valueOf(ClientState.sat), ClientState.sat > 0 ? Ui.AMBER : Ui.MUTED);
         ly += 60;
-
+        if (!ClientState.heard.isEmpty()) {
+            g.drawString(this.font, Ui.t("screen.blackchannel.net.heard"), x + 8, ly, Ui.MUTED, false);
+            ly += 10;
+            int n = 0;
+            for (ClientState.DeanonRow row : ClientState.heard) {
+                if (ly > bottom - 10 || n >= 3) break;
+                String name = row.name() != null && !row.name().isEmpty() ? row.name() : "?";
+                g.drawString(this.font, Ui.trim(this.font, row.handle() + " — " + name, W - 20), x + 8, ly, name.equals("?") ? Ui.MUTED : Ui.GREEN, false);
+                ly += 10;
+                n++;
+            }
+            ly += 2;
+        }
         String result = ClientState.resultFor("chat");
         if (!result.isEmpty()) {
             for (String part : Ui.wrap(this.font, result, W - 20)) {
@@ -348,7 +388,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
                 g.drawString(this.font, part, x + 8, ly, Ui.AMBER, false);
                 ly += 10;
             }
-        } else {
+        } else if (ClientState.heard.isEmpty()) {
             g.drawString(this.font, Ui.t("screen.blackchannel.net.hint"), x + 8, ly, 0xFF4A545A, false);
         }
     }
@@ -629,6 +669,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         if (input == null) return;
         String text = input.getValue().trim();
         if (text.isEmpty()) return;
+        chatScroll = 0;
         if (text.startsWith("@")) {
             int space = text.indexOf(' ');
             if (space > 1) {
@@ -643,6 +684,11 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
 
     @Override
     public boolean mouseScrolled(double mx, double my, double delta) {
+        if (tab == 0) {
+            int sc = (int) Math.signum(delta);
+            chatScroll = Math.max(0, chatScroll - sc);
+            return true;
+        }
         if (tab == 3) marketPage = Math.max(0, marketPage - (int) Math.signum(delta));
         return true;
     }

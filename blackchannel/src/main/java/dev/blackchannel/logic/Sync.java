@@ -434,6 +434,9 @@ public final class Sync {
             }
         }
         m.putInt("alive", aliveCount);
+        m.putBoolean("nodeActive", match.nodeActive);
+        m.putInt("nodeX", match.nodeX);
+        m.putInt("nodeZ", match.nodeZ);
         ListTag teams = new ListTag();
         for (String code : match.teamScores.keySet()) {
             CompoundTag t = new CompoundTag();

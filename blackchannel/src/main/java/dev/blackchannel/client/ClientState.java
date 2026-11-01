@@ -54,6 +54,8 @@ public final class ClientState {
     public static int selfDownedSeconds;
     public static boolean matchActive;
     public static boolean matchEnded;
+    public static boolean nodeActive;
+    public static int nodeX, nodeZ;
     public static final List<String> selfCrew = new ArrayList<>();
 
     public static final class TeamScore {
@@ -118,6 +120,7 @@ public final class ClientState {
         if (m == null || m.isEmpty()) {
             matchActive = false;
             matchEnded = false;
+            nodeActive = false;
             teamScores.clear();
             return;
         }
@@ -125,6 +128,9 @@ public final class ClientState {
         matchEnded = m.getBoolean("ended");
         matchFinalActive = m.getBoolean("final");
         matchTimeLeftSeconds = m.getInt("timeLeft");
+        nodeActive = m.getBoolean("nodeActive");
+        nodeX = m.getInt("nodeX");
+        nodeZ = m.getInt("nodeZ");
         aliveCount = m.getInt("alive");
         selfStatus = m.getString("selfStatus");
         selfDownedSeconds = m.getInt("selfDowned");
