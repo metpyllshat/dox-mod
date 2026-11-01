@@ -2341,7 +2341,10 @@ public final class Minigame {
      */
     public static int cacheCount(MatchData match, int teams) {
         int side = Math.max(2, match.size);
-        double raw = CACHE_PER_TEAM * Math.max(1, teams) * side / 1000.0;
+        // Чем дольше катка, тем больше схронов: иначе всё найдут в первые полчаса и карта опустеет.
+        // Корень, а не линейно: за 90 минут игрок не успевает обыскать вдвое больше сундуков.
+        double longer = Math.sqrt(Mth.clamp(Config.MATCH_DURATION_MINUTES.get() / 30.0, 0.5, 6.0));
+        double raw = CACHE_PER_TEAM * Math.max(1, teams) * side / 1000.0 * longer;
         return Mth.clamp((int) Math.round(raw), CACHE_MIN, CACHE_MAX);
     }
 

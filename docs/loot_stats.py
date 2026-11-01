@@ -9,6 +9,7 @@
 """
 import glob
 import json
+import math
 import os
 import re
 import zipfile
@@ -486,14 +487,37 @@ def parse_pools():
 
 
 # Сколько схронов какой волны и сколько лута: модель на катку 4 отряда × 2 игрока, карта 1000
+# Рабочая катка: 90 минут, 8 игроков, 4 отряда, карта 1000. Схроны при такой длине — 24.
 MATCH_MODEL = {
-    'caches': 21,
+    'caches': 24,
     'waveShare': {'EARLY': 0.55, 'MID': 0.30, 'LATE': 0.15},
     'itemsPerCache': 4.5,
-    'airdrops': 3,
+    'airdrops': 4,
     'airdropItems': 5,
     'players': 8,
 }
+
+# Длины каток, для которых считаем «что успеешь собрать»
+MATCH_MINUTES = (90, 120)
+# Доля катки, когда игрок реально может копать, а не воевать
+ECONOMY_SHARE = 0.4
+
+
+def caches_for(minutes, teams=4, side=1000):
+    """Повторяет Minigame.cacheCount: база по отрядам и карте, длина под корнем."""
+    base = 3.5 * teams * side / 1000.0
+    return max(8, min(56, round(base * math.sqrt(minutes / 30.0))))
+
+
+def match_budget(eco, pools, minutes, players=8):
+    """Часовой бюджет шахты × доля времени + доля лута со схронов на игрока."""
+    saved = MATCH_MODEL['caches']
+    MATCH_MODEL['caches'] = caches_for(minutes)
+    got = supply(eco, pools)
+    MATCH_MODEL['caches'] = saved
+    hours = minutes / 60.0
+    budget = {k: v * hours * ECONOMY_SHARE + got.get(k, 0.0) / players for k, v in HOUR_BUDGET.items()}
+    return budget, got
 
 
 def supply(eco, pools):
@@ -732,7 +756,7 @@ KEY_ITEMS = [
 ]
 
 
-def write_md(totals, per_basket, rows, eco, cons, rounds_need, rounds_have, craft_share):
+def write_md(totals, per_basket, rows, eco, cons, rounds_need, rounds_have, craft_share, pools=None):
     lines = ['# Экономика лута Black Channel', '',
              'Сгенерировано `docs/loot_stats.py`: скрипт читает рецепты всех модов из корня',
              'репозитория (2 100+ рецептов), разворачивает их до сырья и сравнивает с тем,',
@@ -760,9 +784,9 @@ def write_md(totals, per_basket, rows, eco, cons, rounds_need, rounds_have, craf
         lines.append(f'| {pretty(mat)} | {v:.0f} |')
 
     lines += ['', '## Спрос и предложение на катку', '',
-              'Модель: 8 игроков, 21 схрон (карта 1000, 4 отряда), 4–6 вещей в схроне,',
-              'волны 55% / 30% / 15%, три аирдропа. Покрытие ниже 100% — остальное игрок',
-              'добывает сам, это и есть смысл копать.', '',
+              'Модель: катка 90 минут, 8 игроков, 24 схрона (карта 1000, 4 отряда),',
+              '4–6 вещей в схроне, волны 55% / 30% / 15%, четыре аирдропа. Покрытие ниже 100% —',
+              'остальное игрок добывает сам, это и есть смысл копать.', '',
               '| Сырьё | Надо | Дают схроны | Покрытие |', '|---|---:|---:|---:|']
     for mat, need, have, cover in rows:
         lines.append(f'| {pretty(mat)} | {need:.0f} | {have:.0f} | {100 * cover:.0f}% |')
@@ -785,17 +809,20 @@ def write_md(totals, per_basket, rows, eco, cons, rounds_need, rounds_have, craf
               '| Патроны 5.56 | 20–40 | 40–80 | то же, это основной калибр средней волны |',
               '| Патроны 7.62 | 20–40 | 40–80 | АК и СКС — самые частые стволы |',
               '| Патроны .308 | 10–20 | 20–40 | поздняя волна и аирдроп |',
-              '| Медь | 8–16 @12 | 28–56 @22 | медь уходит на каждый крафт патронов |',
-              '| Железо | 4–8 @12 | 8–16 @18 + 12–24 @14 в средней | стол оружейника и аплинк — 18 железа на игрока |',
-              '| Порох | 4–8 @8 | 10–18 @22 + 12–24 @14 | порох нужен на каждый крафт патронов |',
-              '| Редстоун | 6–10 @8 | 8–14 @11 | аплинк, IDS, ПНВ, техника Electrodynamics |',
-              '| Волны схронов | 100% сразу | 55% / 30% / 15% | раньше все схроны ставились на старте |', '',
+              '| Медь | 8–16 @12 | 24–44 @20 | медь уходит на каждый крафт патронов |',
+              '| Железо | 4–8 @12 | 6–14 @16 + 12–24 @14 в средней | стол оружейника и аплинк — 18 железа на игрока |',
+              '| Порох | 4–8 @8 | 8–14 @20 + 12–24 @14 | порох нужен на каждый крафт патронов |',
+              '| Редстоун | 6–10 @8 | 6–12 @10 | аплинк, IDS, ПНВ, техника Electrodynamics |',
+              '| Волны схронов | 100% сразу | 55% / 30% / 15% | раньше все схроны ставились на старте |',
+              '| Длина катки | 30 минут | 90 минут (5–180) | рабочая катка — полтора-два часа |',
+              '| Число схронов | только от отрядов и карты | ещё и от длины катки (√) | иначе за 90 минут карта опустеет |', '',
               'Почему не «положить всего побольше»: если схроны закрывают 100% спроса, копать',
-              'становится незачем, и карта превращается в гонку по сундукам. Цель — 60–75%:',
+              'становится незачем, и карта превращается в гонку по сундукам. Цель — 75–85%:',
               'схроны снимают нужду, но медь, железо и порох всё ещё надо добывать.', '']
 
     lines += hourly_section(eco)
     lines += gun_section()
+    lines += endgame_section(eco, pools or parse_pools())
     lines += nuclear_section(eco)
     lines += scale_section()
     open(OUT_MD, 'w', encoding='utf-8').write('\n'.join(lines))
@@ -899,6 +926,82 @@ def nuclear_section(eco):
               'машины, добыча урана, центрифугирование, плюс ~340 пороха в эквиваленте на сам заряд).',
               'В часовую катку это не влезает даже у скиллового игрока, и это нормально:',
               'ядерка — витрина мода, а не оружие катки.', '']
+    return lines
+
+
+def endgame_section(eco, pools):
+    """Что реально собрать к концу катки 1.5–2 часа."""
+    combos = [
+        ('РПГ в руках + 3 ракеты T1 с осколочной БЧ',
+         [('ballistix:rocketlauncher', 1), ('ballistix:missiletier1', 3), ('ballistix:shrapnel', 3)]),
+        ('VLS (пусковая) + 2 ракеты T1',
+         [('ballistix:vls', 1), ('ballistix:missiletier1', 2), ('ballistix:shrapnel', 2)]),
+        ('Пусковая шахта T2: платформа + рама + пульт',
+         [('ballistix:launcherplatformtier2', 1), ('ballistix:launchersupportframetier2', 1),
+          ('ballistix:launchercontrolpaneltier2', 1)]),
+        ('Ракета T2 с термобарической БЧ',
+         [('ballistix:missiletier2', 1), ('ballistix:thermobaric', 1)]),
+        ('3× C4',
+         [('superbwarfare:c4_bomb', 3)]),
+        ('Автомат TaCZ (АК-47 или M4A1)',
+         [('tacz:ak47', 1)]),
+        ('Снайперка AWP',
+         [('tacz:ai_awp', 1)]),
+        ('Джетпак',
+         [('electrodynamics:jetpack', 1)]),
+        ('ПНВ + композитная броня',
+         [('electrodynamics:nightvisiongoggles', 1), ('electrodynamics:compositearmorchestplate', 1)]),
+        ('Дробилка + генератор на угле',
+         [('electrodynamics:mineralgrinder', 1), ('electrodynamics:coalgenerator', 1)]),
+        ('Ядерный заряд Ballistix',
+         [('ballistix:nuclear', 1)]),
+    ]
+
+    def combo_cost(parts):
+        total = {}
+        for item, n in parts:
+            for k, v in eco.batch_cost(item).items():
+                total[k] = total.get(k, 0) + v * n
+        return {k: v for k, v in total.items() if v >= 0.05}
+
+    budgets = {m: match_budget(eco, pools, m)[0] for m in MATCH_MINUTES}
+
+    lines = ['## Что реально собрать к концу катки 1.5–2 часа', '',
+             'Считается так: бюджет шахты × 40% времени катки (остальное — война и логистика)',
+             'плюс доля лута со схронов на игрока. Схронов на 90 минут — 24, на 120 — 28.', '',
+             '| Цель | 90 мин | 120 мин | Упирается в |', '|---|---|---|---|']
+    for label, parts in combos:
+        cost = combo_cost(parts)
+        cells = []
+        worst_name = ''
+        for m in MATCH_MINUTES:
+            budget = budgets[m]
+            worst, who = 0.0, ''
+            for k, v in cost.items():
+                if k in budget and budget[k] > 0 and v / budget[k] > worst:
+                    worst, who = v / budget[k], k
+            cells.append(f'{"да" if worst <= 1 else "нет"} ({worst * 100:.0f}%)')
+            worst_name = worst_name or pretty(who)
+        lines.append(f'| {label} | {cells[0]} | {cells[1]} | {worst_name} |')
+
+    lines += ['', '### Где проходит граница', '',
+              'Всё упирается в **порох**. Без промышленности порох — это криперы: за катку',
+              'реально набрать ~30–38 штук, а термобарическая БЧ стоит 86, топливный стержень',
+              'для ядерки — 343. Поэтому по «криперской» ветке потолок такой:', '',
+              '- **да:** РПГ в руках с ракетами T1 (любая БЧ первого тира), VLS, C4, гранаты T1;',
+              '- **да:** сама пусковая шахта T2 (это 19 железа, дешёво), но не ракета к ней;',
+              '- **нет:** ракета T2 с термобаром, ракета T3, ядерка, снайперка AWP (200 железа).', '',
+              'Вторая ветка — промышленная. Electrodynamics даёт рецепт пороха',
+              '(серная пыль + селитра + уголь = 6 пороха), а серу и селитру добывают из руд',
+              '(`oresulfur`, `oreniter`) и дробят в дробилке. То есть:', '',
+              '| Что нужно | Порох | Серы и селитры | Уголь |', '|---|---:|---:|---:|',
+              '| Термобарическая БЧ | 86 | ~15 + 15 | 15 |',
+              '| Ракета T2 + термобар | 88 | ~15 + 15 | 15 |',
+              '| Ядерный заряд | 343 | ~58 + 58 | 58 |', '',
+              'С дробилкой, генератором и 15 блоками серной и селитряной руды термобар становится',
+              'вопросом логистики, а не удачи: **ракета T2 к концу двухчасовой катки реальна**.',
+              'Ядерка — нет: помимо 58 крафтов пороха это ещё уран, центрифуга, бойлер и',
+              'экстрактор, то есть 4–8 часов промышленной игры на команду.', '']
     return lines
 
 

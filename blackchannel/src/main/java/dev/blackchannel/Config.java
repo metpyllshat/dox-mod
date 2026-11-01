@@ -224,9 +224,9 @@ public final class Config {
                 "tacz:ammo{AmmoId=tacz:22wmr}*24-48@5",
                 "tacz:ammo{AmmoId=tacz:792x57}*5-10@3",
                 "minecraft:bread*2-4@14",
-                "minecraft:iron_ingot*8-16@18",
-                "minecraft:gunpowder*10-18@22",
-                "minecraft:redstone*8-14@11",
+                "minecraft:iron_ingot*6-14@16",
+                "minecraft:gunpowder*8-14@20",
+                "minecraft:redstone*6-12@10",
                 "minecraft:sugar*3-6@6",
                 "superbwarfare:medical_kit@6",
                 "superbwarfare:heal_clip@7",
@@ -236,7 +236,7 @@ public final class Config {
                 "electrodynamics:circuitbasic*2-4@7",
                 "electrodynamics:platesteel*2-4@7",
                 "blackchannel:field_laptop@3",
-                "minecraft:copper_ingot*28-56@22",
+                "minecraft:copper_ingot*24-44@20",
                 "minecraft:coal*8-16@9",
                 "minecraft:flint*4-8@6",
                 "minecraft:golden_apple*1-2@4",
@@ -306,7 +306,7 @@ public final class Config {
                 "nuclearscience:geigercounter@3",
                 "blackchannel:deep_vpn@3",
                 "minecraft:copper_block*4-7@10",
-                "minecraft:iron_block*2-3@9",
+                "minecraft:iron_block*2-3@7",
                 "minecraft:iron_ingot*12-24@14",
                 "minecraft:gunpowder*12-24@14",
                 "minecraft:redstone*10-18@8",
@@ -362,7 +362,7 @@ public final class Config {
                 "electrodynamics:seismicscanner@3",
                 "electrodynamics:circuitadvanced*2-4@6",
                 "ballistix:rocketlauncher@3",
-                "ballistix:missiletier1*1-2@3",
+                "ballistix:missiletier1*1@3",
                 "ballistix:defuser@3",
                 "sbw_ew_addon:electromagnetic_gun@2",
                 "sbw_ew_addon:advanced_drone@2",
@@ -402,7 +402,7 @@ public final class Config {
                 "electrodynamics:compositearmorchestplate@5",
                 "nuclearscience:reinforcedhazmatplate@4",
                 "nuclearscience:reinforcedhazmathelmet@4",
-                "ballistix:missiletier2*1-2@4",
+                "ballistix:missiletier2*1-2@5",
                 "ballistix:rocketlauncher@4",
                 "sbw_ew_addon:electromagnetic_gun@3",
                 "sbw_ew_addon:advanced_drone@3",
@@ -445,8 +445,8 @@ public final class Config {
         b.pop();
 
         b.push("match");
-        b.comment("Матч идёт matchDuration минут, потом finalDuration минут — кровати и маяки отключены, смерть перманентная. Победитель — команда с максимумом очков.");
-        MATCH_DURATION_MINUTES = b.defineInRange("matchDurationMinutes", 30, 5, 120);
+        b.comment("Рабочая длина катки — полтора-два часа, по умолчанию 90 минут. Матч идёт matchDuration минут, потом finalDuration минут — кровати и маяки отключены, смерть перманентная. Победитель — команда с максимумом очков.");
+        MATCH_DURATION_MINUTES = b.defineInRange("matchDurationMinutes", 90, 5, 180);
         b.comment("Отсутствие PvP в начале матча, в секундах: игроки не могут ранить друг друга, удар даже не проходит. Мобы, падение, огонь и лава бьют как обычно. Отсчёт от старта матча, 0 — PvP сразу.");
         PVP_FREE_SECONDS = b.defineInRange("pvpFreeSeconds", 90, 0, 7200);
         FINAL_DURATION_MINUTES = b.defineInRange("finalDurationMinutes", 10, 1, 30);
