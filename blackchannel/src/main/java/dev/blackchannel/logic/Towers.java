@@ -30,30 +30,38 @@ public final class Towers {
 
     private Towers() {}
 
-    /** Кольцо вокруг центра: 0.33 стороны карты, не ближе 180 к базе отряда. */
+    /** Сколько мест перебираем на каждую вышку, прежде чем сдаться. */
+    private static final int ATTEMPTS = 60;
+    /** Радиусы кольца в долях стороны карты, по очереди. */
+    private static final double[] RADII = {0.33, 0.27, 0.39, 0.22, 0.44};
+
+    /**
+     * Вышки по кольцу вокруг центра. Раньше одна неудачная точка (рядом с базой, под водой,
+     * в пещере) молча пропускалась, и вышек выходило меньше заданного. Теперь для каждой
+     * вышки перебираются другие радиусы и углы, пока не найдётся подходящее место.
+     */
     public static void placeAll(ServerLevel level, MatchData match, RandomSource random) {
         int count = Config.TOWER_COUNT.get();
         if (count <= 0) return;
         // Если уже есть инфо — не плодить
         if (match.towersPlaced && match.towerInfos.size() >= count) return;
         int size = Math.max(2, match.size);
-        double radius = size * 0.33;
         int start = match.towerInfos.size();
         for (int i = start; i < count; i++) {
-            double angle = (Math.PI * 2.0 / count) * i + Math.PI / count;
-            int x = match.centerX + (int) Math.round(Math.cos(angle) * radius);
-            int z = match.centerZ + (int) Math.round(Math.sin(angle) * radius);
-            if (nearBase(match, x, z, 180)) continue;
-            int y = level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
-            // ищем твёрдую землю вниз до 12 блоков, иначе не спавним (был баг — спавн под землей в пещере)
-            for (int dy = 0; dy < 12; dy++) {
-                BlockPos p = new BlockPos(x, y - dy, z);
-                if (!level.getBlockState(p).isAir() && level.getBlockState(p).getBlock() != Blocks.WATER) { y = p.getY(); break; }
+            BlockPos ground = null;
+            for (int attempt = 0; attempt < ATTEMPTS && ground == null; attempt++) {
+                double radius = size * RADII[attempt % RADII.length];
+                double angle = (Math.PI * 2.0 / count) * i + Math.PI / count + attempt * 0.7;
+                int x = match.centerX + (int) Math.round(Math.cos(angle) * radius);
+                int z = match.centerZ + (int) Math.round(Math.sin(angle) * radius);
+                // ближе к концу перебора требования к дистанции до базы смягчаются
+                int minBase = attempt < ATTEMPTS / 2 ? 180 : 110;
+                ground = groundAt(level, match, x, z, minBase);
             }
-            if (y < level.getMinBuildHeight() + 4) continue;
-            BlockPos ground = new BlockPos(x, y, z);
-            if (!match.inside(ground)) continue;
-            if (!level.getBlockState(ground).isSolidRender(level, ground)) continue;
+            if (ground == null) {
+                dev.blackchannel.BlackChannelMod.LOGGER.warn("Вышка {} не нашла места на карте (размер {})", i + 1, size);
+                continue;
+            }
             build(level, match, ground);
             match.towers.add(ground);
             MatchData.TowerInfo info = new MatchData.TowerInfo(ground);
@@ -64,6 +72,26 @@ public final class Towers {
             match.setDirty();
         }
         match.towersPlaced = true;
+    }
+
+    /** Подходящая земля для вышки в точке (x, z) или null. */
+    private static BlockPos groundAt(ServerLevel level, MatchData match, int x, int z, int minBase) {
+        if (nearBase(match, x, z, minBase)) return null;
+        // вышки не лепятся друг к другу: в ошибке ставится одна, а не две в одном месте
+        for (BlockPos t : match.towers) {
+            if (Math.hypot(t.getX() - x, t.getZ() - z) < 40) return null;
+        }
+        int y = level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
+        // ищем твёрдую землю вниз до 12 блоков, иначе не спавним (был баг — спавн под землей в пещере)
+        for (int dy = 0; dy < 12; dy++) {
+            BlockPos p = new BlockPos(x, y - dy, z);
+            if (!level.getBlockState(p).isAir() && level.getBlockState(p).getBlock() != Blocks.WATER) { y = p.getY(); break; }
+        }
+        if (y < level.getMinBuildHeight() + 4) return null;
+        BlockPos ground = new BlockPos(x, y, z);
+        if (!match.inside(ground)) return null;
+        if (!level.getBlockState(ground).isSolidRender(level, ground)) return null;
+        return ground;
     }
 
     private static boolean nearBase(MatchData match, int x, int z, int dist) {
@@ -364,6 +392,11 @@ public final class Towers {
             for(int dx=-2; dx<=2; dx++) for(int dz=-2; dz<=2; dz++) level.setBlock(new BlockPos(g.getX()+dx, g.getY(), g.getZ()+dz), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
             level.setBlock(new BlockPos(g.getX(), top+1, g.getZ()), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
             level.setBlock(new BlockPos(g.getX(), top+1, g.getZ()+1), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
+            // перила по краю площадки и антенна с маячком, которых не было в очистке выше
+            for (int dx=-PLATFORM; dx<=PLATFORM; dx++) for (int dz=-PLATFORM; dz<=PLATFORM; dz++) {
+                level.setBlock(new BlockPos(g.getX()+dx, top+1, g.getZ()+dz), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
+            }
+            for (int dy=2; dy<=6; dy++) level.setBlock(new BlockPos(g.getX()-2, top+dy, g.getZ()-2), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
         }
         match.towerInfos.clear(); match.towers.clear(); match.towersPlaced=false; match.setDirty();
     }

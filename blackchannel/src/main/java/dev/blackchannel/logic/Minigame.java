@@ -605,6 +605,8 @@ public final class Minigame {
             removeBeacons(level, match);
             removeBunkers(level, match);
             removeCaches(level, match);
+            // вышки связи убираем вместе с катной: раньше их снимала только команда start/stop
+            try { Towers.destroyAll(level, match); } catch (Exception e) { match.towers.clear(); match.towerInfos.clear(); match.towersPlaced = false; }
             restoreBorder(level, match);
             restoreKeep(level, match);
         }
