@@ -20,6 +20,7 @@
   "blackchannel.announcer.team_out": "Crew %s out.",
   "blackchannel.announcer.tower_captured": "%s took tower %s",
   "blackchannel.blip.beacon": "Beacon",
+  "blackchannel.blip.bed": "bed",
   "blackchannel.blip.cage": "cage",
   "blackchannel.blip.decoy": "decoy",
   "blackchannel.blip.dish": "dish",

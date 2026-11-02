@@ -292,7 +292,7 @@ public final class Ui {
         if (kind == null) return RED;
         if (kind.startsWith("own")) return EDGE;
         return switch (kind) {
-            case "friend", "beacon", "radio" -> GREEN;
+            case "friend", "beacon", "bed", "radio" -> GREEN;
             case "decoy", "dish", "radar" -> BLUE;
             case "drone", "rack", "ew" -> AMBER;
             case "cage" -> MUTED;

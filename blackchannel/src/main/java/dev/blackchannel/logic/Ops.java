@@ -536,7 +536,6 @@ public final class Ops {
         if (towerBeamPos != null) beam.alpha *= 0.7;
 
         double[] fix = Bearings.bestFix(profile, beam);
-        Contracts.onTrace(player);
         profile.cdTrace = now + Config.TRACE_CD.get() * 20;
         // тариф: +30% каждые 10 мин
         if (!free(player)) {
@@ -549,6 +548,8 @@ public final class Ops {
             int fz = (int) Math.round(fix[1]);
             int err = (int) Math.round(fix[2]);
             addIntel(profile, handle, dim, fx, y, fz, err, now, stale);
+            // контракт TRACE засчитывается только за пеленг с результатом
+            Contracts.onTrace(player);
             result(player, profile, stale ? "blackchannel.result.trace_stale" : "blackchannel.result.trace_ok",
                     handle, Str.dimShort(dim), String.valueOf(fx), String.valueOf(y), String.valueOf(fz), String.valueOf(err));
             player.playNotifySound(SoundEvents.NOTE_BLOCK_PLING.value(), SoundSource.MASTER, 0.7f, 1.4f);

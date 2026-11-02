@@ -299,7 +299,12 @@ public final class SignalEnv {
         level.playSound(null, pos, SoundEvents.BEACON_DEACTIVATE, SoundSource.BLOCKS, 1.4f, 0.4f);
         level.sendParticles(net.minecraft.core.particles.ParticleTypes.ELECTRIC_SPARK, center.x, center.y, center.z, 40, radius / 6.0, 0.6, radius / 6.0, 0.05);
         // Вышки глохнут на 5 мин от ЭМИ
-        try { Towers.pulse(dev.blackchannel.data.MatchData.get(server), pos, server.getTickCount()); } catch (Exception ignored) {}
+        try {
+            Towers.pulse(dev.blackchannel.data.MatchData.get(server), pos, server.getTickCount());
+        } catch (RuntimeException e) {
+            // удар не должен рушиться из-за вышек, но сбой должен быть виден в логе
+            dev.blackchannel.BlackChannelMod.LOGGER.warn("EMP towers pulse failed: {}", e.toString());
+        }
         data.setDirty();
     }
 
