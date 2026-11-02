@@ -31,38 +31,46 @@ public final class Towers {
     private Towers() {}
 
     /** Сколько попыток даём на одну вышку, прежде чем сдаться. */
-    private static final int ATTEMPTS = 24;
-    /** Радиусы кольца в долях стороны карты, по очереди. */
+    private static final int ATTEMPTS = 60;
+    /** Радиусы кольца в долях стороны карты. Первый — основной, как было в PR #47. */
     private static final double[] RADII = {0.33, 0.27, 0.39, 0.22, 0.44};
     /** Номер вышки, которую ставим сейчас, и номер попытки для неё. Сбрасываются в destroyAll. */
     private static int pendingSlot;
     private static int pendingAttempt;
 
     /**
-     * Постановка вышек по тикам. Раньше все точки кольца проверялись сразу, но их чанки
-     * обычно не загружены: высота и блоки там пустые, и точка молча пропускалась.
-     * Теперь для каждой попытки сначала ждём чанк (как у схронов), и только потом смотрим землю.
-     * За тик ставится не больше одной вышки. Возвращает true, когда все вышки стоят
-     * или места под них не нашлось.
+     * Постановка вышек по тикам, по одной за тик. Чанк дозагружается через Minigame.chunkStatus,
+     * потому что точки кольца обычно далеко от игроков и их чанки не загружены.
+     * Возвращает true, когда все вышки стоят или места под них не нашлось.
      */
     public static boolean placeStep(ServerLevel level, MatchData match) {
         int count = Config.TOWER_COUNT.get();
         if (count <= 0) return true;
         if (pendingSlot < match.towerInfos.size()) pendingSlot = match.towerInfos.size();
         int size = Math.max(2, match.size);
+        // минимальное расстояние между вышками: половина дуги кольца, чтобы они не стояли кучно
+        double arc = Math.PI * 2.0 * size * RADII[0] / count;
+        double spacing = Math.max(24.0, arc * 0.5);
         int budget = 16;
         while (pendingSlot < count && budget-- > 0) {
-            double radius = size * RADII[pendingAttempt % RADII.length];
-            double angle = (Math.PI * 2.0 / count) * pendingSlot + Math.PI / count + pendingAttempt * 0.7;
+            int attempt = pendingAttempt;
+            double radius = size * RADII[attempt % RADII.length];
+            // первый круг попыток — ровное кольцо как в PR #47; дальше угол шагает на 30°, чтобы обойти базы
+            double angle = (Math.PI * 2.0 / count) * pendingSlot + Math.PI / count + (attempt / RADII.length) * (Math.PI / 6.0);
             int x = match.centerX + (int) Math.round(Math.cos(angle) * radius);
             int z = match.centerZ + (int) Math.round(Math.sin(angle) * radius);
-            // середина чанка: вся площадка 9×9 уходит в этот же чанк, соседние не нужны
+            // середина чанка: площадка 9×9 и шахта целиком в одном чанке
             x = (x & ~15) + 8;
             z = (z & ~15) + 8;
             int status = Minigame.chunkStatus(level, x >> 4, z >> 4);
             if (status == Minigame.CHUNK_WAIT) return false;
-            int minBase = pendingAttempt < ATTEMPTS / 2 ? 180 : 110;
-            BlockPos ground = status == Minigame.CHUNK_READY ? groundAt(level, match, x, z, minBase) : null;
+            BlockPos ground = null;
+            if (status == Minigame.CHUNK_READY) {
+                // держим чанк загруженным до конца проверки и стройки
+                level.getChunk(x >> 4, z >> 4);
+                int minBase = attempt < ATTEMPTS / 2 ? 180 : 110;
+                ground = groundAt(level, match, x, z, minBase, spacing);
+            }
             if (ground != null) {
                 build(level, match, ground);
                 match.towers.add(ground);
@@ -91,11 +99,10 @@ public final class Towers {
     }
 
     /** Подходящая земля для вышки в точке (x, z) или null. */
-    private static BlockPos groundAt(ServerLevel level, MatchData match, int x, int z, int minBase) {
+    private static BlockPos groundAt(ServerLevel level, MatchData match, int x, int z, int minBase, double spacing) {
         if (nearBase(match, x, z, minBase)) return null;
-        // вышки не лепятся друг к другу: в ошибке ставится одна, а не две в одном месте
         for (BlockPos t : match.towers) {
-            if (Math.hypot(t.getX() - x, t.getZ() - z) < 40) return null;
+            if (Math.hypot(t.getX() - x, t.getZ() - z) < spacing) return null;
         }
         int y = level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
         // ищем твёрдую землю вниз до 12 блоков, иначе не спавним (был баг — спавн под землей в пещере)
@@ -103,7 +110,9 @@ public final class Towers {
             BlockPos p = new BlockPos(x, y - dy, z);
             if (!level.getBlockState(p).isAir() && level.getBlockState(p).getBlock() != Blocks.WATER) { y = p.getY(); break; }
         }
-        if (y < level.getMinBuildHeight() + 4) return null;
+        // Раньше порог был minBuild+4: на суперфлэте трава на y=-61, и вышки не ставились вовсе.
+        // Отсекаем только совсем дно мира.
+        if (y <= level.getMinBuildHeight() + 1) return null;
         BlockPos ground = new BlockPos(x, y, z);
         if (!match.inside(ground)) return null;
         if (!level.getBlockState(ground).isSolidRender(level, ground)) return null;
@@ -127,9 +136,8 @@ public final class Towers {
         BlockState rail = Blocks.IRON_BARS.defaultBlockState();
         BlockState air = Blocks.AIR.defaultBlockState();
         BlockState ladder = Blocks.LADDER.defaultBlockState().setValue(net.minecraft.world.level.block.LadderBlock.FACING, Direction.EAST);
-        for (int dx = -2; dx <= 2; dx++) {
-            for (int dz = -2; dz <= 2; dz++) set(level, x + dx, y, z + dz, brick);
-        }
+        // Основание не кладём: грунт под вышкой остаётся нетронутым, и снос не оставляет ямы.
+        // Шахта стоит прямо на нём, с y+1 (проверка groundAt гарантирует твёрдый блок).
         for (int dy = 1; dy <= HEIGHT; dy++) {
             for (int dx = -1; dx <= 1; dx++) {
                 for (int dz = -1; dz <= 1; dz++) {
@@ -402,10 +410,13 @@ public final class Towers {
     public static void destroyAll(ServerLevel level, MatchData match) {
         for (MatchData.TowerInfo inf : match.towerInfos) {
             BlockPos g = inf.pos;
+            // Выгруженный чанк: setBlock в нём молча ничего не делает, поэтому грузим его до сноса
+            for (int dx : new int[]{-PLATFORM, PLATFORM}) for (int dz : new int[]{-PLATFORM, PLATFORM}) {
+                level.getChunk((g.getX() + dx) >> 4, (g.getZ() + dz) >> 4);
+            }
             int top = g.getY()+HEIGHT+1;
             for(int dx=-PLATFORM; dx<=PLATFORM; dx++) for(int dz=-PLATFORM; dz<=PLATFORM; dz++) level.setBlock(new BlockPos(g.getX()+dx, top, g.getZ()+dz), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
-            for(int dy=0; dy<=HEIGHT+6; dy++) for(int dx=-1; dx<=1; dx++) for(int dz=-1; dz<=1; dz++) level.setBlock(new BlockPos(g.getX()+dx, g.getY()+dy, g.getZ()+dz), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
-            for(int dx=-2; dx<=2; dx++) for(int dz=-2; dz<=2; dz++) level.setBlock(new BlockPos(g.getX()+dx, g.getY(), g.getZ()+dz), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
+            for(int dy=1; dy<=HEIGHT+6; dy++) for(int dx=-1; dx<=1; dx++) for(int dz=-1; dz<=1; dz++) level.setBlock(new BlockPos(g.getX()+dx, g.getY()+dy, g.getZ()+dz), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
             level.setBlock(new BlockPos(g.getX(), top+1, g.getZ()), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
             level.setBlock(new BlockPos(g.getX(), top+1, g.getZ()+1), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
             // перила по краю площадки и антенна с маячком, которых не было в очистке выше

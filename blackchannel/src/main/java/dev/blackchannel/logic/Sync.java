@@ -442,7 +442,7 @@ public final class Sync {
         m.putInt("nodeX", match.nodeX);
         m.putInt("nodeZ", match.nodeZ);
         ListTag towers = new ListTag();
-        for (dev.blackchannel.data.MatchData.TowerInfo inf : match.towerInfos) { CompoundTag c = new CompoundTag(); c.putInt("x", inf.pos.getX()); c.putInt("z", inf.pos.getZ()); c.putString("owner", inf.owner == null ? "" : inf.owner); c.putLong("dis", inf.disabledUntil); towers.add(c); }
+        for (dev.blackchannel.data.MatchData.TowerInfo inf : match.towerInfos) { CompoundTag c = new CompoundTag(); c.putInt("x", inf.pos.getX()); c.putInt("z", inf.pos.getZ()); c.putString("owner", inf.owner == null ? "" : inf.owner); c.putLong("dis", Math.max(0L, inf.disabledUntil - now)); towers.add(c); }
         m.put("towers", towers);
         ListTag teams = new ListTag();
         for (String code : match.teamScores.keySet()) {

@@ -420,7 +420,8 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     }
 
     private boolean anyOwnTower() {
-        for (ClientState.TowerRow tw : ClientState.towers) if (!tw.owner.isEmpty() && !tw.disabled) return true;
+        // Своя вышка — владелец совпадает с нашим отрядом. Раньше проверяли «чья-то», и кнопка была активна у всех.
+        for (ClientState.TowerRow tw : ClientState.towers) if (!tw.owner.isEmpty() && tw.owner.equals(ClientState.crew) && !tw.disabled) return true;
         return false;
     }
 

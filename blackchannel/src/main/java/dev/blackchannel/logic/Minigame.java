@@ -2068,7 +2068,8 @@ public final class Minigame {
         match.matchStartTick = startTick;
         match.playersLeaked = false;
         match.beaconsLeaked = false;
-        if (match.active) { try { Towers.destroyAll(level, match); } catch(Exception ignored) { match.towers.clear(); match.towerInfos.clear(); match.towersPlaced=false; } } else { match.towers.clear(); match.towerInfos.clear(); }
+        // Вышки прошлой катки: снести из мира и забыть (раньше блоки оставались, если катка не была активна)
+        try { Towers.destroyAll(level, match); } catch (Exception e) { match.towers.clear(); match.towerInfos.clear(); match.towersPlaced = false; }
         match.nodeActive = false;
         match.nextEventTick = 0L;
         match.silenceUntil = 0L;
@@ -2148,7 +2149,8 @@ public final class Minigame {
         match.nodeActive = false;
         match.silenceUntil = 0L;
         match.nextEventTick = 0L;
-        if (match.active) { try { Towers.destroyAll(level, match); } catch(Exception ignored) { match.towers.clear(); match.towerInfos.clear(); match.towersPlaced=false; } } else { match.towers.clear(); match.towerInfos.clear(); }
+        // Вышки прошлой катки: снести из мира и забыть (раньше блоки оставались, если катка не была активна)
+        try { Towers.destroyAll(level, match); } catch (Exception e) { match.towers.clear(); match.towerInfos.clear(); match.towersPlaced = false; }
         match.finalActive = false;
         match.drops.clear();
         match.anchors.clear();
