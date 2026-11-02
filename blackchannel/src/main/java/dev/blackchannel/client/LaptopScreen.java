@@ -38,11 +38,6 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     private boolean dragPrice;
     private ItemStack hoverStack = ItemStack.EMPTY;
     private boolean hoverHidden;
-    private HackGame hack;
-    /** Зажата ли ЛКМ во время взлома. */
-    private boolean holdingHack;
-    /** Сколько тиков оверлей висит после конца взлома, чтобы игрок успел прочитать итог. */
-    private int hackLinger;
 
     public LaptopScreen(Menus.LaptopMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
@@ -116,53 +111,6 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         if (!hoverStack.isEmpty()) g.renderTooltip(this.font, hoverStack, mx, my);
         else if (hoverHidden) noteTip(g, Ui.t("screen.blackchannel.peek_hidden"), mx, my);
         else Ui.tips(g, this.font, hits, mx, my);
-        if (hack != null) drawHack(g, mx, my);
-    }
-
-    /** Оверлей взлома: рамка, заголовок, таймер, дорожка с зоной, полоска удержания и статус. */
-    private void drawHack(GuiGraphics g, int mx, int my) {
-        int w = 200;
-        int h = 50;
-        int px = this.width / 2 - w / 2;
-        int py = this.height / 2 - h / 2;
-        g.fill(px - 1, py - 1, px + w + 1, py + h + 1, Ui.EDGE);
-        g.fill(px, py, px + w, py + h, 0xF0101418);
-        g.drawString(this.font, Ui.t("screen.blackchannel.hack.title"), px + 8, py + 6, Ui.AMBER, false);
-        String timer = hack.secondsLeft() + "с";
-        g.drawString(this.font, timer, px + w - 8 - this.font.width(timer), py + 6, Ui.MUTED, false);
-
-        int tx = px + 8;
-        int ty = py + 20;
-        int tw = w - 16;
-        int th = 8;
-        g.fill(tx, ty, tx + tw, ty + th, Ui.DEEP);
-        int zoneX = tx + Math.round((hack.target - hack.zone) * tw);
-        int zoneW = Math.max(2, Math.round(hack.zone * 2 * tw));
-        g.fill(zoneX, ty, zoneX + zoneW, ty + th, hack.success ? Ui.GREEN : 0xFF2F6B45);
-        int knobX = tx + Math.round(hack.pos * (tw - 2));
-        g.fill(knobX, ty - 3, knobX + 2, ty + th + 3, Ui.AMBER);
-
-        Ui.bar(g, tx, py + 34, tw, 5, hack.progress, hack.failed ? Ui.RED : Ui.GREEN);
-
-        String status;
-        int color;
-        if (hack.success) {
-            status = Ui.t("screen.blackchannel.hack.ok");
-            color = Ui.GREEN;
-        } else if (hack.failed) {
-            status = Ui.t("screen.blackchannel.hack.fail");
-            color = Ui.RED;
-        } else {
-            status = Ui.t("screen.blackchannel.hack.hint");
-            color = Ui.TEXT;
-        }
-        g.drawString(this.font, status, px + 8, py + 42, color, false);
-    }
-
-    private void startHack(String handle) {
-        hack = new HackGame(handle, handle.hashCode());
-        holdingHack = false;
-        hackLinger = 0;
     }
 
     private void drawChrome(GuiGraphics g, int mx, int my) {
@@ -414,12 +362,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
-        if (hack == null) Sfx.play("ui.click");
-        if (hack != null) {
-            // держим ЛКМ: удержание учитывает containerTick, а не клики
-            if (button == 0) holdingHack = true;
-            return true;
-        }
+        Sfx.play("ui.click");
         if (page == 2 && mx >= this.leftPos + SLIDER_X && mx <= this.leftPos + SLIDER_X + SLIDER_W
                 && my >= this.topPos + SLIDER_Y - 4 && my <= this.topPos + SLIDER_Y + 10) {
             dragPrice = true;
@@ -455,11 +398,6 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
                 }
                 arg = "confirm";
             }
-            // мини-игра на TRACE
-            if (Actions.TRACE.equals(hit.action()) && !arg.isEmpty()) {
-                startHack(arg);
-                return true;
-            }
             send(hit.action(), arg);
             return true;
         }
@@ -478,7 +416,6 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     @Override
     public boolean mouseReleased(double mx, double my, int button) {
         dragPrice = false;
-        if (button == 0) holdingHack = false;
         return super.mouseReleased(mx, my, button);
     }
 
@@ -508,7 +445,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     public boolean keyPressed(int key, int scan, int mods) {
         if (page == 0 && (key == 257 || key == 335) && input != null && input.isFocused()
                 && !input.getValue().trim().isEmpty()) {
-            startHack(input.getValue().trim());
+            send(Actions.TRACE, input.getValue().trim());
             return true;
         }
         boolean typing = (input != null && input.isFocused()) || (priceBox != null && priceBox.isFocused());
@@ -518,29 +455,5 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     private void send(String action, String arg) {
         if (ModNetwork.CHANNEL != null) ModNetwork.CHANNEL.sendToServer(new ModNetwork.ActionPkt(action, arg == null ? "" : arg));
-    }
-
-    @Override
-    protected void containerTick() {
-        super.containerTick();
-        if (hack == null) return;
-        if (!hack.finished()) {
-            hack.tick(holdingHack);
-            if (hack.success) {
-                Sfx.play("hack.success");
-                // TRACE уходит сразу в момент успеха, один раз; позывной зафиксирован на старте
-                send(Actions.TRACE, hack.handle);
-            } else if (hack.failed) {
-                Sfx.play("hack.fail");
-            } else if (hack.ticks % 12 == 0) {
-                Sfx.play("hack.tick");
-            }
-            return;
-        }
-        // итог висит полсекунды, потом оверлей уходит
-        if (++hackLinger >= 30) {
-            hack = null;
-            holdingHack = false;
-        }
     }
 }

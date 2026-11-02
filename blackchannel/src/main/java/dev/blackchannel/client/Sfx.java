@@ -7,7 +7,7 @@ import net.minecraft.sounds.SoundEvent;
 
 /**
  * Звуки интерфейса: кнопки, пеленг, глушение, взлом. Ключи совпадают с sounds.json
- * (ui.click, bearing.ping, jam.hum, hack.tick, hack.success, hack.fail).
+ * (ui.click, bearing.ping, jam.hum).
  */
 public final class Sfx {
     private static final float VOLUME = 0.6f;

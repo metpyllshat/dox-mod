@@ -112,29 +112,10 @@ def hum():
     return scale(fade(mix(buzz, grit), attack=0.02, release=0.15), 0.45)
 
 
-def tick():
-    return scale(fade(tone(lambda t: 2200, 0.03, decay=110)), 0.3)
-
-
-def success():
-    notes = [660, 880, 1320]
-    parts = [fade(tone(lambda t, f=f: f, 0.09, decay=14), release=0.03) for f in notes]
-    return scale(concat(*parts), 0.45)
-
-
-def fail():
-    sweep = tone(lambda t: 320 - 200 * min(1.0, t / 0.35), 0.4, shape="square")
-    grit = noise(0.4, 0.2)
-    return scale(fade(mix(sweep, grit), release=0.1), 0.5)
-
-
 SOUNDS = {
     "ui/click": click,
     "bearing/ping": ping,
     "jam/hum": hum,
-    "hack/tick": tick,
-    "hack/success": success,
-    "hack/fail": fail,
 }
 
 
