@@ -413,6 +413,7 @@ public final class Minigame {
             updateStageBar(server, match, now);
             checkVictory(server, match);
             if (!match.active) return;
+            Contracts.tick(server, match, now);
         }
         // Утечки по расписанию из конфига: половина катки — координаты всех игроков,
         // три четверти — координаты всех маяков. Обе с погрешностью, обе видны всем.
@@ -477,7 +478,7 @@ public final class Minigame {
                     player.removeEffect(MobEffects.INVISIBILITY);
                     player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
                     player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.permanent_dead")));
-                    checkTeamElimination(match, match.playerCrew.getOrDefault(id, ""));
+                    checkTeamElimination(server, match, match.playerCrew.getOrDefault(id, ""));
                 }
             }
             match.setDirty();
@@ -559,11 +560,7 @@ public final class Minigame {
             match.nodeX = match.centerX;
             match.nodeZ = match.centerZ;
             match.setDirty();
-            for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-                player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.node_open",
-                        match.nodeX, match.nodeZ)));
-                player.playNotifySound(SoundEvents.NOTE_BLOCK_BELL.value(), SoundSource.MASTER, 0.9f, 0.7f);
-            }
+            Announcer.call(server, "node_open", match.nodeX, match.nodeZ);
             return;
         }
         if (now % 200 != 0) return;
@@ -855,13 +852,7 @@ public final class Minigame {
         chest.setChanged();
         match.cacheChests.add(spot.immutable());
         match.setDirty();
-        Component header = Component.translatable("blackchannel.minigame.airdrop_header");
-        Component line = Component.translatable("blackchannel.minigame.airdrop_at", spot.getX(), spot.getY(), spot.getZ());
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            player.sendSystemMessage(Msg.paint(header));
-            player.sendSystemMessage(Msg.paint(line));
-            player.playNotifySound(SoundEvents.BEACON_ACTIVATE, SoundSource.MASTER, 1.0f, 1.0f);
-        }
+        Announcer.call(server, "airdrop", spot.getX(), spot.getY(), spot.getZ());
     }
 
     /** Одна база за тик: поставить маяк и высадить её игроков. */
@@ -1199,7 +1190,7 @@ public final class Minigame {
         player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.permanent_dead")));
         player.getServer().getPlayerList().broadcastSystemMessage(Msg.paint(
                 Component.translatable("blackchannel.minigame.permanent_dead_announce", player.getGameProfile().getName())), false);
-        checkTeamElimination(match, crew);
+        checkTeamElimination(player.getServer(), match, crew);
     }
 
     /** Возврат на кровать или маяк после ранения. */
@@ -1238,14 +1229,15 @@ public final class Minigame {
             match.addScore(killerCrew, pts);
             killer.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.score_kill", pts)));
         }
+        Contracts.progress(killer.getServer(), match, killerCrew, dev.blackchannel.data.Contract.KILL, 1);
     }
 
     /** Команда выбывает, когда все её игроки погибли окончательно. */
-    private static void checkTeamElimination(MatchData match, String crew) {
+    private static void checkTeamElimination(MinecraftServer server, MatchData match, String crew) {
         if (crew == null || crew.isEmpty()) return;
         if (!match.playerCrew.containsValue(crew)) return;
         if (match.teamAlive(crew)) return;
-        match.eliminatedTeams.add(crew);
+        if (match.eliminatedTeams.add(crew)) Announcer.call(server, "team_out", teamName(server, crew));
     }
 
     public static void onHurt(LivingHurtEvent event) {
@@ -2026,6 +2018,7 @@ public final class Minigame {
         match.playerCrew.clear();
         match.playerColorIdx.clear();
         match.eliminatedTeams.clear();
+        Contracts.reset(match);
         PROTECT.clear();
         REVIVE.clear();
         LAST_HIT.clear();
@@ -2247,6 +2240,7 @@ public final class Minigame {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.minigame.match_start", minutes)));
         }
+        Announcer.voiceAll(server, "start");
     }
 
     private static void assign(ServerPlayer player, MatchData match, boolean teleport) {

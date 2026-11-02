@@ -119,6 +119,7 @@ public final class Ops {
             case Actions.TOWER_CAM -> Towers.camera(player, profile);
             case Actions.TOWER_SCAN -> Towers.scan(player, profile);
             case Actions.KILL -> killSwitch(player, rackPos(player));
+            case Actions.CONTRACT_DELIVER -> Contracts.deliver(player, arg);
             default -> { }
         }
         noise(profile, noiseOf(action));
@@ -535,6 +536,7 @@ public final class Ops {
         if (towerBeamPos != null) beam.alpha *= 0.7;
 
         double[] fix = Bearings.bestFix(profile, beam);
+        Contracts.onTrace(player);
         profile.cdTrace = now + Config.TRACE_CD.get() * 20;
         // тариф: +30% каждые 10 мин
         if (!free(player)) {
@@ -803,6 +805,7 @@ public final class Ops {
         NetData.Profile owner = data(player).profile(be.owner);
         give(player, Devices.sample(owner.handle, false));
         result(player, profile, "blackchannel.result.hack_ok", owner.handle);
+        Contracts.onHack(player, dev.blackchannel.data.MatchData.get(player.getServer()).playerCrew.getOrDefault(be.owner, ""));
         ServerPlayer online = player.getServer().getPlayerList().getPlayer(be.owner);
         if (online != null) {
             online.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.ids_hack")));

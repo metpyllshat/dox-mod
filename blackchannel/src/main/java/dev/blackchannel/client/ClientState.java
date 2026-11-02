@@ -33,6 +33,8 @@ public final class ClientState {
     public static long toastUntil;
     public static final List<IntelRow> intel = new ArrayList<>();
     public static final List<BeamRow> beams = new ArrayList<>();
+    /** Открытые контракты отряда, до трёх. */
+    public static final List<ContractRow> contracts = new ArrayList<>();
     public static final List<ChatRow> chat = new ArrayList<>();
     public static final List<Blip> blips = new ArrayList<>();
     public static final List<ListingRow> listings = new ArrayList<>();
@@ -94,7 +96,11 @@ public final class ClientState {
         rackCharge = tag.getInt("rackCharge");
         rackHackable = tag.getBoolean("rackHackable");
         readIntel(tag.getList("intel", Tag.TAG_COMPOUND));
+        int beamsBefore = beams.size();
         readBeams(tag.getList("beams", Tag.TAG_COMPOUND));
+        // новый луч на телефоне — короткий пинг, как у радара
+        if (beams.size() > beamsBefore) Sfx.play("bearing.ping");
+        readContracts(tag.getList("contracts", Tag.TAG_COMPOUND));
         readChat(tag.getList("chat", Tag.TAG_COMPOUND));
         readListings(tag.getList("listings", Tag.TAG_COMPOUND));
         readTracks(tag.getList("trackers", Tag.TAG_COMPOUND));
@@ -182,7 +188,10 @@ public final class ClientState {
         bomb = tag.getInt("bomb");
         airplane = tag.getBoolean("airplane");
         dnd = tag.getBoolean("dnd");
+        boolean wasJammed = jammed;
         jammed = tag.getBoolean("jammed");
+        // глушилка включилась: гул на терминале один раз, не на каждый синк
+        if (jammed && !wasJammed) Sfx.play("jam.hum");
         faraday = tag.getBoolean("faraday");
         uplink = tag.getBoolean("uplink");
         dish = tag.getBoolean("dish");
@@ -251,6 +260,16 @@ public final class ClientState {
             row.age = c.getInt("age");
             row.stale = c.getBoolean("stale");
             intel.add(row);
+        }
+    }
+
+    private static void readContracts(ListTag list) {
+        contracts.clear();
+        for (int i = 0; i < list.size(); i++) {
+            CompoundTag c = list.getCompound(i);
+            contracts.add(new ContractRow(c.getInt("id"), c.getString("kind"), c.getInt("target"),
+                    c.getInt("progress"), c.getInt("reward"), c.getBoolean("desperate"),
+                    c.getInt("left"), c.getString("item")));
         }
     }
 
@@ -381,6 +400,8 @@ public final class ClientState {
         public CompoundTag nbt = new CompoundTag();
     }
     public record TrackRow(String label, String dim, int x, int y, int z, boolean live) {}
+    public record ContractRow(int id, String kind, int target, int progress, int reward, boolean desperate,
+                              int left, String item) {}
     public record LogRow(String key, String arg, int age) {}
     public record DeanonRow(String handle, String name) {}
     public record PeekSlot(int slot, String id, int count, boolean hidden, boolean lie, CompoundTag nbt) {}

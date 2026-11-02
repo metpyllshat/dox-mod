@@ -88,6 +88,7 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue AIRDROP_FIRST_MINUTE;
     public static final ForgeConfigSpec.IntValue AIRDROP_INTERVAL_MINUTES;
     public static final ForgeConfigSpec.IntValue AIRDROP_ITEMS;
+    public static final ForgeConfigSpec.IntValue CONTRACT_MINUTES;
     public static final ForgeConfigSpec.IntValue BEACON_SHIELD_SECONDS;
     public static final ForgeConfigSpec.BooleanValue TRACE_SCALE_MAP;
     public static final ForgeConfigSpec.IntValue TRACE_MAP_REF;
@@ -466,6 +467,8 @@ public final class Config {
         AIRDROP_FIRST_MINUTE = b.defineInRange("airdropFirstMinute", 15, 1, 180);
         AIRDROP_INTERVAL_MINUTES = b.defineInRange("airdropIntervalMinutes", 20, 5, 180);
         AIRDROP_ITEMS = b.defineInRange("airdropItems", 5, 1, 12);
+        b.comment("Контракты отряда: сколько минут живёт задание до замены. Выполненное платит сразу, отчаянное — вдвое.");
+        CONTRACT_MINUTES = b.defineInRange("contractMinutes", 10, 3, 60);
         b.pop();
 
         b.push("world");

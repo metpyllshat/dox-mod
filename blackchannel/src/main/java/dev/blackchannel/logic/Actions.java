@@ -24,6 +24,7 @@ public final class Actions {
     public static final String KILL = "kill";
     public static final String TOWER_CAM = "tower_cam";
     public static final String TOWER_SCAN = "tower_scan";
+    public static final String CONTRACT_DELIVER = "contract.deliver";
 
     private Actions() {}
 }
