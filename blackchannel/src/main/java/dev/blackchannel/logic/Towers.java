@@ -30,48 +30,64 @@ public final class Towers {
 
     private Towers() {}
 
-    /** Сколько мест перебираем на каждую вышку, прежде чем сдаться. */
-    private static final int ATTEMPTS = 60;
+    /** Сколько попыток даём на одну вышку, прежде чем сдаться. */
+    private static final int ATTEMPTS = 24;
     /** Радиусы кольца в долях стороны карты, по очереди. */
     private static final double[] RADII = {0.33, 0.27, 0.39, 0.22, 0.44};
+    /** Номер вышки, которую ставим сейчас, и номер попытки для неё. Сбрасываются в destroyAll. */
+    private static int pendingSlot;
+    private static int pendingAttempt;
 
     /**
-     * Вышки по кольцу вокруг центра. Раньше одна неудачная точка (рядом с базой, под водой,
-     * в пещере) молча пропускалась, и вышек выходило меньше заданного. Теперь для каждой
-     * вышки перебираются другие радиусы и углы, пока не найдётся подходящее место.
+     * Постановка вышек по тикам. Раньше все точки кольца проверялись сразу, но их чанки
+     * обычно не загружены: высота и блоки там пустые, и точка молча пропускалась.
+     * Теперь для каждой попытки сначала ждём чанк (как у схронов), и только потом смотрим землю.
+     * За тик ставится не больше одной вышки. Возвращает true, когда все вышки стоят
+     * или места под них не нашлось.
      */
-    public static void placeAll(ServerLevel level, MatchData match, RandomSource random) {
+    public static boolean placeStep(ServerLevel level, MatchData match) {
         int count = Config.TOWER_COUNT.get();
-        if (count <= 0) return;
-        // Если уже есть инфо — не плодить
-        if (match.towersPlaced && match.towerInfos.size() >= count) return;
+        if (count <= 0) return true;
+        if (pendingSlot < match.towerInfos.size()) pendingSlot = match.towerInfos.size();
         int size = Math.max(2, match.size);
-        int start = match.towerInfos.size();
-        for (int i = start; i < count; i++) {
-            BlockPos ground = null;
-            for (int attempt = 0; attempt < ATTEMPTS && ground == null; attempt++) {
-                double radius = size * RADII[attempt % RADII.length];
-                double angle = (Math.PI * 2.0 / count) * i + Math.PI / count + attempt * 0.7;
-                int x = match.centerX + (int) Math.round(Math.cos(angle) * radius);
-                int z = match.centerZ + (int) Math.round(Math.sin(angle) * radius);
-                // ближе к концу перебора требования к дистанции до базы смягчаются
-                int minBase = attempt < ATTEMPTS / 2 ? 180 : 110;
-                ground = groundAt(level, match, x, z, minBase);
+        int budget = 16;
+        while (pendingSlot < count && budget-- > 0) {
+            double radius = size * RADII[pendingAttempt % RADII.length];
+            double angle = (Math.PI * 2.0 / count) * pendingSlot + Math.PI / count + pendingAttempt * 0.7;
+            int x = match.centerX + (int) Math.round(Math.cos(angle) * radius);
+            int z = match.centerZ + (int) Math.round(Math.sin(angle) * radius);
+            // середина чанка: вся площадка 9×9 уходит в этот же чанк, соседние не нужны
+            x = (x & ~15) + 8;
+            z = (z & ~15) + 8;
+            int status = Minigame.chunkStatus(level, x >> 4, z >> 4);
+            if (status == Minigame.CHUNK_WAIT) return false;
+            int minBase = pendingAttempt < ATTEMPTS / 2 ? 180 : 110;
+            BlockPos ground = status == Minigame.CHUNK_READY ? groundAt(level, match, x, z, minBase) : null;
+            if (ground != null) {
+                build(level, match, ground);
+                match.towers.add(ground);
+                MatchData.TowerInfo info = new MatchData.TowerInfo(ground);
+                long now = level.getServer().getTickCount();
+                info.nextCryptoTick = now + 1200;
+                info.nextSectorTick = now + Config.TOWER_SECTOR_SECONDS.get() * 20L;
+                match.towerInfos.add(info);
+                match.setDirty();
+                pendingSlot++;
+                pendingAttempt = 0;
+                break;
             }
-            if (ground == null) {
-                dev.blackchannel.BlackChannelMod.LOGGER.warn("Вышка {} не нашла места на карте (размер {})", i + 1, size);
-                continue;
+            if (++pendingAttempt >= ATTEMPTS) {
+                dev.blackchannel.BlackChannelMod.LOGGER.warn("Вышка {} не нашла места на карте (размер {})", pendingSlot + 1, size);
+                pendingSlot++;
+                pendingAttempt = 0;
             }
-            build(level, match, ground);
-            match.towers.add(ground);
-            MatchData.TowerInfo info = new MatchData.TowerInfo(ground);
-            long now = level.getServer().getTickCount();
-            info.nextCryptoTick = now + 1200;
-            info.nextSectorTick = now + Config.TOWER_SECTOR_SECONDS.get() * 20L;
-            match.towerInfos.add(info);
-            match.setDirty();
         }
-        match.towersPlaced = true;
+        if (pendingSlot >= count) {
+            pendingSlot = 0;
+            pendingAttempt = 0;
+            return true;
+        }
+        return false;
     }
 
     /** Подходящая земля для вышки в точке (x, z) или null. */
@@ -398,7 +414,7 @@ public final class Towers {
             }
             for (int dy=2; dy<=6; dy++) level.setBlock(new BlockPos(g.getX()-2, top+dy, g.getZ()-2), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
         }
-        match.towerInfos.clear(); match.towers.clear(); match.towersPlaced=false; match.setDirty();
+        match.towerInfos.clear(); match.towers.clear(); match.towersPlaced=false; pendingSlot=0; pendingAttempt=0; match.setDirty();
     }
     /** ЭМИ глушит вышки на 5 мин. */
     public static void pulse(MatchData match, BlockPos center, long now) {

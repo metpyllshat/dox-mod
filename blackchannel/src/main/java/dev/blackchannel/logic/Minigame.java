@@ -109,9 +109,9 @@ public final class Minigame {
     /** Очередь высадки: одна база за тик, чтобы не грузить десятки чанков разом. */
     private static final List<PendingBase> DEPLOY = new ArrayList<>();
 
-    private static final int CHUNK_READY = 1;
-    private static final int CHUNK_WAIT = 0;
-    private static final int CHUNK_FAIL = -1;
+    static final int CHUNK_READY = 1;
+    static final int CHUNK_WAIT = 0;
+    static final int CHUNK_FAIL = -1;
     private static final long CHUNK_WAIT_LIMIT = 200L;
     private static CompletableFuture<?> CHUNK_WAIT_FUTURE;
     private static int chunkWaitX = Integer.MIN_VALUE;
@@ -429,10 +429,12 @@ public final class Minigame {
             announceBeaconCoords(server, match, level);
         }
         // Вышки связи строим один раз, после того как разъехались базы
-        if (!match.towersPlaced && DEPLOY.isEmpty() && match.cacheTick > 0) {
-            match.towersPlaced = true;
-            Towers.placeAll(level, match, level.getRandom());
-            match.setDirty();
+        // Вышки ставим по тикам, после высадки баз; схроны ждут, пока все вышки встанут
+        if (!match.towersPlaced && DEPLOY.isEmpty()) {
+            if (Towers.placeStep(level, match)) {
+                match.towersPlaced = true;
+                match.setDirty();
+            }
         }
         // События вечера: ЭМИ-шторм, тишина, аукцион, сводка
         Evening.tick(server, match);
@@ -492,7 +494,7 @@ public final class Minigame {
         }
         // Разбиваем placeCaches на тики (cacheTick хранит индекс следующего схрона).
         // Ставим только текущую волну: следующая откроется на смене этапа.
-        if (waveOpen(match)) {
+        if (match.towersPlaced && waveOpen(match)) {
             placeCacheStep(server, match, level);
         }
     }
@@ -718,7 +720,7 @@ public final class Minigame {
      * Один асинхронный запрос на чанк: тик сервера не стоит, а повторных запросов нет,
      * иначе на каждый тик улетал бы новый тикет и чанковая система захлёбывалась.
      */
-    private static int chunkStatus(ServerLevel level, int cx, int cz) {
+    static int chunkStatus(ServerLevel level, int cx, int cz) {
         if (level.getChunkSource().getChunkNow(cx, cz) != null) {
             if (chunkWaitX == cx && chunkWaitZ == cz) resetChunkWait();
             return CHUNK_READY;
