@@ -65,6 +65,7 @@ public final class Sync {
             c.putInt("n", beam.samples);
             c.putInt("age", Math.max(0, (now - beam.tick) / 20));
             c.putString("dim", Str.dimShort(beam.dim));
+            c.putString("src", beam.source == null ? "TRACE" : beam.source);
             beams.add(c);
         }
         tag.put("beams", beams);
