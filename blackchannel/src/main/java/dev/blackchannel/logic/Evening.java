@@ -58,20 +58,14 @@ public final class Evening {
             profile.empUntil = Math.max(profile.empUntil, (int) now + 400);
             // Шторм обнуляет шум: у всех чистый лист
             profile.noise = 0;
-            player.playNotifySound(SoundEvents.LIGHTNING_BOLT_THUNDER, SoundSource.MASTER, 0.5f, 1.4f);
-            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.event.storm")
-                    .withStyle(ChatFormatting.AQUA)));
         }
+        Announcer.call(server, "storm");
     }
 
     /** Тишина: полторы минуты в эфире нельзя ничего: ни TRACE, ни рынка, ни вызова. */
     private static void silence(MinecraftServer server, MatchData match, long now) {
         match.silenceUntil = now + 1800L;
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            player.playNotifySound(SoundEvents.AMBIENT_CAVE.value(), SoundSource.MASTER, 0.7f, 0.6f);
-            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.event.silence")
-                    .withStyle(ChatFormatting.GRAY)));
-        }
+        Announcer.call(server, "silence");
     }
 
     /** Сводка: кто сколько набрал и сколько ещё живых. */
@@ -83,11 +77,7 @@ public final class Evening {
             if (line.length() > 0) line.append("  ");
             line.append(Minigame.teamName(server, row.getKey())).append(' ').append(row.getValue());
         }
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.event.summary", line.toString())
-                    .withStyle(ChatFormatting.GOLD)));
-            player.playNotifySound(SoundEvents.NOTE_BLOCK_CHIME.value(), SoundSource.MASTER, 0.6f, 1.1f);
-        }
+        Announcer.call(server, "summary", line.toString());
     }
 
     /**

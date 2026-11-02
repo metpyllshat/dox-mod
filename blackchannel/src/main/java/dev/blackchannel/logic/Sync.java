@@ -36,6 +36,9 @@ public final class Sync {
         tag.putInt("noise", Math.max(0, Math.min(100, profile.noise)));
         tag.putString("crew", profile.crew == null ? "" : profile.crew);
         tag.putBoolean("ids", profile.ids);
+        MatchData contractMatch = MatchData.get(server);
+        tag.put("contracts", Contracts.rowsFor(contractMatch,
+                contractMatch.playerCrew.getOrDefault(player.getUUID(), ""), server.overworld().getGameTime()));
         tag.putBoolean("hard", profile.hardened);
 
         ListTag intel = new ListTag();

@@ -378,10 +378,21 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        if (hack == null) Sfx.play("ui.click");
         if (hack != null) {
-            if (button == 0) hack.tick(true);
-            if (hack.success) { send(Actions.TRACE, input.getValue().trim()); hack = null; }
-            if (hack.failed) hack = null;
+            if (button == 0) {
+                hack.tick(true);
+                Sfx.play("hack.tick");
+            }
+            // было: после успеха hack уже null, и hack.failed падал с NPE
+            if (hack.success) {
+                Sfx.play("hack.success");
+                send(Actions.TRACE, input.getValue().trim());
+                hack = null;
+            } else if (hack.failed) {
+                Sfx.play("hack.fail");
+                hack = null;
+            }
             return true;
         }
         if (page == 2 && mx >= this.leftPos + SLIDER_X && mx <= this.leftPos + SLIDER_X + SLIDER_W
@@ -486,9 +497,13 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     protected void containerTick() {
         super.containerTick();
         if (hack != null) {
+            boolean ended = hack.success || hack.failed;
             hack.tick(false);
-            if (hack.success || hack.failed) {
-                // держим оверлей ещё секунду
+            if (!ended && (hack.success || hack.failed)) {
+                Sfx.play(hack.success ? "hack.success" : "hack.fail");
+            } else if (!ended && hack.ticks % 12 == 0) {
+                // ползунок ходит: редкий щелчок, чтобы чувствовалась частота
+                Sfx.play("hack.tick");
             }
         }
     }

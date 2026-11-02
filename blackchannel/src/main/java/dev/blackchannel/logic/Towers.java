@@ -231,6 +231,7 @@ public final class Towers {
         match.setDirty();
         // очки за захват
         match.addScore(crew, 5);
+        Contracts.progress(server, match, crew, dev.blackchannel.data.Contract.TOWER, 1);
         // визуал — покрасить бетон
         if (server.overworld() != null) {
             BlockPos beacon = new BlockPos(info.pos.getX() - 2, info.pos.getY() + HEIGHT + 7, info.pos.getZ() - 2);
@@ -242,7 +243,7 @@ public final class Towers {
         String h = dev.blackchannel.data.NetData.get(server).profile(capturer.getUUID()).handle;
         Component msg = Msg.paint(Component.translatable("blackchannel.tower.captured", h.isEmpty()?capturer.getGameProfile().getName():h, crew, info.pos.getX(), info.pos.getZ()));
         for (ServerPlayer p : server.getPlayerList().getPlayers()) p.sendSystemMessage(msg);
-        for (ServerPlayer p : server.getPlayerList().getPlayers()) p.playNotifySound(SoundEvents.BEACON_ACTIVATE, SoundSource.MASTER, 1f, 1.2f);
+        Announcer.voiceAll(server, "tower_captured");
     }
 
     private static BlockState coloredConcrete(int idx) {

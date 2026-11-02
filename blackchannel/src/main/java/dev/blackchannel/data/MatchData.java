@@ -80,6 +80,10 @@ public class MatchData extends SavedData {
     public final Map<String, Integer> teamColorIdx = new HashMap<>();
     public final Set<String> eliminatedTeams = new HashSet<>();
 
+    // Контракты отрядов: живут одну катку, сбрасываются на старте
+    public final List<Contract> contracts = new ArrayList<>();
+    public int contractSeq = 1;
+
     // Player beds & state
     public final Map<UUID, BlockPos> bedPositions = new HashMap<>();
     public final Map<UUID, DownedState> downedPlayers = new HashMap<>();
@@ -194,6 +198,9 @@ public class MatchData extends SavedData {
         }
         ListTag elim = tag.getList("eliminated", Tag.TAG_STRING);
         for (int i = 0; i < elim.size(); i++) data.eliminatedTeams.add(elim.getString(i));
+        ListTag contracts = tag.getList("contracts", Tag.TAG_COMPOUND);
+        for (int i = 0; i < contracts.size(); i++) data.contracts.add(Contract.load(contracts.getCompound(i)));
+        data.contractSeq = Math.max(1, tag.getInt("contractSeq"));
         return data;
     }
 
@@ -293,6 +300,10 @@ public class MatchData extends SavedData {
         ListTag elim = new ListTag();
         for (String code : eliminatedTeams) elim.add(net.minecraft.nbt.StringTag.valueOf(code));
         tag.put("eliminated", elim);
+        ListTag contractList = new ListTag();
+        for (Contract contract : contracts) contractList.add(contract.save());
+        tag.put("contracts", contractList);
+        tag.putInt("contractSeq", contractSeq);
         return tag;
     }
 

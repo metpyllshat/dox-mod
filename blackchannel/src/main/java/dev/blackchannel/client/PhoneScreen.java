@@ -1,7 +1,9 @@
 package dev.blackchannel.client;
 
+import dev.blackchannel.data.Contract;
 import dev.blackchannel.logic.Actions;
 import dev.blackchannel.logic.Catalog;
+import dev.blackchannel.logic.Contracts;
 import dev.blackchannel.logic.Teams;
 import dev.blackchannel.menu.Menus;
 import dev.blackchannel.net.ModNetwork;
@@ -98,6 +100,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             case 0 -> drawFeed(g, x, y);
             case 1 -> drawMap(g, x, y);
             case 2 -> drawNet(g, x, y);
+            case 4 -> drawContracts(g, x, y);
             default -> drawMarket(g, x, y, mx, my);
         }
         drawInput(g, x, y);
@@ -137,6 +140,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             case 0 -> Ui.t("screen.blackchannel.tab.feed");
             case 1 -> Ui.t("screen.blackchannel.tab.map");
             case 2 -> Ui.t("screen.blackchannel.tab.net");
+            case 4 -> Ui.t("screen.blackchannel.tab.tasks");
             default -> Ui.t("screen.blackchannel.tab.market_short");
         };
         g.drawString(this.font, title, x + 8, y + 24, Ui.TEXT, false);
@@ -635,10 +639,54 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
                 Ui.t("screen.blackchannel.tab.feed"),
                 Ui.t("screen.blackchannel.tab.map"),
                 Ui.t("screen.blackchannel.tab.net"),
-                Ui.t("screen.blackchannel.tab.market_short")
+                Ui.t("screen.blackchannel.tab.market_short"),
+                Ui.t("screen.blackchannel.tab.tasks")
         };
-        for (int i = 0; i < 4; i++) {
-            Ui.tab(g, this.font, hits, x + 6 + i * 59, y + TABS_Y, 57, TABS_H, names[i], tab == i, "tab", String.valueOf(i));
+        // порядок вкладок: ЭФИР, КАРТА, СЕТЬ, РЫНОК, ЗАДАЧИ — индекс совпадает с позицией
+        for (int i = 0; i < names.length; i++) {
+            Ui.tab(g, this.font, hits, x + 6 + i * 47, y + TABS_Y, 45, TABS_H, names[i], tab == i, "tab", String.valueOf(i));
+        }
+    }
+
+    // ---------- задачи отряда ----------
+
+    /** Три карточки контрактов: что нужно, прогресс, награда, срок, сдача предметов. */
+    private void drawContracts(GuiGraphics g, int x, int y) {
+        int ly = y + TOP;
+        int bottom = y + BOTTOM;
+        if (ClientState.crew == null || ClientState.crew.isEmpty()) {
+            g.drawString(this.font, Ui.t("screen.blackchannel.contract.no_crew"), x + 8, ly + 4, Ui.MUTED, false);
+            return;
+        }
+        if (ClientState.contracts.isEmpty()) {
+            for (String part : Ui.wrap(this.font, Ui.t("screen.blackchannel.contract.empty"), W - 20)) {
+                if (ly > bottom - 10) break;
+                g.drawString(this.font, part, x + 8, ly, Ui.MUTED, false);
+                ly += 10;
+            }
+            return;
+        }
+        for (ClientState.ContractRow row : ClientState.contracts) {
+            if (ly + 36 > bottom) break;
+            Ui.well(g, x + 8, ly, W - 16, 36);
+            String title = Contracts.titleOf(row.kind(), row.target(), row.item()).getString();
+            String prefix = row.desperate() ? Ui.t("screen.blackchannel.contract.desperate") + " · " : "";
+            g.drawString(this.font, Ui.trim(this.font, prefix + title, W - 70), x + 12, ly + 4,
+                    row.desperate() ? Ui.RED : Ui.TEXT, false);
+            String reward = "+" + row.reward();
+            g.drawString(this.font, reward, x + W - 14 - this.font.width(reward), ly + 4, Ui.GREEN, false);
+            int done = Math.min(row.progress(), row.target());
+            Ui.bar(g, x + 12, ly + 15, W - 40, 4, row.target() <= 0 ? 0f : (float) done / row.target(),
+                    row.desperate() ? Ui.RED : Ui.AMBER);
+            int left = Math.max(0, row.left());
+            String meta = done + "/" + row.target() + " · " + String.format("%d:%02d", left / 60, left % 60);
+            g.drawString(this.font, meta, x + 12, ly + 23, Ui.MUTED, false);
+            if (Contract.DELIVER.equals(row.kind())) {
+                Ui.button(g, this.font, hits, x + W - 14 - 56, ly + 21, 56, 11,
+                        Ui.t("screen.blackchannel.contract.deliver"), null, false, Actions.CONTRACT_DELIVER,
+                        String.valueOf(row.id()));
+            }
+            ly += 38;
         }
     }
 
@@ -658,6 +706,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
     }
 
     private void onHit(Ui.Hit hit) {
+        Sfx.play("ui.click");
         switch (hit.action()) {
             case "tab" -> tab = Integer.parseInt(hit.arg());
             case "mkt" -> {
