@@ -88,6 +88,14 @@ public class MatchData extends SavedData {
     public final Map<UUID, String> playerCrew = new HashMap<>();
     public final Map<UUID, Integer> playerColorIdx = new HashMap<>();
 
+    // Статистика катки (показывается в сводке)
+    public final Map<UUID, Stats> stats = new HashMap<>();
+    public static class Stats {
+        public int traces, towers, kills, deaths, cryptoEarned;
+        public String title = "";
+    }
+    public Stats stats(UUID id) { return stats.computeIfAbsent(id, k -> new Stats()); }
+
     // Пошаговое размещение схронов
     public int cacheTick;
     public int cacheTotal;
