@@ -112,7 +112,7 @@ Dox здесь — координаты последней радиоотмет�
 ## Диктор и звуки
 
 - Диктор — текст в чат и голос (`assets/blackchannel/sounds/announcer/*.ogg`): старт, шторм, тишина, сводка, аирдроп, узел, захват вышки, выбытие отряда. Чтобы заменить фразу, положите ogg с тем же именем.
-- Звуки интерфейса (`sounds/ui`, `bearing`, `jam`, `hack`) синтезируются `tools/gen_sounds.py`. Нужен ffmpeg с libvorbis: `FFMPEG=/путь/к/ffmpeg python3 tools/gen_sounds.py`.
+- Звуки интерфейса (`sounds/ui`, `bearing`, `jam`) синтезируются `tools/gen_sounds.py`. Нужен ffmpeg с libvorbis: `FFMPEG=/путь/к/ffmpeg python3 tools/gen_sounds.py`.
 
 ## Команды
 

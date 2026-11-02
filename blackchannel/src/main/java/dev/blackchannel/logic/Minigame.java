@@ -582,14 +582,9 @@ public final class Minigame {
     private static void checkVictory(MinecraftServer server, MatchData match) {
         if (!match.active) return;
         if (match.teamScores.size() < 2) return;
-        Set<String> alive = new HashSet<>();
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            UUID id = player.getUUID();
-            String crew = match.playerCrew.get(id);
-            if (crew == null || crew.isEmpty()) continue;
-            if (match.permanentDead.contains(id)) continue;
-            alive.add(crew);
-        }
+        // Живой отряд — тот, где есть хоть один не погибший окончательно игрок, онлайн он или нет.
+        // Раньше брали только онлайн: отряд, вылетевший с сервера, проигрывал катку мгновенно.
+        Set<String> alive = match.aliveTeams();
         if (alive.size() > 1) return;
         String winner = alive.isEmpty() ? "" : alive.iterator().next();
         endMatch(server, match, winner);

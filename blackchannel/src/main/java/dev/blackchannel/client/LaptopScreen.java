@@ -38,7 +38,6 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     private boolean dragPrice;
     private ItemStack hoverStack = ItemStack.EMPTY;
     private boolean hoverHidden;
-    private HackGame hack;
 
     public LaptopScreen(Menus.LaptopMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
@@ -112,21 +111,6 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         if (!hoverStack.isEmpty()) g.renderTooltip(this.font, hoverStack, mx, my);
         else if (hoverHidden) noteTip(g, Ui.t("screen.blackchannel.peek_hidden"), mx, my);
         else Ui.tips(g, this.font, hits, mx, my);
-        if (hack != null) drawHack(g, mx, my);
-    }
-
-    private void drawHack(GuiGraphics g, int mx, int my) {
-        int cx = this.width / 2 - 90;
-        int cy = this.height / 2 - 20;
-        g.fill(cx-2, cy-2, cx+182, cy+22, 0xFF000000);
-        g.fill(cx, cy, cx+180, cy+12, 0xFF1A1A1A);
-        int knob = (int)(hack.pos * 176);
-        g.fill(cx+knob, cy-2, cx+knob+4, cy+14, 0xFFE0A72E);
-        int t = (int)(hack.target * 176);
-        g.fill(cx+t- (int)(hack.zone*176), cy, cx+t+(int)(hack.zone*176), cy+12, 0x447FE08A);
-        float holdPct = hack.hold / 1.2f;
-        g.fill(cx, cy+16, cx+(int)(180*holdPct), cy+18, 0xFF7FE08A);
-        g.drawString(this.font, hack.success ? "OK" : hack.failed ? "FAIL" : "HOLD IN ZONE", cx, cy+20, 0xFFFFFFFF, false);
     }
 
     private void drawChrome(GuiGraphics g, int mx, int my) {
@@ -378,23 +362,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
-        if (hack == null) Sfx.play("ui.click");
-        if (hack != null) {
-            if (button == 0) {
-                hack.tick(true);
-                Sfx.play("hack.tick");
-            }
-            // было: после успеха hack уже null, и hack.failed падал с NPE
-            if (hack.success) {
-                Sfx.play("hack.success");
-                send(Actions.TRACE, input.getValue().trim());
-                hack = null;
-            } else if (hack.failed) {
-                Sfx.play("hack.fail");
-                hack = null;
-            }
-            return true;
-        }
+        Sfx.play("ui.click");
         if (page == 2 && mx >= this.leftPos + SLIDER_X && mx <= this.leftPos + SLIDER_X + SLIDER_W
                 && my >= this.topPos + SLIDER_Y - 4 && my <= this.topPos + SLIDER_Y + 10) {
             dragPrice = true;
@@ -429,11 +397,6 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
                     return true;
                 }
                 arg = "confirm";
-            }
-            // мини-игра на TRACE
-            if (Actions.TRACE.equals(hit.action()) && !arg.isEmpty()) {
-                hack = new HackGame(arg.hashCode());
-                return true;
             }
             send(hit.action(), arg);
             return true;
@@ -480,8 +443,9 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     @Override
     public boolean keyPressed(int key, int scan, int mods) {
-        if (page == 0 && (key == 257 || key == 335) && input != null && input.isFocused()) {
-            hack = new HackGame(input.getValue().trim().hashCode());
+        if (page == 0 && (key == 257 || key == 335) && input != null && input.isFocused()
+                && !input.getValue().trim().isEmpty()) {
+            send(Actions.TRACE, input.getValue().trim());
             return true;
         }
         boolean typing = (input != null && input.isFocused()) || (priceBox != null && priceBox.isFocused());
@@ -491,20 +455,5 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     private void send(String action, String arg) {
         if (ModNetwork.CHANNEL != null) ModNetwork.CHANNEL.sendToServer(new ModNetwork.ActionPkt(action, arg == null ? "" : arg));
-    }
-
-    @Override
-    protected void containerTick() {
-        super.containerTick();
-        if (hack != null) {
-            boolean ended = hack.success || hack.failed;
-            hack.tick(false);
-            if (!ended && (hack.success || hack.failed)) {
-                Sfx.play(hack.success ? "hack.success" : "hack.fail");
-            } else if (!ended && hack.ticks % 12 == 0) {
-                // ползунок ходит: редкий щелчок, чтобы чувствовалась частота
-                Sfx.play("hack.tick");
-            }
-        }
     }
 }
