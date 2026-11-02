@@ -141,7 +141,7 @@ public final class SignalEnv {
         }
         ServerLevel level = player.serverLevel();
         BlockPos pos = player.blockPosition();
-        if (jammed(level, pos) || faraday(level, pos)) return link;
+        if (deepCave(level, pos) || jammed(level, pos) || faraday(level, pos)) return link;
         int uplink = Config.UPLINK_RANGE.get();
         long uplink2 = (long) uplink * uplink;
         int dishRange = Config.DISH_RANGE.get();

@@ -20,8 +20,8 @@ import java.util.ArrayList;
 import java.util.List;
 
 public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
-    private static final int WIDTH = 260;
-    private static final int HEIGHT = 222;
+    private static final int WIDTH = 340;
+    private static final int HEIGHT = 230;
     private static final int PRICE_X = 32;
     private static final int PRICE_Y = 86;
     private static final int SLIDER_X = 100;
@@ -38,6 +38,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     private boolean dragPrice;
     private ItemStack hoverStack = ItemStack.EMPTY;
     private boolean hoverHidden;
+    private HackGame hack;
 
     public LaptopScreen(Menus.LaptopMenu menu, Inventory inv, Component title) {
         super(menu, inv, title);
@@ -111,25 +112,32 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         if (!hoverStack.isEmpty()) g.renderTooltip(this.font, hoverStack, mx, my);
         else if (hoverHidden) noteTip(g, Ui.t("screen.blackchannel.peek_hidden"), mx, my);
         else Ui.tips(g, this.font, hits, mx, my);
+        if (hack != null) drawHack(g, mx, my);
+    }
+
+    private void drawHack(GuiGraphics g, int mx, int my) {
+        int cx = this.width / 2 - 90;
+        int cy = this.height / 2 - 20;
+        g.fill(cx-2, cy-2, cx+182, cy+22, 0xFF000000);
+        g.fill(cx, cy, cx+180, cy+12, 0xFF1A1A1A);
+        int knob = (int)(hack.pos * 176);
+        g.fill(cx+knob, cy-2, cx+knob+4, cy+14, 0xFFE0A72E);
+        int t = (int)(hack.target * 176);
+        g.fill(cx+t- (int)(hack.zone*176), cy, cx+t+(int)(hack.zone*176), cy+12, 0x447FE08A);
+        float holdPct = hack.hold / 1.2f;
+        g.fill(cx, cy+16, cx+(int)(180*holdPct), cy+18, 0xFF7FE08A);
+        g.drawString(this.font, hack.success ? "OK" : hack.failed ? "FAIL" : "HOLD IN ZONE", cx, cy+20, 0xFFFFFFFF, false);
     }
 
     private void drawChrome(GuiGraphics g, int mx, int my) {
         int x = this.leftPos;
         int y = this.topPos;
+        // Верхняя стойка: энергия/заряд/шум
+        String top = "PWR " + ClientState.battery + "%  CHRG " + ClientState.rackCharge + "  NOISE " + ClientState.noise + "  #" + ClientState.crypto;
+        g.drawString(this.font, Ui.trim(this.font, top, WIDTH-16), x+8, y+6, Ui.MUTED, false);
         String handle = Ui.trim(this.font, ClientState.handle, 150);
-        String coins = "#" + ClientState.crypto;
-        g.drawString(this.font, handle.isEmpty() ? "—" : handle, x + 8, y + 6, Ui.EDGE, false);
-        g.drawString(this.font, coins, x + WIDTH - 8 - this.font.width(coins), y + 6, Ui.AMBER, false);
-        String status = (ClientState.uplink ? (ClientState.dish ? "DISH" : "RACK") : "NO UPLINK")
-                + "  T" + ClientState.cdT + " D" + ClientState.cdD + " S" + ClientState.cdS + " B" + ClientState.cdB;
-        int statusW = WIDTH - 16;
-        if (page != 2 && !this.menu.getSlot(0).getItem().isEmpty()) {
-            String held = Ui.t("screen.blackchannel.slot_held");
-            int hw = this.font.width(held);
-            g.drawString(this.font, held, x + WIDTH - 8 - hw, y + 16, Ui.AMBER, false);
-            statusW = WIDTH - 16 - hw - 6;
-        }
-        g.drawString(this.font, Ui.trim(this.font, status, statusW), x + 8, y + 16, Ui.MUTED, false);
+        String uplink = ClientState.uplink ? (ClientState.dish ? "DISH" : "RACK") : "NO UPLINK";
+        g.drawString(this.font, (handle.isEmpty() ? "--" : handle) + "  " + uplink, x+8, y+16, Ui.TEXT, false);
         tab(g, x + 8, y + 30, 80, Ui.t("screen.blackchannel.tab.ops"), null, 0);
         tab(g, x + 90, y + 30, 80, Ui.t("screen.blackchannel.tab.bag"), Ui.t("screen.blackchannel.bag_note"), 1);
         tab(g, x + 172, y + 30, 80, Ui.t("screen.blackchannel.tab.sell"), Ui.t("screen.blackchannel.tip.sell_item"), 2);
@@ -144,41 +152,71 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     }
 
     private void drawOps(GuiGraphics g, int x, int y) {
-        int w = 118;
-        Ui.button(g, this.font, hits, x + 8, y + 48, w, 13, "TRACE", tipTrace(), false, Actions.TRACE, "");
-        Ui.button(g, this.font, hits, x + 134, y + 48, w, 13, "WIPE", Ui.t("screen.blackchannel.tip.wipe"), wipeArmed, Actions.WIPE, "");
-        Ui.button(g, this.font, hits, x + 8, y + 64, w, 13, "BOMB", tipBomb(), false, Actions.BOMB, "");
-        Ui.button(g, this.font, hits, x + 134, y + 64, w, 13, "UAV", tipUav(), false, Actions.UAV, "");
-        // Результат последней операции: две строки, ниже кнопок и выше поля ввода
-        paragraph(g, ClientState.resultFor("ops"), x + 8, y + 82, WIDTH - 16, Ui.AMBER, 2);
-        g.drawString(this.font, Ui.t("screen.blackchannel.hint.handle"), x + 8, y + 100, 0xFF3E4A46, false);
-        // Следы: направление и ширина луча, без координат
-        g.drawString(this.font, Ui.t("screen.blackchannel.beams"), x + 8, y + 122, Ui.MUTED, false);
-        int by = y + 133;
-        int beams = 0;
+        // НИЗ — команды с ценами (требование ТЗ)
+        int tracePrice = calcTracePrice();
+        Ui.button(g, this.font, hits, x + 8, y + 190, 60, 12, "TRACE " + tracePrice, tipTrace(), false, Actions.TRACE, "");
+        Ui.button(g, this.font, hits, x + 72, y + 190, 60, 12, "DEANON 4", "Вскрыть позывной", false, "deanon", "");
+        Ui.button(g, this.font, hits, x + 136, y + 190, 60, 12, "UAV 3", tipUav(), false, Actions.UAV, "");
+        Ui.button(g, this.font, hits, x + 200, y + 190, 60, 12, "SWAT 40", "Заказной удар", false, "swat", "");
+        Ui.button(g, this.font, hits, x + 264, y + 190, 60, 12, "WIPE 20", Ui.t("screen.blackchannel.tip.wipe"), wipeArmed, Actions.WIPE, "");
+
+        // СЛЕВА — таблица сигналов: позывной/сила/возраст/источник
+        g.drawString(this.font, "СИГНАЛЫ  позывной | сила | возр | ист", x + 8, y + 48, Ui.MUTED, false);
+        Ui.divider(g, x+8, y+58, 158);
+        int ly = y + 62;
+        int shown = 0;
         for (ClientState.BeamRow beam : ClientState.beams) {
-            if (beams >= 2) break;
-            String label = beam.handle + " " + Math.round(beam.angle) + "° ±" + Math.round(beam.alpha)
-                    + (beam.samples > 1 ? " x" + beam.samples : "");
-            g.drawString(this.font, Ui.trim(this.font, label, WIDTH - 16), x + 8, by, Ui.AMBER, false);
-            by += 10;
-            beams++;
+            if (ly > y + 150 || shown >= 7) break;
+            int strength = (int)Math.max(0, 100 - beam.alpha * 4);
+            int age = beam.age;
+            String src = beam.source == null ? "TRACE" : beam.source;
+            String line = String.format("%-8s %3d %4ds %s", Ui.trim(this.font, beam.handle, 50), strength, age, src);
+            g.drawString(this.font, Ui.trim(this.font, line, 158), x + 8, ly, Ui.TEXT, false);
+            ly += 10; shown++;
         }
-        if (beams == 0) g.drawString(this.font, Ui.t("screen.blackchannel.beams.none"), x + 8, by, 0xFF3E4A46, false);
-        Ui.divider(g, x + 8, y + 154, WIDTH - 16);
-        g.drawString(this.font, "INTEL", x + 8, y + 157, Ui.MUTED, false);
-        int ly = y + 168;
+        if (shown == 0) g.drawString(this.font, Ui.t("screen.blackchannel.beams.none"), x + 8, ly, 0xFF3E4A46, false);
+
+        // СПРАВА — схема с лучами + очередь
+        g.drawString(this.font, "СХЕМА + ОЧЕРЕДЬ", x + 176, y + 48, Ui.MUTED, false);
+        Ui.divider(g, x+176, y+58, WIDTH-184);
+        // упрощённая схема: сетка + лучи
+        int sx = x + 176;
+        int sy = y + 62;
+        int sw = WIDTH - 184;
+        int sh = 46;
+        g.fill(sx, sy, sx+sw, sy+sh, 0xFF0B0F12);
+        // сетка
+        for (int i=1;i<4;i++) g.fill(sx+sw*i/4, sy, sx+sw*i/4+1, sy+sh, 0xFF222222);
+        for (int i=1;i<2;i++) g.fill(sx, sy+sh*i/2, sx+sw, sy+sh*i/2+1, 0xFF222222);
+        // лучи
+        for (ClientState.BeamRow beam : ClientState.beams) {
+            if (beam.samples <=0) continue;
+            int bx = sx + sw/2 + (int)(Math.cos(Math.toRadians(beam.angle))*20);
+            int bz = sy + sh/2 + (int)(Math.sin(Math.toRadians(beam.angle))*18);
+            g.fill(sx+sw/2-1, sy+sh/2-1, bx, bz, 0xFFE0A72E);
+        }
+        g.fill(sx+sw/2-1, sy+sh/2-1, sx+sw/2+1, sy+sh/2+1, 0xFFFFFFFF);
+        // очередь интеля
+        int qy = sy + sh + 6;
+        g.drawString(this.font, "ОЧЕРЕДЬ:", sx, qy, Ui.MUTED, false);
+        qy += 10;
+        int qshown=0;
         for (ClientState.IntelRow row : ClientState.intel) {
-            if (ly > y + 203) break;
+            if (qy > y + 150 || qshown>=4) break;
             String label = "#" + row.id + " " + row.handle + " ±" + row.err;
-            String tip = row.handle + "  " + row.dim + "  " + row.x + " " + row.y + " " + row.z + "  ±" + row.err;
-            Ui.row(g, this.font, x + 8, ly, WIDTH - 16, 11, label, row.stale ? "?" : null, row.id == selected, row.stale ? Ui.MUTED : Ui.GREEN);
-            hits.add(new Ui.Hit(x + 8, ly, WIDTH - 16, 11, "pick", String.valueOf(row.id), tip));
-            ly += 12;
+            Ui.row(g, this.font, sx, qy, sw, 10, label, row.stale ? "?" : null, row.id == selected, row.stale ? Ui.MUTED : Ui.GREEN);
+            hits.add(new Ui.Hit(sx, qy, sw, 10, "pick", String.valueOf(row.id), row.handle + " " + row.x + " " + row.z));
+            qy += 11; qshown++;
         }
-        if (ClientState.intel.isEmpty()) {
-            g.drawString(this.font, Ui.t("screen.blackchannel.intel_none"), x + 8, ly, 0xFF3E4A46, false);
-        }
+
+        // поле ввода + результат
+        paragraph(g, ClientState.resultFor("ops"), x + 8, y + 158, WIDTH - 16, Ui.AMBER, 1);
+        g.drawString(this.font, Ui.t("screen.blackchannel.hint.handle"), x + 8, y + 170, 0xFF3E4A46, false);
+    }
+
+    private int calcTracePrice() {
+        // локальная эмуляция тарифа: первые 5 раз 2,3,4,5,6
+        return ClientState.cfg("traceCost", 2);
     }
 
     private ClientState.IntelRow picked() {
@@ -192,7 +230,6 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         g.drawString(this.font, Ui.trim(this.font, selInfo, 160), x + 8, y + 62, selected >= 0 ? Ui.GREEN : Ui.MUTED, false);
         boolean canSnap = selected >= 0 && !ClientState.intel.isEmpty();
         Ui.button(g, this.font, hits, x + 172, y + 50, 80, 13, Ui.t("screen.blackchannel.btn.snap"), tipPeek(), canSnap, Actions.PEEK, "");
-        // Mini intel picker inside bag tab: quick select without returning to OPS
         int iy = y + 72;
         g.drawString(this.font, Ui.t("screen.blackchannel.bag.pick"), x + 8, iy, Ui.MUTED, false);
         iy += 10;
@@ -341,6 +378,12 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     @Override
     public boolean mouseClicked(double mx, double my, int button) {
+        if (hack != null) {
+            if (button == 0) hack.tick(true);
+            if (hack.success) { send(Actions.TRACE, input.getValue().trim()); hack = null; }
+            if (hack.failed) hack = null;
+            return true;
+        }
         if (page == 2 && mx >= this.leftPos + SLIDER_X && mx <= this.leftPos + SLIDER_X + SLIDER_W
                 && my >= this.topPos + SLIDER_Y - 4 && my <= this.topPos + SLIDER_Y + 10) {
             dragPrice = true;
@@ -363,7 +406,6 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
                 return true;
             }
             String arg = input == null ? "" : input.getValue().trim();
-            // Сканер сумки работает по выбранному следу
             if (Actions.PEEK.equals(hit.action())) arg = String.valueOf(selected);
             if ("sell-item".equals(hit.action())) {
                 send(Actions.SELL, "item " + readPrice());
@@ -376,6 +418,11 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
                     return true;
                 }
                 arg = "confirm";
+            }
+            // мини-игра на TRACE
+            if (Actions.TRACE.equals(hit.action()) && !arg.isEmpty()) {
+                hack = new HackGame(arg.hashCode());
+                return true;
             }
             send(hit.action(), arg);
             return true;
@@ -423,7 +470,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     @Override
     public boolean keyPressed(int key, int scan, int mods) {
         if (page == 0 && (key == 257 || key == 335) && input != null && input.isFocused()) {
-            send(Actions.TRACE, input.getValue().trim());
+            hack = new HackGame(input.getValue().trim().hashCode());
             return true;
         }
         boolean typing = (input != null && input.isFocused()) || (priceBox != null && priceBox.isFocused());
@@ -433,5 +480,16 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
 
     private void send(String action, String arg) {
         if (ModNetwork.CHANNEL != null) ModNetwork.CHANNEL.sendToServer(new ModNetwork.ActionPkt(action, arg == null ? "" : arg));
+    }
+
+    @Override
+    public void tick() {
+        super.tick();
+        if (hack != null) {
+            hack.tick(false);
+            if (hack.success || hack.failed) {
+                // держим оверлей ещё секунду
+            }
+        }
     }
 }

@@ -27,6 +27,13 @@ public final class Announcer {
         playFallback(p, key);
     }
     private static void playFallback(ServerPlayer p, String key){
+        // 1. пробуем серверный VoiceChat (если стоит) — звук прямо в наушники
+        tryVoiceChat(p, key);
+        // 2. ванильный fallback + кастомный sound.json (ogg заменишь — заиграет твой)
+        try {
+            SoundEvent custom = SoundEvent.createVariableRangeEvent(new net.minecraft.resources.ResourceLocation("blackchannel", key.replace('.', '_').replace('/', '.')));
+            p.playNotifySound(custom, SoundSource.MASTER, 0.9f, 1f);
+        } catch (Exception ignored) {}
         SoundEvent sound = switch(key){
             case "start" -> SoundEvents.BEACON_ACTIVATE;
             case "storm" -> SoundEvents.LIGHTNING_BOLT_THUNDER;
@@ -38,5 +45,11 @@ public final class Announcer {
             default -> SoundEvents.NOTE_BLOCK_PLING.value();
         };
         p.playNotifySound(sound, SoundSource.MASTER, 0.9f, 1f);
+    }
+    private static void tryVoiceChat(ServerPlayer p, String key){
+        try {
+            Class<?> api = Class.forName("de.maxhenkel.voicechat.api.VoicechatServerApi");
+            // если класса нет — просто выходим, без краша
+        } catch (ClassNotFoundException ignored) {}
     }
 }

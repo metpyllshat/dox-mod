@@ -143,7 +143,7 @@ public final class Optics {
             Ops.result(player, profile, "blackchannel.result.peek_miss");
             return;
         }
-        if (!Ops.pay(player, profile, Config.PEEK_COST.get())) return;
+        if (!Ops.payPeekWithSampleOrCrypto(player, profile, Config.PEEK_COST.get(), intel.handle)) return;
         int now = player.getServer().getTickCount();
         profile.cdPeek = now + Config.PEEK_CD.get() * 20;
         int dist = 9999;

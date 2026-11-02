@@ -471,7 +471,8 @@ public final class Ops {
             result(player, profile, "blackchannel.result.no_target");
             return;
         }
-        if (!pay(player, profile, Config.TRACE_COST.get())) return;
+        int nowCost = traceCost(profile, player.getServer().getTickCount());
+        if (!pay(player, profile, nowCost)) return;
         ServerPlayer online = player.getServer().getPlayerList().getPlayer(target.id);
         int now = player.getServer().getTickCount();
         boolean live = online != null && SignalEnv.transmitting(online, target);
@@ -535,6 +536,12 @@ public final class Ops {
 
         double[] fix = Bearings.bestFix(profile, beam);
         profile.cdTrace = now + Config.TRACE_CD.get() * 20;
+        // тариф: +30% каждые 10 мин
+        if (!free(player)) {
+            if (now - profile.traceStreakTick > 12000) profile.traceStreak = 0;
+            else profile.traceStreak = Math.min(4, profile.traceStreak + 1);
+            profile.traceStreakTick = now;
+        }
         if (fix != null) {
             int fx = (int) Math.round(fix[0]);
             int fz = (int) Math.round(fix[1]);
@@ -708,7 +715,10 @@ public final class Ops {
         }
         if (!pay(player, profile, listing.price)) return;
         NetData.Profile seller = data.profiles.get(listing.seller);
-        if (seller != null) seller.crypto = Math.min(5000, seller.crypto + listing.price);
+        if (seller != null) {
+            int taxed = (int)Math.round(listing.price * 0.9);
+            seller.crypto = Math.min(5000, seller.crypto + taxed);
+        }
         if (listing.intel) {
             addIntel(profile, listing.handle, listing.dim, listing.x, listing.y, listing.z, listing.err, player.getServer().getTickCount(), listing.stale);
         } else {
@@ -1081,6 +1091,20 @@ public final class Ops {
         return true;
     }
 
+    static int traceCost(NetData.Profile profile, int now) {
+        int base = Math.max(1, Config.TRACE_COST.get());
+        if (now - profile.traceStreakTick > 12000) profile.traceStreak = 0;
+        int[] table = {base, Math.min(6, (int)Math.round(base*1.3)), Math.min(6, (int)Math.round(base*1.3*1.3)), 5, 6};
+        // док-таблица 2→3→4→5→6
+        if (base == 2) table = new int[]{2,3,4,5,6};
+        int idx = Math.min(profile.traceStreak, table.length-1);
+        return table[idx];
+    }
+    static int swatCost(NetData.Profile profile) {
+        int base = Math.max(1, Config.SWAT_COST.get());
+        if (profile.swatCount == 0) return base;
+        return Math.min(5000, (int)Math.round(base * (1.0 + 0.5 * profile.swatCount)));
+    }
     static boolean pay(ServerPlayer player, NetData.Profile profile, int cost) {
         if (free(player)) return true;
         if (profile.crypto < cost) {
@@ -1089,6 +1113,19 @@ public final class Ops {
         }
         profile.crypto -= cost;
         return true;
+    }
+    static boolean payPeekWithSampleOrCrypto(ServerPlayer player, NetData.Profile profile, int cost, String handle) {
+        if (free(player)) return true;
+        ItemStack sample = findSample(player, handle);
+        if (!sample.isEmpty() && !Devices.sampleEncrypted(sample)) {
+            // если есть чистый образец — можно им вместо 8 крипты (игрок выбирает: образец дороже, но если крипты нет — спасает)
+            // приоритет: если крипты не хватает — жрём образец
+            if (profile.crypto < cost) {
+                sample.shrink(1);
+                return true;
+            }
+        }
+        return pay(player, profile, cost);
     }
 
     private static boolean takeOptional(ServerPlayer player, net.minecraft.world.item.Item item) {

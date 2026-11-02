@@ -183,6 +183,9 @@ public class NetData extends SavedData {
         public boolean welcomed;
         public int chatWindow;
         public int chatCount;
+        public int traceStreak;
+        public int traceStreakTick;
+        public int swatCount;
         public int intelSeq = 1;
         public final List<Intel> intel = new ArrayList<>();
         public final List<Beam> beams = new ArrayList<>();
@@ -240,6 +243,9 @@ public class NetData extends SavedData {
             tag.putString("ta", toastArg);
             tag.putBoolean("wel", welcomed);
             tag.putInt("seq", intelSeq);
+            tag.putInt("tStreak", traceStreak);
+            tag.putInt("tTick", traceStreakTick);
+            tag.putInt("swat", swatCount);
             ListTag intel = new ListTag();
             for (Intel row : this.intel) intel.add(row.save());
             tag.put("intel", intel);
@@ -304,6 +310,9 @@ public class NetData extends SavedData {
             profile.toastArg = tag.getString("ta");
             profile.welcomed = tag.getBoolean("wel");
             profile.intelSeq = Math.max(1, tag.getInt("seq"));
+            profile.traceStreak = tag.getInt("tStreak");
+            profile.traceStreakTick = tag.getInt("tTick");
+            profile.swatCount = tag.getInt("swat");
             ListTag intel = tag.getList("intel", Tag.TAG_COMPOUND);
             for (int i = 0; i < intel.size(); i++) profile.intel.add(Intel.load(intel.getCompound(i)));
             ListTag beams = tag.getList("beams", Tag.TAG_COMPOUND);
