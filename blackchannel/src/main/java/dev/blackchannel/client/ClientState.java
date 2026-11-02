@@ -267,6 +267,7 @@ public final class ClientState {
             row.samples = c.getInt("n");
             row.age = c.getInt("age");
             row.dim = c.getString("dim");
+            row.source = c.contains("src") ? c.getString("src") : "TRACE";
             beams.add(row);
         }
     }
@@ -362,7 +363,7 @@ public final class ClientState {
     public static final class BeamRow {
         public int ox, oz, age, samples;
         public double angle, alpha;
-        public String handle = "", dim = "";
+        public String handle = "", dim = "", source = "";
     }
 
     public static final class IntelRow {

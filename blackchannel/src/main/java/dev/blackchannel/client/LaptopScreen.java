@@ -483,8 +483,8 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     }
 
     @Override
-    public void tick() {
-        super.tick();
+    protected void containerTick() {
+        super.containerTick();
         if (hack != null) {
             hack.tick(false);
             if (hack.success || hack.failed) {
