@@ -664,12 +664,33 @@ public final class Minigame {
             prof.beams.clear();
         }
         netData.setDirty();
+        broadcastStats(server, match);
         match.towersPlaced = false;
         match.nodeActive = false;
         match.silenceUntil = 0L;
         match.nextEventTick = 0L;
         if (wasActive) BlackChannelMod.LOGGER.info("BlackChannel match finished, winner: {}", winnerLabel);
         match.setDirty();
+    }
+
+    /** Итоги катки в чат: по каждому игроку, который числился в отряде. */
+    private static void broadcastStats(MinecraftServer server, MatchData match) {
+        if (match.playerCrew.isEmpty()) return;
+        NetData netData = NetData.get(server);
+        List<Component> lines = new ArrayList<>();
+        lines.add(Msg.paint(Component.translatable("blackchannel.minigame.stats_header").withStyle(ChatFormatting.AQUA)));
+        for (Map.Entry<UUID, String> entry : match.playerCrew.entrySet()) {
+            MatchData.Stats s = match.stats(entry.getKey());
+            NetData.Profile p = netData.profile(entry.getKey());
+            s.title = Titles.forProfile(p, s);
+            String handle = p.handle == null || p.handle.isEmpty() ? "?" : p.handle;
+            lines.add(Msg.paint(Component.translatable("blackchannel.minigame.stats_row", handle,
+                    teamLabel(server, entry.getValue()), s.kills, s.deaths, s.traces, s.towers, s.cryptoEarned, s.title)));
+        }
+        match.setDirty();
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            for (Component line : lines) player.sendSystemMessage(line);
+        }
     }
 
     private static void placeCacheStep(MinecraftServer server, MatchData match, ServerLevel level) {
@@ -1092,6 +1113,7 @@ public final class Minigame {
         ServerPlayer killer = event.getSource().getEntity() instanceof ServerPlayer sp && sp != victim ? sp : null;
         if (killer == null) killer = lastAttacker(victim, match);
         if (killer != null) awardKill(killer, victim, match);
+        match.stats(victim.getUUID()).deaths++;
 
         ServerLevel level = Ops.levelOf(victim.getServer(), match.dim);
         BlockPos respawn = null;
@@ -1223,6 +1245,7 @@ public final class Minigame {
         String killerCrew = match.playerCrew.getOrDefault(killer.getUUID(), "");
         String victimCrew = match.playerCrew.getOrDefault(victim.getUUID(), "");
         if (killerCrew.isEmpty() || killerCrew.equals(victimCrew)) return;
+        match.stats(killer.getUUID()).kills++;
         int pts = Config.SCORE_KILL.get();
         if (pts > 0) {
             match.addScore(killerCrew, pts);
@@ -2006,6 +2029,7 @@ public final class Minigame {
         match.anchors.clear();
         match.kitted.clear();
         match.teamScores.clear();
+        match.stats.clear();
         // Маяки и схроны от прошлой игры: сначала убрать из мира, потом забыть координаты
         removeBeacons(level, match);
         removeBunkers(level, match);

@@ -4,6 +4,7 @@ import dev.blackchannel.Config;
 import dev.blackchannel.data.MatchData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
+import net.minecraft.nbt.CompoundTag;
 import net.minecraft.network.chat.Component;
 import net.minecraft.server.MinecraftServer;
 import net.minecraft.server.level.ServerLevel;
@@ -11,6 +12,7 @@ import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.sounds.SoundEvents;
 import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
+import net.minecraft.world.level.GameType;
 import net.minecraft.world.item.ItemStack;
 import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
@@ -283,6 +285,7 @@ public final class Towers {
         match.setDirty();
         // очки за захват
         match.addScore(crew, 5);
+        if (capturer != null) match.stats(capturer.getUUID()).towers++;
         Contracts.progress(server, match, crew, dev.blackchannel.data.Contract.TOWER, 1);
         // визуал — покрасить бетон
         if (server.overworld() != null) {
@@ -474,34 +477,96 @@ public final class Towers {
     }
 
 
+    // ---------- обзор вокруг вышки ----------
+
+    /** Длительность обзора и шаг: за один круг точка обходит вышку ровно один раз. */
+    private static final int CAM_TICKS = 400;
+    private static final int CAM_STEP_TICKS = 2;
+    private static final double CAM_RADIUS = 14.0;
+    private static final double CAM_STEP_RAD = 2.0 * Math.PI / (CAM_TICKS / CAM_STEP_TICKS);
+    private static final String CAM_END = "bc_cam_end";
+    private static final String CAM_MODE = "bc_cam_mode";
+    private static final String CAM_RET = "bc_cam_ret";
+    private static final String CAM_BASE = "bc_cam_base";
+
+    /**
+     * Обзор вокруг своей вышки: игрок переходит в наблюдателя, а точка обзора облетает
+     * вышку по кругу на высоте верхней части. Куда смотреть, игрок решает сам мышью.
+     * В конце режим и место возвращаются прежние.
+     */
     public static void camera(ServerPlayer player, dev.blackchannel.data.NetData.Profile profile) {
-        MatchData match = MatchData.get(player.getServer());
+        MinecraftServer server = player.getServer();
+        MatchData match = MatchData.get(server);
+        if (isCamActive(player)) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_busy")), false); return; }
         MatchData.TowerInfo owned = null;
-        for (MatchData.TowerInfo inf : match.towerInfos) if (inf.owner!=null && inf.owner.equals(profile.crew) && inf.disabledUntil <= player.getServer().getTickCount()) { owned = inf; break; }
-        if (owned==null) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.no_own")), true); return; }
+        for (MatchData.TowerInfo inf : match.towerInfos) if (inf.owner!=null && inf.owner.equals(profile.crew) && inf.disabledUntil <= server.getTickCount()) { owned = inf; break; }
+        if (owned==null) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.no_own")), false); return; }
         int cost = Config.TOWER_CAM_COST.get();
-        if (profile.crypto < cost) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.need_crypto", cost)), true); return; }
+        if (profile.crypto < cost) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.need_crypto", cost)), false); return; }
         profile.crypto -= cost;
-        BlockPos eye = new BlockPos(owned.pos.getX(), owned.pos.getY()+HEIGHT+3, owned.pos.getZ());
-        // Дрон-вид: телепортируем в spectator на вышку на 12с, потом возврат
+        ServerLevel level = player.serverLevel();
+        int bx = owned.pos.getX();
+        int by = owned.pos.getY();
+        int bz = owned.pos.getZ();
+        // запоминаем, куда и в каком режиме вернуть игрока
         BlockPos ret = player.blockPosition();
-        player.getPersistentData().putIntArray("bc_cam_ret", new int[]{ret.getX(), ret.getY(), ret.getZ(), player.level().dimension().location().toString().hashCode()});
-        player.teleportTo(eye.getX()+0.5, eye.getY(), eye.getZ()+0.5);
-        player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
-        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_ok", owned.pos.getX(), owned.pos.getZ())), true);
+        CompoundTag data = player.getPersistentData();
+        data.putIntArray(CAM_RET, new int[]{ret.getX(), ret.getY(), ret.getZ()});
+        data.putIntArray(CAM_BASE, new int[]{bx, by, bz});
+        data.putInt(CAM_MODE, player.gameMode.getGameModeForPlayer().getId());
+        data.putLong(CAM_END, server.getTickCount() + (long) CAM_TICKS);
+        player.setGameMode(GameType.SPECTATOR);
+        camTeleport(player, level, bx, by, bz, 0);
+        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_ok", bx, bz, CAM_TICKS / 20)), false);
         player.playNotifySound(SoundEvents.SPYGLASS_USE, SoundSource.MASTER, 1f, 1f);
-        // подсветка рядом
-        for (ServerPlayer p : player.getServer().getPlayerList().getPlayers()) if(p.distanceToSqr(eye.getX(), eye.getY(), eye.getZ()) <= 200*200L) p.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.GLOWING, 200, 0, false, false));
-        // возврат через 12с
-        player.getServer().tell(new net.minecraft.server.TickTask(player.getServer().getTickCount()+240, () -> {
-            if (player.hasDisconnected()) return;
-            if (player.gameMode.getGameModeForPlayer() == net.minecraft.world.level.GameType.SPECTATOR) {
-                try { player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL); } catch(Exception ignored) {}
-                int[] a = player.getPersistentData().getIntArray("bc_cam_ret");
-                if (a.length>=3) player.teleportTo(a[0]+0.5, a[1], a[2]+0.5);
+        camSchedule(server, player.getUUID(), 1);
+    }
+
+    /** Точка обзора на шаге k: по кругу вокруг вышки, на высоте верхней части. */
+    private static void camTeleport(ServerPlayer player, ServerLevel level, int bx, int by, int bz, int k) {
+        double a = k * CAM_STEP_RAD;
+        double x = bx + 0.5 + CAM_RADIUS * Math.cos(a);
+        double z = bz + 0.5 + CAM_RADIUS * Math.sin(a);
+        double y = by + HEIGHT + 3;
+        player.teleportTo(level, x, y, z, player.getYRot(), player.getXRot());
+    }
+
+    private static void camSchedule(MinecraftServer server, UUID id, int k) {
+        server.tell(new net.minecraft.server.TickTask(server.getTickCount() + CAM_STEP_TICKS, () -> {
+            ServerPlayer player = server.getPlayerList().getPlayer(id);
+            // вышел из игры: вернём при входе (см. restoreCam)
+            if (player == null) return;
+            CompoundTag data = player.getPersistentData();
+            if (!data.contains(CAM_END)) return;
+            if (server.getTickCount() >= data.getLong(CAM_END)
+                    || player.gameMode.getGameModeForPlayer() != GameType.SPECTATOR) {
+                restoreCam(player);
+                return;
             }
+            int[] base = data.getIntArray(CAM_BASE);
+            if (base.length >= 3) camTeleport(player, player.serverLevel(), base[0], base[1], base[2], k);
+            camSchedule(server, id, k + 1);
         }));
     }
+
+    public static boolean isCamActive(ServerPlayer player) {
+        return player.getPersistentData().contains(CAM_END);
+    }
+
+    /** Возвращает игрока из обзора в прежний режим и на прежнее место. Безопасно вызывать многократно. */
+    public static void restoreCam(ServerPlayer player) {
+        CompoundTag data = player.getPersistentData();
+        if (!data.contains(CAM_END)) return;
+        int[] ret = data.getIntArray(CAM_RET);
+        GameType mode = GameType.byId(data.contains(CAM_MODE) ? data.getInt(CAM_MODE) : 0);
+        data.remove(CAM_END);
+        data.remove(CAM_MODE);
+        data.remove(CAM_RET);
+        data.remove(CAM_BASE);
+        player.setGameMode(mode);
+        if (ret.length >= 3) player.teleportTo(player.serverLevel(), ret[0] + 0.5, ret[1], ret[2] + 0.5, player.getYRot(), player.getXRot());
+    }
+
     public static void scan(ServerPlayer player, dev.blackchannel.data.NetData.Profile profile) {
         MatchData match = MatchData.get(player.getServer());
         MatchData.TowerInfo owned = null;
