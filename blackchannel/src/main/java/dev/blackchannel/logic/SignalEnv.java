@@ -119,11 +119,18 @@ public final class SignalEnv {
         return other != null && !self.crew.isEmpty() && self.crew.equals(other.crew);
     }
 
+    public static boolean deepCave(ServerLevel level, BlockPos pos) {
+        if (pos.getY() > -40) return false;
+        // глубокая пещера глушит любой сигнал, если над головой непрозрачный потолок
+        return !level.canSeeSky(pos.above(8));
+    }
+
     public static boolean transmitting(ServerPlayer player, NetData.Profile profile) {
         if (profile.airplane || emp(profile, player.getServer())) return false;
         if (!Devices.hasDevice(player) || Devices.battery(player) <= 0) return false;
         ServerLevel level = player.serverLevel();
         BlockPos pos = player.blockPosition();
+        if (deepCave(level, pos)) return false;
         return !jammed(level, pos) && !faraday(level, pos);
     }
 

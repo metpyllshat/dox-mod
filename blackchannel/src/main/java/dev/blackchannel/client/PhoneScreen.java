@@ -413,6 +413,11 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         }
     }
 
+    private boolean anyOwnTower() {
+        for (ClientState.TowerRow tw : ClientState.towers) if (!tw.owner.isEmpty() && !tw.disabled) return true;
+        return false;
+    }
+
     private String uplinkText() {
         if (ClientState.uplink) return ClientState.dish ? Ui.t("screen.blackchannel.state.dish") : Ui.t("screen.blackchannel.state.rack");
         return Ui.t("screen.blackchannel.state.none");
