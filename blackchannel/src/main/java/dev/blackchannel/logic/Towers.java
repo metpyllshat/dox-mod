@@ -106,7 +106,11 @@ public final class Towers {
         set(level, x, top + 1, z, air);
         BlockPos chest = new BlockPos(x + 1, top + 1, z + 1);
         set(level, chest.getX(), chest.getY(), chest.getZ(), Blocks.CHEST.defaultBlockState());
-        if (Config.TOWER_LOOT.get()) Minigame.queueLoot(chest);
+        if (Config.TOWER_LOOT.get()) { for(int i=0;i<3;i++) Minigame.queueLoot(chest); }
+        // второй сундук для баланса 1.5x лута
+        BlockPos chest2 = new BlockPos(x -1, top + 1, z + 1);
+        set(level, chest2.getX(), chest2.getY(), chest2.getZ(), Blocks.CHEST.defaultBlockState());
+        if (Config.TOWER_LOOT.get()) Minigame.queueLoot(chest2);
         // Терминал — магнетит (лодстоун) в центре, на него ПКМ пустой рукой для взлома
         BlockPos terminal = new BlockPos(x, top + 1, z);
         set(level, terminal.getX(), terminal.getY(), terminal.getZ(), Blocks.LODESTONE.defaultBlockState());
@@ -148,6 +152,11 @@ public final class Towers {
             String handName = player.getMainHandItem().getItem().toString().toLowerCase();
             if (handName.contains("pick") || handName.contains("shovel") || handName.contains("axe")) return false;
         }
+        // только магнетит-терминал
+        try { if (!(server.overworld().getBlockState(clicked).getBlock() == net.minecraft.world.level.block.Blocks.LODESTONE)) { // allow also clicking chest nearby to open chest
+            // если это сундук вышки — не перехватывать
+            if (server.overworld().getBlockState(clicked).getBlock() == net.minecraft.world.level.block.Blocks.CHEST) return false;
+        } } catch(Exception ignored) {}
         if (!isTerminal(MatchData.get(server), clicked)) {
             // клик не по терминалу, а по земле рядом — не взлом
             // проверяем дистанцию до терминала
@@ -223,7 +232,8 @@ public final class Towers {
             BlockState colored = coloredConcrete(idx);
             server.overworld().setBlock(beacon, colored, 3);
         }
-        Component msg = Msg.paint(Component.translatable("blackchannel.tower.captured", capturer.getGameProfile().getName(), crew, info.pos.getX(), info.pos.getZ()));
+        String h = dev.blackchannel.data.NetData.get(server).profile(capturer.getUUID()).handle;
+        Component msg = Msg.paint(Component.translatable("blackchannel.tower.captured", h.isEmpty()?capturer.getGameProfile().getName():h, crew, info.pos.getX(), info.pos.getZ()));
         for (ServerPlayer p : server.getPlayerList().getPlayers()) p.sendSystemMessage(msg);
         for (ServerPlayer p : server.getPlayerList().getPlayers()) p.playNotifySound(SoundEvents.BEACON_ACTIVATE, SoundSource.MASTER, 1f, 1.2f);
     }
@@ -276,7 +286,7 @@ public final class Towers {
                     if (crew.equals(info.owner)) {
                         // прямое зачисление в профиль
                         dev.blackchannel.data.NetData.get(server).profile(p.getUUID()).crypto = Math.min(5000, dev.blackchannel.data.NetData.get(server).profile(p.getUUID()).crypto + Config.TOWER_CRYPTO_PER_MIN.get());
-                        p.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.crypto", Config.TOWER_CRYPTO_PER_MIN.get(), info.pos.getX(), info.pos.getZ())), true);
+                        p.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.crypto", info.pos.getX(), info.pos.getZ(), Config.TOWER_CRYPTO_PER_MIN.get())), true);
                     }
                 }
                 match.setDirty();
@@ -337,6 +347,18 @@ public final class Towers {
         }
     }
 
+    public static void destroyAll(ServerLevel level, MatchData match) {
+        for (MatchData.TowerInfo inf : match.towerInfos) {
+            BlockPos g = inf.pos;
+            int top = g.getY()+HEIGHT+1;
+            for(int dx=-PLATFORM; dx<=PLATFORM; dx++) for(int dz=-PLATFORM; dz<=PLATFORM; dz++) level.setBlock(new BlockPos(g.getX()+dx, top, g.getZ()+dz), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(), 3);
+            for(int dy=0; dy<=HEIGHT+6; dy++) for(int dx=-1; dx<=1; dx++) for(int dz=-1; dz<=1; dz++) level.setBlock(new BlockPos(g.getX()+dx, g.getY()+dy, g.getZ()+dz), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
+            for(int dx=-2; dx<=2; dx++) for(int dz=-2; dz<=2; dz++) level.setBlock(new BlockPos(g.getX()+dx, g.getY(), g.getZ()+dz), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
+            level.setBlock(new BlockPos(g.getX(), top+1, g.getZ()), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
+            level.setBlock(new BlockPos(g.getX(), top+1, g.getZ()+1), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
+        }
+        match.towerInfos.clear(); match.towers.clear(); match.towersPlaced=false; match.setDirty();
+    }
     /** ЭМИ глушит вышки на 5 мин. */
     public static void pulse(MatchData match, BlockPos center, long now) {
         int dur = Config.TOWER_DISABLE_SECONDS.get() * 20;
@@ -381,6 +403,44 @@ public final class Towers {
             if (player.blockPosition().distSqr(info.pos) <= (long) Config.TOWER_CHAT_RADIUS.get() * Config.TOWER_CHAT_RADIUS.get()) return true;
         }
         return false;
+    }
+
+
+    public static void camera(ServerPlayer player, dev.blackchannel.data.NetData.Profile profile) {
+        MatchData match = MatchData.get(player.getServer());
+        MatchData.TowerInfo owned = null;
+        for (MatchData.TowerInfo inf : match.towerInfos) if (inf.owner!=null && inf.owner.equals(profile.crew) && inf.disabledUntil <= player.getServer().getTickCount()) { owned = inf; break; }
+        if (owned==null) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.no_own")), true); return; }
+        int cost = Config.TOWER_CAM_COST.get();
+        if (profile.crypto < cost) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.need_crypto", cost)), true); return; }
+        profile.crypto -= cost;
+        BlockPos eye = new BlockPos(owned.pos.getX(), owned.pos.getY()+HEIGHT+3, owned.pos.getZ());
+        for (ServerPlayer p : player.getServer().getPlayerList().getPlayers()) if(p.distanceToSqr(eye.getX(), eye.getY(), eye.getZ()) <= 200*200L) p.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.GLOWING, 200, 0, false, false));
+        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_ok", owned.pos.getX(), owned.pos.getZ())), true);
+        player.playNotifySound(SoundEvents.SPYGLASS_USE, SoundSource.MASTER, 1f, 1f);
+    }
+    public static void scan(ServerPlayer player, dev.blackchannel.data.NetData.Profile profile) {
+        MatchData match = MatchData.get(player.getServer());
+        MatchData.TowerInfo owned = null;
+        for (MatchData.TowerInfo inf : match.towerInfos) if (inf.owner!=null && inf.owner.equals(profile.crew) && inf.disabledUntil <= player.getServer().getTickCount()) { owned = inf; break; }
+        if (owned==null) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.no_own")), true); return; }
+        int cost = Config.TOWER_SCAN_COST.get();
+        if (profile.crypto < cost) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.need_crypto", cost)), true); return; }
+        profile.crypto -= cost;
+        int r = Config.TOWER_SECTOR_RADIUS.get();
+        int err = Math.max(15, r/10);
+        for (ServerPlayer enemy : player.getServer().getPlayerList().getPlayers()) {
+            if (enemy==player) continue;
+            if (enemy.distanceToSqr(owned.pos.getX(), enemy.getY(), owned.pos.getZ()) > (long)r*r) continue;
+            if (MatchData.get(player.getServer()).permanentDead.contains(enemy.getUUID())) continue;
+            String handle = dev.blackchannel.data.NetData.get(player.getServer()).profile(enemy.getUUID()).handle;
+            if (handle==null||handle.isEmpty()) continue;
+            int sx = enemy.blockPosition().getX() + player.getRandom().nextInt(err*2+1)-err;
+            int sz = enemy.blockPosition().getZ() + player.getRandom().nextInt(err*2+1)-err;
+            Ops.noteFix(player.getServer(), player.getUUID(), handle, dev.blackchannel.data.NetData.get(player.getServer()).profile(enemy.getUUID()).lastName, Str.dim(enemy.level()), sx, enemy.blockPosition().getY(), sz, err, false, "blackchannel.log.tower_sector");
+        }
+        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.scan_ok", r)), true);
+        player.playNotifySound(SoundEvents.BEACON_POWER_SELECT, SoundSource.MASTER, 1f, 1.2f);
     }
 
     /** Пеленг на шум 400 — даёт владельцам вышек сектор на шумящего. */

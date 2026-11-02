@@ -22,6 +22,8 @@ public final class Actions {
     public static final String PEEK = "peek";
     public static final String HACK = "hack";
     public static final String KILL = "kill";
+    public static final String TOWER_CAM = "tower_cam";
+    public static final String TOWER_SCAN = "tower_scan";
 
     private Actions() {}
 }

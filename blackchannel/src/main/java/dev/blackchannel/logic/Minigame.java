@@ -1331,9 +1331,9 @@ public final class Minigame {
 
     /** Лежит на месте, не двигается и не взаимодействует с миром. */
     private static void freezeDowned(ServerPlayer player, MatchData.DownedState ds) {
-        // ForcedPose держит позу на сервере, setPose отправляет её клиентам, чтобы игрок лежал пластом.
-        if (player.getForcedPose() != Pose.SWIMMING) player.setForcedPose(Pose.SWIMMING);
-        if (player.getPose() != Pose.SWIMMING) player.setPose(Pose.SWIMMING);
+        // ForcedPose SLEEPING выглядит как лежание на боку, SWIMMING как ползущий — SLEEPING ближе к трупу
+        if (player.getForcedPose() != Pose.SLEEPING) player.setForcedPose(Pose.SLEEPING);
+        if (player.getPose() != Pose.SLEEPING) player.setPose(Pose.SLEEPING);
         player.setDeltaMovement(Vec3.ZERO);
         player.setSprinting(false);
         player.noPhysics = true;
@@ -2076,9 +2076,7 @@ public final class Minigame {
         match.matchStartTick = startTick;
         match.playersLeaked = false;
         match.beaconsLeaked = false;
-        match.towersPlaced = false;
-        match.towers.clear();
-        match.towerInfos.clear();
+        if (match.active) { try { Towers.destroyAll(level, match); } catch(Exception ignored) { match.towers.clear(); match.towerInfos.clear(); match.towersPlaced=false; } } else { match.towers.clear(); match.towerInfos.clear(); }
         match.nodeActive = false;
         match.nextEventTick = 0L;
         match.silenceUntil = 0L;
@@ -2158,9 +2156,7 @@ public final class Minigame {
         match.nodeActive = false;
         match.silenceUntil = 0L;
         match.nextEventTick = 0L;
-        match.towersPlaced = false;
-        match.towers.clear();
-        match.towerInfos.clear();
+        if (match.active) { try { Towers.destroyAll(level, match); } catch(Exception ignored) { match.towers.clear(); match.towerInfos.clear(); match.towersPlaced=false; } } else { match.towers.clear(); match.towerInfos.clear(); }
         match.finalActive = false;
         match.drops.clear();
         match.anchors.clear();
