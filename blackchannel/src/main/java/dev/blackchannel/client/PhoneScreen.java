@@ -147,7 +147,8 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         String who = handle + " · " + crew;
         String state = linkState();
         int stateW = this.font.width(state);
-        g.drawString(this.font, Ui.trim(this.font, who, W - 24 - stateW), x + 8, y + 35, Ui.MUTED, false);
+        int whoW = W - 24 - stateW - 4;
+        g.drawString(this.font, Ui.trim(this.font, who, Math.max(40, whoW)), x + 8, y + 35, Ui.MUTED, false);
         g.drawString(this.font, state, x + W - 8 - stateW, y + 35, linkColor(), false);
     }
 
@@ -380,14 +381,15 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
                 ClientState.hard ? Ui.GREEN : Ui.MUTED);
         ry += 10;
         line(g, x + 12, ry, Ui.t("screen.blackchannel.net.sat"), String.valueOf(ClientState.sat), ClientState.sat > 0 ? Ui.AMBER : Ui.MUTED);
+        ly += 58; // прошли well
         // Кнопки вышки: камера и скан (платно) — только если есть своя
         boolean hasOwn = anyOwnTower();
-        if (bottom - ly >= 30) {
+        if (bottom - ly >= 16) {
             Ui.button(g, this.font, hits, x + 8, ly, 112, 12, Ui.t("screen.blackchannel.btn.tower_cam"), ClientState.tip("screen.blackchannel.tip.tower_cam", ClientState.cfg("towerCam",6)), hasOwn, "tower_cam", "");
             Ui.button(g, this.font, hits, x + 124, ly, 112, 12, Ui.t("screen.blackchannel.btn.tower_scan"), ClientState.tip("screen.blackchannel.tip.tower_scan", ClientState.cfg("towerScan",4)), hasOwn, "tower_scan", "");
             ly += 16;
         }
-        ly += 2;
+        ly += 4;
         if (!ClientState.heard.isEmpty()) {
             g.drawString(this.font, Ui.t("screen.blackchannel.net.heard"), x + 8, ly, Ui.MUTED, false);
             ly += 10;

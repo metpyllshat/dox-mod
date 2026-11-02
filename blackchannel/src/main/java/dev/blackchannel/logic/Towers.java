@@ -44,9 +44,16 @@ public final class Towers {
             int x = match.centerX + (int) Math.round(Math.cos(angle) * radius);
             int z = match.centerZ + (int) Math.round(Math.sin(angle) * radius);
             if (nearBase(match, x, z, 180)) continue;
-            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+            int y = level.getHeight(Heightmap.Types.WORLD_SURFACE_WG, x, z);
+            // ищем твёрдую землю вниз до 12 блоков, иначе не спавним (был баг — спавн под землей в пещере)
+            for (int dy = 0; dy < 12; dy++) {
+                BlockPos p = new BlockPos(x, y - dy, z);
+                if (!level.getBlockState(p).isAir() && level.getBlockState(p).getBlock() != Blocks.WATER) { y = p.getY(); break; }
+            }
+            if (y < level.getMinBuildHeight() + 4) continue;
             BlockPos ground = new BlockPos(x, y, z);
             if (!match.inside(ground)) continue;
+            if (!level.getBlockState(ground).isSolidRender(level, ground)) continue;
             build(level, match, ground);
             match.towers.add(ground);
             MatchData.TowerInfo info = new MatchData.TowerInfo(ground);
@@ -415,9 +422,24 @@ public final class Towers {
         if (profile.crypto < cost) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.need_crypto", cost)), true); return; }
         profile.crypto -= cost;
         BlockPos eye = new BlockPos(owned.pos.getX(), owned.pos.getY()+HEIGHT+3, owned.pos.getZ());
-        for (ServerPlayer p : player.getServer().getPlayerList().getPlayers()) if(p.distanceToSqr(eye.getX(), eye.getY(), eye.getZ()) <= 200*200L) p.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.GLOWING, 200, 0, false, false));
+        // Дрон-вид: телепортируем в spectator на вышку на 12с, потом возврат
+        BlockPos ret = player.blockPosition();
+        player.getPersistentData().putIntArray("bc_cam_ret", new int[]{ret.getX(), ret.getY(), ret.getZ(), player.level().dimension().location().toString().hashCode()});
+        player.teleportTo(eye.getX()+0.5, eye.getY(), eye.getZ()+0.5);
+        player.setGameMode(net.minecraft.world.level.GameType.SPECTATOR);
         player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_ok", owned.pos.getX(), owned.pos.getZ())), true);
         player.playNotifySound(SoundEvents.SPYGLASS_USE, SoundSource.MASTER, 1f, 1f);
+        // подсветка рядом
+        for (ServerPlayer p : player.getServer().getPlayerList().getPlayers()) if(p.distanceToSqr(eye.getX(), eye.getY(), eye.getZ()) <= 200*200L) p.addEffect(new net.minecraft.world.effect.MobEffectInstance(net.minecraft.world.effect.MobEffects.GLOWING, 200, 0, false, false));
+        // возврат через 12с
+        player.getServer().tell(new net.minecraft.server.TickTask(player.getServer().getTickCount()+240, () -> {
+            if (player.hasDisconnected()) return;
+            if (player.gameMode.getGameModeForPlayer() == net.minecraft.world.level.GameType.SPECTATOR) {
+                try { player.setGameMode(net.minecraft.world.level.GameType.SURVIVAL); } catch(Exception ignored) {}
+                int[] a = player.getPersistentData().getIntArray("bc_cam_ret");
+                if (a.length>=3) player.teleportTo(a[0]+0.5, a[1], a[2]+0.5);
+            }
+        }));
     }
     public static void scan(ServerPlayer player, dev.blackchannel.data.NetData.Profile profile) {
         MatchData match = MatchData.get(player.getServer());

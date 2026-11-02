@@ -152,16 +152,16 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
     }
 
     private void drawOps(GuiGraphics g, int x, int y) {
-        // НИЗ — команды с ценами (требование ТЗ)
+        // НИЗ — команды с ценами (без DEANON/SWAT по keep_noise)
         int tracePrice = calcTracePrice();
         Ui.button(g, this.font, hits, x + 8, y + 190, 60, 12, "TRACE " + tracePrice, tipTrace(), false, Actions.TRACE, "");
-        Ui.button(g, this.font, hits, x + 72, y + 190, 60, 12, "DEANON 4", "Вскрыть позывной", false, "deanon", "");
-        Ui.button(g, this.font, hits, x + 136, y + 190, 60, 12, "UAV 3", tipUav(), false, Actions.UAV, "");
-        Ui.button(g, this.font, hits, x + 200, y + 190, 60, 12, "SWAT 40", "Заказной удар", false, "swat", "");
+        Ui.button(g, this.font, hits, x + 72, y + 190, 60, 12, "UAV 3", tipUav(), false, Actions.UAV, "");
+        Ui.button(g, this.font, hits, x + 136, y + 190, 60, 12, "BOMB 3", tipBomb(), false, Actions.BOMB, "");
+        Ui.button(g, this.font, hits, x + 200, y + 190, 60, 12, "PEEK 8", tipPeek(), false, Actions.PEEK, "");
         Ui.button(g, this.font, hits, x + 264, y + 190, 60, 12, "WIPE 20", Ui.t("screen.blackchannel.tip.wipe"), wipeArmed, Actions.WIPE, "");
 
         // СЛЕВА — таблица сигналов: позывной/сила/возраст/источник
-        g.drawString(this.font, "СИГНАЛЫ  позывной | сила | возр | ист", x + 8, y + 48, Ui.MUTED, false);
+        g.drawString(this.font, "СИГНАЛЫ", x + 8, y + 48, Ui.MUTED, false);
         Ui.divider(g, x+8, y+58, 158);
         int ly = y + 62;
         int shown = 0;
@@ -177,7 +177,7 @@ public class LaptopScreen extends AbstractContainerScreen<Menus.LaptopMenu> {
         if (shown == 0) g.drawString(this.font, Ui.t("screen.blackchannel.beams.none"), x + 8, ly, 0xFF3E4A46, false);
 
         // СПРАВА — схема с лучами + очередь
-        g.drawString(this.font, "СХЕМА + ОЧЕРЕДЬ", x + 176, y + 48, Ui.MUTED, false);
+        g.drawString(this.font, "СХЕМА", x + 176, y + 48, Ui.MUTED, false);
         Ui.divider(g, x+176, y+58, WIDTH-184);
         // упрощённая схема: сетка + лучи
         int sx = x + 176;
