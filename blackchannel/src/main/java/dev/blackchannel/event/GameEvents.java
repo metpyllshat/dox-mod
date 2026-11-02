@@ -106,7 +106,10 @@ public final class GameEvents {
 
     @SubscribeEvent
     public static void login(PlayerEvent.PlayerLoggedInEvent event) {
-        if (event.getEntity() instanceof ServerPlayer player) Minigame.onLogin(player);
+        if (event.getEntity() instanceof ServerPlayer player) {
+            Minigame.onLogin(player);
+            dev.blackchannel.logic.Towers.restoreCam(player);
+        }
     }
 
     @SubscribeEvent

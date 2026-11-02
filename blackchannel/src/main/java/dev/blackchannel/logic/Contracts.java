@@ -232,6 +232,7 @@ public final class Contracts {
     /** Игрок успешно сделал TRACE с результатом. */
     public static void onTrace(ServerPlayer player) {
         MatchData match = MatchData.get(player.getServer());
+        match.stats(player.getUUID()).traces++;
         progress(player.getServer(), match, match.playerCrew.getOrDefault(player.getUUID(), ""), Contract.TRACE, 1);
     }
 

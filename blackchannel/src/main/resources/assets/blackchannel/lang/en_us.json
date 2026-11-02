@@ -268,7 +268,7 @@
   "blackchannel.spam.4": "CALLBACK FAILED",
   "blackchannel.spam.5": "SIM LOCK",
   "blackchannel.spam.6": "ROUTE LOOP",
-  "blackchannel.tower.cam_ok": "Tower cam %s %s: glow 10s.",
+  "blackchannel.tower.cam_ok": "Tower view %s %s for %ss. Look with the mouse, the view circles the tower.",
   "blackchannel.tower.captured": "%s captured tower %s @ %s %s",
   "blackchannel.tower.crypto": "Tower %s %s: +%s crypto.",
   "blackchannel.tower.disabled": "Tower jammed for %ss more.",
@@ -554,5 +554,8 @@
   "tooltip.blackchannel.sim": "Sneak-use to burn the handle and roll a new one.",
   "tooltip.blackchannel.vpn": "Use to install VPN. Traces land off your body.",
   "tooltip.blackchannel.vpn2": "Use to install deep VPN. Traces often fail outright.",
-  "tooltip.blackchannel.zero": "Keep it in inventory. DEANON ignores VPN and opens an encrypted sample."
+  "tooltip.blackchannel.zero": "Keep it in inventory. DEANON ignores VPN and opens an encrypted sample.",
+  "blackchannel.tower.cam_busy": "Tower view is already active.",
+  "blackchannel.minigame.stats_header": "Match stats:",
+  "blackchannel.minigame.stats_row": "%s [%s]: kills %s, deaths %s, traces %s, towers %s, contract crypto %s · %s"
 }
