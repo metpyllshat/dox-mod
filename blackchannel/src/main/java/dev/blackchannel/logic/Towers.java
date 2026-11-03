@@ -513,22 +513,25 @@ public final class Towers {
 
     // ---------- обзор от вышки по кругу ----------
 
-    /** Длительность обзора без действий; поворот делает сам игрок мышью (см. client/TowerCam). */
+    /** Длительность обзора без действий: потом выход сам. */
     private static final int CAM_TICKS = 2400;
-    /** Как часто сервер проверяет, не пора ли выйти из обзора. */
-    private static final int CAM_CHECK_TICKS = 20;
-    /** Чуть вниз, чтобы в кадре был верх вышки и ближняя земля. */
-    private static final float CAM_PITCH = 18f;
+    /** Как часто сервер возвращает игрока на платформу, если его сдвинуло. */
+    private static final int CAM_CHECK_TICKS = 5;
+    /** Допуск, на сколько игрок может отойти от точки на платформе. */
+    private static final double CAM_HOLD_RADIUS = 0.6;
     private static final String CAM_END = "bc_cam_end";
     private static final String CAM_MODE = "bc_cam_mode";
     private static final String CAM_RET = "bc_cam_ret";
     private static final String CAM_MARKER = "bc_cam_marker";
+    private static final String CAM_HOLD = "bc_cam_hold";
 
     /**
-     * Обзор от своей вышки: игрок стоит на верхушке вышки в режиме наблюдателя, а камера —
-     * невидимый маркер на том же месте. Взгляд крутит сам игрок мышью на клиенте; сервер
-     * лишь держит игрока на вышке. Игрок не двигается, поэтому чанки вокруг остаются
-     * загруженными и экран не пустеет. Повторное нажатие КАМЕРА — выход. Через 2 минуты выход сам.
+     * Обзор от своей вышки по образцу дрона SuperbWarfare: игрок остаётся в обычном режиме,
+     * его видно и он может получить урон. Его камера — невидимый маркер на платформе
+     * (ServerPlayer.setCamera). Взгляд крутит мышь на клиенте (client/TowerCam).
+     * Игрок привязан к точке на платформе: если его сдвинуло, сервер возвращает его на место.
+     * Во время обзора блоки не ломаются и не ставятся (см. GameEvents).
+     * Повторное нажатие КАМЕРА — выход. Через 2 минуты выход сам.
      */
     public static void camera(ServerPlayer player, dev.blackchannel.data.NetData.Profile profile) {
         MinecraftServer server = player.getServer();
@@ -544,29 +547,33 @@ public final class Towers {
         int cost = Config.TOWER_CAM_COST.get();
         if (profile.crypto < cost) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.need_crypto", cost)), false); return; }
         ServerLevel level = player.serverLevel();
-        double x = owned.pos.getX() + 0.5;
-        double y = owned.pos.getY() + HEIGHT + 3;
-        double z = owned.pos.getZ() + 0.5;
+        // Точка стояния: центр платформы, ноги на её верхнем слое
+        double fx = owned.pos.getX() + 0.5;
+        double fy = owned.pos.getY() + HEIGHT + 2;
+        double fz = owned.pos.getZ() + 0.5;
         net.minecraft.world.entity.Entity marker = net.minecraft.world.entity.EntityType.MARKER.create(level);
         if (marker == null) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_fail")), false); return; }
         profile.crypto -= cost;
-        marker.moveTo(x, y, z, 0f, CAM_PITCH);
+        // Камера на уровне глаз игрока, смотрит вниз под углом
+        marker.moveTo(fx, fy + 1.6, fz, 0f, CAM_PITCH);
         level.addFreshEntity(marker);
         BlockPos ret = player.blockPosition();
         CompoundTag data = player.getPersistentData();
         data.putIntArray(CAM_RET, new int[]{ret.getX(), ret.getY(), ret.getZ()});
+        data.putDouble(CAM_HOLD + "x", fx);
+        data.putDouble(CAM_HOLD + "y", fy);
+        data.putDouble(CAM_HOLD + "z", fz);
         data.putInt(CAM_MODE, player.gameMode.getGameModeForPlayer().getId());
         data.putUUID(CAM_MARKER, marker.getUUID());
         data.putLong(CAM_END, server.getTickCount() + (long) CAM_TICKS);
-        player.setGameMode(GameType.SPECTATOR);
-        player.teleportTo(level, x, y, z, 0f, CAM_PITCH);
+        player.teleportTo(level, fx, fy, fz, 0f, CAM_PITCH);
         player.setCamera(marker);
         player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_ok", owned.pos.getX(), owned.pos.getZ(), CAM_TICKS / 20)), false);
         player.playNotifySound(SoundEvents.SPYGLASS_USE, SoundSource.MASTER, 1f, 1f);
         camSchedule(server, player.getUUID());
     }
 
-    /** Сервер только следит за сроком и за тем, жива ли камера. Поворот на сервер не идёт. */
+    /** Сервер следит за сроком, за маркером и держит игрока на платформе. */
     private static void camSchedule(MinecraftServer server, UUID id) {
         server.tell(new net.minecraft.server.TickTask(server.getTickCount() + CAM_CHECK_TICKS, () -> {
             ServerPlayer player = server.getPlayerList().getPlayer(id);
@@ -575,13 +582,24 @@ public final class Towers {
             CompoundTag data = player.getPersistentData();
             if (!data.contains(CAM_END)) return;
             if (server.getTickCount() >= data.getLong(CAM_END)
-                    || player.gameMode.getGameModeForPlayer() != GameType.SPECTATOR
+                    || player.isDeadOrDying()
                     || markerOf(player) == null) {
                 restoreCam(player);
                 return;
             }
+            holdOnPlatform(player);
             camSchedule(server, id);
         }));
+    }
+
+    /** Если игрока сдвинуло (отбросило, сорвался с платформы), возвращаем на точку. */
+    private static void holdOnPlatform(ServerPlayer player) {
+        CompoundTag data = player.getPersistentData();
+        if (!data.contains(CAM_HOLD + "x")) return;
+        double hx = data.getDouble(CAM_HOLD + "x"), hy = data.getDouble(CAM_HOLD + "y"), hz = data.getDouble(CAM_HOLD + "z");
+        double dx = player.getX() - hx, dy = player.getY() - hy, dz = player.getZ() - hz;
+        if (dx * dx + dz * dz <= CAM_HOLD_RADIUS * CAM_HOLD_RADIUS && Math.abs(dy) <= 1.0) return;
+        player.teleportTo(player.serverLevel(), hx, hy, hz, player.getYRot(), player.getXRot());
     }
 
     private static net.minecraft.world.entity.Entity markerOf(ServerPlayer player) {
@@ -594,7 +612,7 @@ public final class Towers {
         return player.getPersistentData().contains(CAM_END);
     }
 
-    /** Выход из обзора: камера обратно на игрока, режим и место прежние. Безопасно вызывать многократно. */
+    /** Выход из обзора: камера обратно на игрока, место прежнее. Безопасно вызывать многократно. */
     public static void restoreCam(ServerPlayer player) {
         CompoundTag data = player.getPersistentData();
         if (!data.contains(CAM_END)) return;
@@ -606,9 +624,15 @@ public final class Towers {
         data.remove(CAM_MODE);
         data.remove(CAM_RET);
         data.remove(CAM_MARKER);
+        data.remove(CAM_HOLD + "x");
+        data.remove(CAM_HOLD + "y");
+        data.remove(CAM_HOLD + "z");
         player.setCamera(player);
-        player.setGameMode(mode);
-        if (ret.length >= 3) player.teleportTo(player.serverLevel(), ret[0] + 0.5, ret[1], ret[2] + 0.5, player.getYRot(), player.getXRot());
+        // Режим не менялся с начала обзора, но если его сменил старый вариант, вернём прежний
+        if (player.gameMode.getGameModeForPlayer() != mode) player.setGameMode(mode);
+        if (ret.length >= 3 && !player.isDeadOrDying()) {
+            player.teleportTo(player.serverLevel(), ret[0] + 0.5, ret[1], ret[2] + 0.5, player.getYRot(), player.getXRot());
+        }
     }
 
     public static void scan(ServerPlayer player, dev.blackchannel.data.NetData.Profile profile) {
