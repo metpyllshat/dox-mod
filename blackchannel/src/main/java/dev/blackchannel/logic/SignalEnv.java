@@ -347,7 +347,6 @@ public final class SignalEnv {
         boolean linked = link(viewer, self).mode != Link.Mode.NONE;
         if (!linked && Config.RADAR_NEEDS_UPLINK.get()) {
             addStructures(out, viewer, self, viewer.getServer(), level);
-            addCaches(out, viewer, level);
             return out.size() > 48 ? out.subList(0, 48) : out;
         }
         long r2 = (long) range * range;
@@ -402,27 +401,7 @@ public final class SignalEnv {
             }
         });
         addStructures(out, viewer, self, server, level);
-        addCaches(out, viewer, level);
         return out.size() > 48 ? out.subList(0, 48) : out;
-    }
-
-    /**
-     * Схроны на радаре: в карте 1500×1500 без подсказки их не найти. Схрон видно любому,
-     * у кого есть радар, в радиусе cacheSignalRadius. Сам сундук не подсвечивается.
-     */
-    private static void addCaches(List<Blip> out, ServerPlayer viewer, ServerLevel level) {
-        int radius = Config.CACHE_SIGNAL_RADIUS.get();
-        if (radius <= 0) return;
-        MatchData match = MatchData.get(viewer.getServer());
-        long r2 = (long) radius * radius;
-        BlockPos origin = viewer.blockPosition();
-        for (BlockPos pos : match.cacheChests) {
-            if (out.size() >= 48) return;
-            if (pos == null || !level.hasChunkAt(pos)) continue;
-            long d2 = pos.distSqr(origin);
-            if (d2 > r2) continue;
-            out.add(new Blip(pos.getX() - origin.getX(), pos.getZ() - origin.getZ(), (int) Math.sqrt(d2), "cache", "?"));
-        }
     }
 
     private static void addStructures(List<Blip> out, ServerPlayer viewer, NetData.Profile self, MinecraftServer server, ServerLevel level) {

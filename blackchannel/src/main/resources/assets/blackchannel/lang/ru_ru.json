@@ -562,5 +562,9 @@
   "blackchannel.minigame.stats_none": "Статистики пока нет: катка не начиналась.",
   "blackchannel.tower.cam_off": "Обзор вышки выключен.",
   "blackchannel.tower.cam_fail": "Не удалось запустить обзор, крипта не списана.",
-  "blackchannel.blip.cache": "схрон"
+  "item.blackchannel.metal_detector": "Металлоискатель",
+  "tooltip.blackchannel.metal_detector": "Ищет схроны в радиусе. Ломается со временем.",
+  "blackchannel.detector.off": "Металлоискатель работает только во время катки.",
+  "blackchannel.detector.quiet": "Металлоискатель молчит.",
+  "blackchannel.detector.hit": "Металлоискатель: схрон в %s м, %s"
 }

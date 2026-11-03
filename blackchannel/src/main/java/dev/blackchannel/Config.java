@@ -110,8 +110,8 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue TOWER_SECTOR_RADIUS;
     public static final ForgeConfigSpec.IntValue TOWER_CHAT_RADIUS;
     public static final ForgeConfigSpec.IntValue TOWER_INTERCEPT_RADIUS;
-    /** Радиус, с которого радар видит схрон. 0 — схроны не видны на радаре. */
-    public static final ForgeConfigSpec.IntValue CACHE_SIGNAL_RADIUS;
+    public static final ForgeConfigSpec.IntValue DETECTOR_RADIUS;
+    public static final ForgeConfigSpec.IntValue DETECTOR_USES;
     public static final ForgeConfigSpec.IntValue TOWER_CRYPTO_PER_MIN;
     public static final ForgeConfigSpec.IntValue TOWER_HACK_SECONDS;
     public static final ForgeConfigSpec.IntValue TOWER_DISABLE_SECONDS;
@@ -459,8 +459,8 @@ public final class Config {
                 "minecraft:redstone*2-8@8",
                 "minecraft:gunpowder*1-3@8",
                 "blackchannel:battery_cell@6",
-                "tacz:ammo{AmmoId=tacz:9mm}*8-16@8",
-                "tacz:ammo{AmmoId=tacz:556x45}*8-16@8"
+                "tacz:ammo{AmmoId=tacz:9mm}*4-10@8",
+                "tacz:ammo{AmmoId=tacz:556x45}*4-10@8"
         ), o -> o instanceof String);
         b.comment("Сколько предметов выпадает в одном схроне: случайное число от минимума до максимума.");
         b.comment("Базовые значения выше — это эталон: 8 игроков, 14 схронов на карте 1000×1000. "
@@ -472,8 +472,8 @@ public final class Config {
         CACHE_ITEMS_MIN = b.defineInRange("cacheItemsMin", 3, 1, 12);
         CACHE_ITEMS_MAX = b.defineInRange("cacheItemsMax", 6, 1, 12);
         b.comment("Схронов на команду на карте 1000x1000 за 30 минут. Дальше масштабируется по размеру карты и длине катки.");
-        CACHES_PER_TEAM = b.defineInRange("cachesPerTeam", 6.0D, 1.0D, 20.0D);
-        CACHES_MAX = b.defineInRange("cachesMax", 80, 8, 300);
+        CACHES_PER_TEAM = b.defineInRange("cachesPerTeam", 9.0D, 1.0D, 30.0D);
+        CACHES_MAX = b.defineInRange("cachesMax", 120, 8, 400);
         b.comment("Аирдропы: сброс в случайную точку карты с координатами для всех. Первый — через airDropFirstMinute минут, дальше каждые airDropIntervalMinutes.");
         AIRDROP_ENABLED = b.define("airdropEnabled", true);
         AIRDROP_FIRST_MINUTE = b.defineInRange("airdropFirstMinute", 15, 1, 180);
@@ -558,7 +558,10 @@ public final class Config {
         TOWER_SECTOR_SECONDS = b.defineInRange("towerSectorSeconds", 60, 10, 600);
         TOWER_CHAT_RADIUS = b.defineInRange("towerChatRadius", 800, 32, 2048);
         TOWER_INTERCEPT_RADIUS = b.defineInRange("towerInterceptRadius", 400, 32, 2048);
-        CACHE_SIGNAL_RADIUS = b.defineInRange("cacheSignalRadius", 160, 0, 1024);
+        b.comment("Металлоискатель: на каком расстоянии в блоках он замечает схрон.");
+        DETECTOR_RADIUS = b.defineInRange("detectorRadius", 50, 8, 200);
+        b.comment("Металлоискатель: сколько раз его можно использовать до поломки.");
+        DETECTOR_USES = b.defineInRange("detectorUses", 40, 1, 500);
         TOWER_CRYPTO_PER_MIN = b.defineInRange("towerCryptoPerMin", 2, 0, 100);
         TOWER_HACK_SECONDS = b.defineInRange("towerHackSeconds", 20, 2, 120);
         TOWER_DISABLE_SECONDS = b.defineInRange("towerDisableSeconds", 300, 10, 3600);

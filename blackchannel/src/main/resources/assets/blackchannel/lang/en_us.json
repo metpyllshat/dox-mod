@@ -562,5 +562,9 @@
   "blackchannel.minigame.stats_none": "No stats yet: no match has started.",
   "blackchannel.tower.cam_off": "Tower view off.",
   "blackchannel.tower.cam_fail": "Could not start the view, crypto not charged.",
-  "blackchannel.blip.cache": "cache"
+  "item.blackchannel.metal_detector": "Metal detector",
+  "tooltip.blackchannel.metal_detector": "Finds caches nearby. Wears out with use.",
+  "blackchannel.detector.off": "The metal detector only works during a match.",
+  "blackchannel.detector.quiet": "The metal detector is silent.",
+  "blackchannel.detector.hit": "Metal detector: cache %s m away, %s"
 }

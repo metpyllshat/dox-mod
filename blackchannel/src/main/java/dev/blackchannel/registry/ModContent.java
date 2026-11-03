@@ -6,6 +6,7 @@ import dev.blackchannel.block.NodeBlockEntity;
 import dev.blackchannel.block.LoggerBlock;
 import dev.blackchannel.block.LoggerBlockEntity;
 import dev.blackchannel.item.DefibItem;
+import dev.blackchannel.item.DetectorItem;
 import dev.blackchannel.item.DeviceItem;
 import dev.blackchannel.item.LoggerItem;
 import dev.blackchannel.item.TagItem;
@@ -59,6 +60,8 @@ public final class ModContent {
             () -> new LoggerItem(LOGGER.get(), new Item.Properties().stacksTo(16)));
     public static final RegistryObject<Item> DEFIB = ITEMS.register("defibrillator",
             () -> new DefibItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE)));
+    public static final RegistryObject<Item> DETECTOR = ITEMS.register("metal_detector",
+            () -> new DetectorItem(new Item.Properties().stacksTo(1).durability(40).rarity(Rarity.UNCOMMON)));
     public static final RegistryObject<Item> TAG = ITEMS.register("dog_tag",
             () -> new TagItem(new Item.Properties().stacksTo(1).rarity(Rarity.UNCOMMON)));
 
