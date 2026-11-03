@@ -52,14 +52,14 @@ public class DetectorItem extends Item {
 
         ServerLevel sl = sp.serverLevel();
         int radius = Config.DETECTOR_RADIUS.get();
-        long r2 = (long) radius * radius;
+        double r2 = (double) radius * radius;
         BlockPos origin = sp.blockPosition();
         BlockPos best = null;
-        long bestD2 = Long.MAX_VALUE;
+        double bestD2 = Double.MAX_VALUE;
         for (BlockPos pos : match.cacheChests) {
             if (pos == null || !sl.hasChunkAt(pos)) continue;
             if (!(sl.getBlockEntity(pos) instanceof ChestBlockEntity)) continue;
-            long d2 = pos.distSqr(origin);
+            double d2 = pos.distSqr(origin);
             if (d2 <= r2 && d2 < bestD2) {
                 bestD2 = d2;
                 best = pos;
