@@ -268,7 +268,7 @@
   "blackchannel.spam.4": "CALLBACK FAILED",
   "blackchannel.spam.5": "SIM LOCK",
   "blackchannel.spam.6": "ROUTE LOOP",
-  "blackchannel.tower.cam_ok": "Tower view %s %s for %ss. Look with the mouse, the view circles the tower.",
+  "blackchannel.tower.cam_ok": "Tower view %s %s for %ss. Press CAM again to exit.",
   "blackchannel.tower.captured": "%s captured tower %s @ %s %s",
   "blackchannel.tower.crypto": "Tower %s %s: +%s crypto.",
   "blackchannel.tower.disabled": "Tower jammed for %ss more.",
@@ -278,6 +278,7 @@
   "blackchannel.tower.need_crew": "Tower: join a crew via menu to capture.",
   "blackchannel.tower.no_own": "Need owned tower online.",
   "blackchannel.tower.own": "Tower already yours: %s.",
+  "blackchannel.tower.zone_enter": "Tower zone %s %s: %s entered",
   "blackchannel.tower.scan_ok": "Tower scan %sm: points updated.",
   "block.blackchannel.decoy_beacon": "Decoy Beacon",
   "block.blackchannel.faraday_anchor": "Faraday Anchor",
@@ -557,5 +558,8 @@
   "tooltip.blackchannel.zero": "Keep it in inventory. DEANON ignores VPN and opens an encrypted sample.",
   "blackchannel.tower.cam_busy": "Tower view is already active.",
   "blackchannel.minigame.stats_header": "Match stats:",
-  "blackchannel.minigame.stats_row": "%s [%s]: kills %s, deaths %s, traces %s, towers %s, contract crypto %s · %s"
+  "blackchannel.minigame.stats_row": "%s [%s]: kills %s, deaths %s, traces %s, towers %s, contract crypto %s · %s",
+  "blackchannel.minigame.stats_none": "No stats yet: no match has started.",
+  "blackchannel.tower.cam_off": "Tower view off.",
+  "blackchannel.tower.cam_fail": "Could not start the view, crypto not charged."
 }

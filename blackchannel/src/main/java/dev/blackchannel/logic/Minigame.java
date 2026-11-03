@@ -97,9 +97,7 @@ public final class Minigame {
     /** Полоса сверху: текущий этап катки и сколько до следующего. */
     private static ServerBossEvent stageBar;
     // Схроны: 14 на карту 1000×1000 с четырьмя отрядами, дальше — линейно
-    private static final double CACHE_PER_TEAM = 3.5;
     private static final int CACHE_MIN = 8;
-    private static final int CACHE_MAX = 56;
 
     private record LastHit(UUID attacker, long tick) {}
 
@@ -135,6 +133,8 @@ public final class Minigame {
     private static final ArrayDeque<BlockPos> LOOT_QUEUE = new ArrayDeque<>();
     private static final int LOOT_PER_TICK = 4;
     private static final int LOOT_QUEUE_LIMIT = 2048;
+    /** Сундуки вышек: свой пул (ресурсы, без оружия) и своя очередь. */
+    private static final ArrayDeque<BlockPos> TOWER_LOOT_QUEUE = new ArrayDeque<>();
     /** Границу включаем после высадки: пока базы грузятся, игроки стоят вне зоны. */
     private static boolean borderPending;
 
@@ -151,6 +151,7 @@ public final class Minigame {
                 .executes(c -> help(c.getSource()))
                 .then(Commands.literal("help").executes(c -> help(c.getSource())))
                 .then(Commands.literal("status").executes(c -> status(c.getSource())))
+                .then(Commands.literal("stats").executes(c -> statsFor(c.getSource())))
                 .then(Commands.literal("team").executes(c -> openTeamMenu(c.getSource())))
                 .then(Commands.literal("crew").executes(c -> openTeamMenu(c.getSource())))
                 .then(Commands.literal("center").requires(Minigame::op)
@@ -354,11 +355,32 @@ public final class Minigame {
             }
             index++;
         }
+        // Таймеры внизу списка: до аирдропа и до новых заданий. Выше команд, чтобы были на виду.
+        long now = server.overworld().getGameTime();
+        List<String> timers = new ArrayList<>();
+        if (Config.AIRDROP_ENABLED.get() && match.nextAirdropTick > now) {
+            timers.add("Аирдроп " + clockOf(match.nextAirdropTick - now));
+        }
+        if (match.nextContractTick > now) {
+            timers.add("Задания " + clockOf(match.nextContractTick - now));
+        }
+        int timerScore = 100000;
+        for (String text : timers) {
+            String label = "\u00a77" + text;
+            keep.add(label);
+            scoreboard.getOrCreatePlayerScore(label, obj).setScore(timerScore--);
+        }
         for (String old : lineNames) {
             if (!keep.contains(old)) scoreboard.resetPlayerScore(old, obj);
         }
         lineNames.clear();
         lineNames.addAll(keep);
+    }
+
+    /** Оставшееся время в тиках — в «м:сс». */
+    private static String clockOf(long ticks) {
+        long left = Math.max(0L, ticks / 20L);
+        return String.format("%d:%02d", left / 60L, left % 60L);
     }
 
     private static ChatFormatting scoreColor(MatchData match, String code) {
@@ -625,6 +647,7 @@ public final class Minigame {
         nextDeployTick = 0;
         nextCacheTick = 0;
         LOOT_QUEUE.clear();
+        TOWER_LOOT_QUEUE.clear();
         match.downedPlayers.clear();
         String winner;
         if (survivor != null) {
@@ -673,11 +696,32 @@ public final class Minigame {
         match.setDirty();
     }
 
-    /** Итоги катки в чат: по каждому игроку, который числился в отряде. */
+    /** Итоги катки в чат: по каждому игроку, который числился в отряде. Одним блоком, чтобы не теряться. */
     private static void broadcastStats(MinecraftServer server, MatchData match) {
-        if (match.playerCrew.isEmpty()) return;
-        NetData netData = NetData.get(server);
+        List<Component> lines = statsLines(server, match);
+        if (lines.isEmpty()) return;
+        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
+            for (Component line : lines) player.sendSystemMessage(line);
+        }
+    }
+
+    /** Команда /minigame stats: итоги текущей (или последней) катки, только тебе. */
+    private static int statsFor(CommandSourceStack source) {
+        MinecraftServer server = source.getServer();
+        MatchData match = MatchData.get(server);
+        List<Component> lines = statsLines(server, match);
+        if (lines.isEmpty()) {
+            source.sendFailure(Msg.paint(Component.translatable("blackchannel.minigame.stats_none")));
+            return 0;
+        }
+        for (Component line : lines) source.sendSuccess(() -> line, false);
+        return 1;
+    }
+
+    private static List<Component> statsLines(MinecraftServer server, MatchData match) {
         List<Component> lines = new ArrayList<>();
+        if (match.playerCrew.isEmpty()) return lines;
+        NetData netData = NetData.get(server);
         lines.add(Msg.paint(Component.translatable("blackchannel.minigame.stats_header").withStyle(ChatFormatting.AQUA)));
         for (Map.Entry<UUID, String> entry : match.playerCrew.entrySet()) {
             MatchData.Stats s = match.stats(entry.getKey());
@@ -688,9 +732,7 @@ public final class Minigame {
                     teamLabel(server, entry.getValue()), s.kills, s.deaths, s.traces, s.towers, s.cryptoEarned, s.title)));
         }
         match.setDirty();
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            for (Component line : lines) player.sendSystemMessage(line);
-        }
+        return lines;
     }
 
     private static void placeCacheStep(MinecraftServer server, MatchData match, ServerLevel level) {
@@ -721,10 +763,28 @@ public final class Minigame {
         if (status == CHUNK_READY) {
             int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, cand.getX(), cand.getZ());
             BlockPos feet = new BlockPos(cand.getX(), y, cand.getZ());
-            if (match.inside(feet) && standableHere(level, feet)) placeChest(level, match, feet, level.getRandom());
+            placeNearby(level, match, feet);
         }
         logStep("cache " + match.cacheTick + "/" + match.cacheTotal + " (волна " + (match.cacheWave + 1) + ")", started);
         if (!waveOpen(match)) announceWave(server, match);
+    }
+
+    /**
+     * Схрон не пропадает, если точка не подходит (вода, склон, листва): пробуем другие места
+     * в том же чанке, он уже загружен и пробы ничего не дергают в мире.
+     */
+    private static void placeNearby(ServerLevel level, MatchData match, BlockPos first) {
+        RandomSource random = level.getRandom();
+        for (int attempt = 0; attempt < 8; attempt++) {
+            int x = attempt == 0 ? first.getX() : (first.getX() & ~15) + 2 + random.nextInt(12);
+            int z = attempt == 0 ? first.getZ() : (first.getZ() & ~15) + 2 + random.nextInt(12);
+            int y = level.getHeight(Heightmap.Types.MOTION_BLOCKING_NO_LEAVES, x, z);
+            BlockPos feet = new BlockPos(x, y, z);
+            if (match.inside(feet) && standableHere(level, feet)) {
+                placeChest(level, match, feet, random);
+                return;
+            }
+        }
     }
 
     /** Сообщение о том, что волна схронов расставлена: сколько уже в мире и какая это волна. */
@@ -1045,6 +1105,12 @@ public final class Minigame {
 
     /** Разбор очереди сундуков: несколько штук за тик, уже в нормальном контексте тика. */
     /** Поставить сундук в очередь на лут: его наполнят по чуть-чуть, без лага. */
+    /** Сундук вышки: наполняется пулом cacheTower, без оружия. */
+    public static void queueTowerLoot(BlockPos pos) {
+        if (pos == null || TOWER_LOOT_QUEUE.size() >= LOOT_QUEUE_LIMIT) return;
+        TOWER_LOOT_QUEUE.add(pos.immutable());
+    }
+
     public static void queueLoot(BlockPos pos) {
         if (pos == null) return;
         if (LOOT_QUEUE.size() >= LOOT_QUEUE_LIMIT) return;
@@ -1052,14 +1118,16 @@ public final class Minigame {
     }
 
     private static void lootStep(MatchData match, ServerLevel level) {
-        for (int i = 0; i < LOOT_PER_TICK && !LOOT_QUEUE.isEmpty(); i++) {
-            BlockPos pos = LOOT_QUEUE.poll();
+        for (int i = 0; i < LOOT_PER_TICK && (!TOWER_LOOT_QUEUE.isEmpty() || !LOOT_QUEUE.isEmpty()); i++) {
+            boolean tower = !TOWER_LOOT_QUEUE.isEmpty();
+            BlockPos pos = tower ? TOWER_LOOT_QUEUE.poll() : LOOT_QUEUE.poll();
             if (pos == null) return;
             if (!level.isLoaded(pos)) continue;
             if (!(level.getBlockEntity(pos) instanceof RandomizableContainerBlockEntity box)) continue;
             if (!isContainer(box.getBlockState().getBlock())) continue;
             try {
-                injectLoot(level, match, box);
+                if (tower) injectLoot(level, match, box, Config.CACHE_TOWER.get(), Config.TOWER_LOOT_ROLLS.get());
+                else injectLoot(level, match, box, Config.CACHE_DUNGEON.get(), 3 + level.getRandom().nextInt(3));
             } catch (RuntimeException e) {
                 BlackChannelMod.LOGGER.warn("field chest skip at {}: {}", pos, e.toString());
             }
@@ -2055,6 +2123,7 @@ public final class Minigame {
         nextDeployTick = 0;
         nextCacheTick = level.getGameTime() + CACHE_START_DELAY;
         LOOT_QUEUE.clear();
+        TOWER_LOOT_QUEUE.clear();
         borderPending = true;
         // Генерацию чанков, постановку маяка и телепорт раскладываем по тикам:
         // десятки чанков в одном тике на обычном мире вешают сервер на минуты.
@@ -2167,6 +2236,7 @@ public final class Minigame {
         nextDeployTick = 0;
         nextCacheTick = 0;
         LOOT_QUEUE.clear();
+        TOWER_LOOT_QUEUE.clear();
         match.matchEndTick = 0;
         match.finalEndTick = 0;
         match.nextAirdropTick = 0;
@@ -2597,8 +2667,8 @@ public final class Minigame {
         // Чем дольше катка, тем больше схронов: иначе всё найдут в первые полчаса и карта опустеет.
         // Корень, а не линейно: за 90 минут игрок не успевает обыскать вдвое больше сундуков.
         double longer = Math.sqrt(Mth.clamp(Config.MATCH_DURATION_MINUTES.get() / 30.0, 0.5, 6.0));
-        double raw = CACHE_PER_TEAM * Math.max(1, teams) * side / 1000.0 * longer;
-        return Mth.clamp((int) Math.round(raw), CACHE_MIN, CACHE_MAX);
+        double raw = Config.CACHES_PER_TEAM.get() * Math.max(1, teams) * side / 1000.0 * longer;
+        return Mth.clamp((int) Math.round(raw), CACHE_MIN, Config.CACHES_MAX.get());
     }
 
     private static void prepareCaches(ServerLevel level, MatchData match) {
@@ -2762,11 +2832,12 @@ public final class Minigame {
      * Лут кладётся в любой сундук или бочку в зоне матча, а не только в данжах.
      * Сгенерированный таблицей лут заменяется нашим, из игроцкого сундука ничего не выкидываем.
      */
-    private static void injectLoot(ServerLevel level, MatchData match, RandomizableContainerBlockEntity box) {
+    private static void injectLoot(ServerLevel level, MatchData match, RandomizableContainerBlockEntity box,
+                                   List<? extends String> pool, int rolls) {
         if (box.getPersistentData().getBoolean("bcLoot")) return;
         if (!match.inside(box.getBlockPos())) return;
         RandomSource random = level.getRandom();
-        List<ItemStack> stacks = rollLoot(Config.CACHE_DUNGEON.get(), 3 + random.nextInt(3), random);
+        List<ItemStack> stacks = rollLoot(pool, rolls, random);
         if (stacks.isEmpty()) return;
         CompoundTag saved = box.saveWithoutMetadata();
         // 1.20.1 не отдаёт id таблицы методом. Он лежит в теге, пока сундук не открыли.

@@ -84,11 +84,14 @@ public final class Config {
     public static final ForgeConfigSpec.DoubleValue LOOT_SCALE_MAX;
     public static final ForgeConfigSpec.IntValue CACHE_ITEMS_MIN;
     public static final ForgeConfigSpec.IntValue CACHE_ITEMS_MAX;
+    public static final ForgeConfigSpec.DoubleValue CACHES_PER_TEAM;
+    public static final ForgeConfigSpec.IntValue CACHES_MAX;
     public static final ForgeConfigSpec.BooleanValue AIRDROP_ENABLED;
     public static final ForgeConfigSpec.IntValue AIRDROP_FIRST_MINUTE;
     public static final ForgeConfigSpec.IntValue AIRDROP_INTERVAL_MINUTES;
     public static final ForgeConfigSpec.IntValue AIRDROP_ITEMS;
     public static final ForgeConfigSpec.IntValue CONTRACT_MINUTES;
+    public static final ForgeConfigSpec.IntValue CONTRACT_REFRESH_MINUTES;
     public static final ForgeConfigSpec.IntValue BEACON_SHIELD_SECONDS;
     public static final ForgeConfigSpec.BooleanValue TRACE_SCALE_MAP;
     public static final ForgeConfigSpec.IntValue TRACE_MAP_REF;
@@ -99,6 +102,10 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue LEAK_SCATTER_PERCENT;
     public static final ForgeConfigSpec.IntValue TOWER_COUNT;
     public static final ForgeConfigSpec.BooleanValue TOWER_LOOT;
+    public static final ForgeConfigSpec.IntValue TOWER_LOOT_ROLLS;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_TOWER;
+    public static final ForgeConfigSpec.IntValue TOWER_LINK_RADIUS;
+    public static final ForgeConfigSpec.IntValue TOWER_RADAR_BONUS;
     public static final ForgeConfigSpec.IntValue TOWER_PELENG_RADIUS;
     public static final ForgeConfigSpec.IntValue TOWER_SECTOR_RADIUS;
     public static final ForgeConfigSpec.IntValue TOWER_CHAT_RADIUS;
@@ -462,6 +469,9 @@ public final class Config {
         LOOT_SCALE_MAX = b.defineInRange("lootScaleMax", 3.0D, 1.0D, 6.0D);
         CACHE_ITEMS_MIN = b.defineInRange("cacheItemsMin", 3, 1, 12);
         CACHE_ITEMS_MAX = b.defineInRange("cacheItemsMax", 6, 1, 12);
+        b.comment("Схронов на команду на карте 1000x1000 за 30 минут. Дальше масштабируется по размеру карты и длине катки.");
+        CACHES_PER_TEAM = b.defineInRange("cachesPerTeam", 6.0D, 1.0D, 20.0D);
+        CACHES_MAX = b.defineInRange("cachesMax", 80, 8, 300);
         b.comment("Аирдропы: сброс в случайную точку карты с координатами для всех. Первый — через airDropFirstMinute минут, дальше каждые airDropIntervalMinutes.");
         AIRDROP_ENABLED = b.define("airdropEnabled", true);
         AIRDROP_FIRST_MINUTE = b.defineInRange("airdropFirstMinute", 15, 1, 180);
@@ -469,6 +479,8 @@ public final class Config {
         AIRDROP_ITEMS = b.defineInRange("airdropItems", 5, 1, 12);
         b.comment("Контракты отряда: сколько минут живёт задание до замены. Выполненное платит сразу, отчаянное — вдвое.");
         CONTRACT_MINUTES = b.defineInRange("contractMinutes", 10, 3, 60);
+        b.comment("Как часто отряду добавляются новые задания (до трёх открытых).");
+        CONTRACT_REFRESH_MINUTES = b.defineInRange("contractRefreshMinutes", 5, 1, 60);
         b.pop();
 
         b.push("world");
@@ -519,6 +531,25 @@ public final class Config {
         TOWER_COUNT = b.defineInRange("towerCount", 6, 0, 12);
         b.comment("Класть ли на верхнюю площадку вышки контейнер с лутом поздней волны.");
         TOWER_LOOT = b.define("towerLoot", true);
+        b.comment("Сколько раз вытаскивать предмет из пула вышки (один сундук на вышку). Пул — cacheTower.");
+        TOWER_LOOT_ROLLS = b.defineInRange("towerLootRolls", 4, 1, 12);
+        b.comment("Лут сундука вышки: только ресурсы, без оружия. Формат как у остальных пулов: предмет*мин-макс@вес.");
+        CACHE_TOWER = b.defineList("cacheTower", List.of(
+                "minecraft:iron_ingot*4-12@10",
+                "minecraft:raw_iron*3-8@6",
+                "minecraft:copper_ingot*6-16@10",
+                "minecraft:raw_copper*4-10@6",
+                "minecraft:gold_ingot*2-6@6",
+                "minecraft:raw_gold*2-6@4",
+                "minecraft:redstone*8-24@10",
+                "minecraft:lapis_lazuli*4-12@6",
+                "minecraft:quartz*4-12@6",
+                "minecraft:glass_pane*4-12@4"
+        ), o -> o instanceof String);
+        b.comment("Вышка работает как аплинк и тарелка: в этом радиусе от своей вышки связь есть.");
+        TOWER_LINK_RADIUS = b.defineInRange("towerLinkRadius", 96, 16, 512);
+        b.comment("Прибавка к радару телефона/ноутбука рядом со своей вышкой (в блоках).");
+        TOWER_RADAR_BONUS = b.defineInRange("towerRadarBonus", 120, 0, 512);
         b.comment("Что даёт вышка: пеленг на любой шум 400, карта сектора 600 раз в 60с, крипта 2/мин, чат отряда 800 без стойки, перехват чужих действий");
         TOWER_PELENG_RADIUS = b.defineInRange("towerPelengRadius", 400, 32, 2048);
         TOWER_SECTOR_RADIUS = b.defineInRange("towerSectorRadius", 600, 32, 2048);

@@ -3,6 +3,7 @@ package dev.blackchannel.logic;
 import dev.blackchannel.Config;
 import dev.blackchannel.block.NodeBlock;
 import dev.blackchannel.block.NodeBlockEntity;
+import dev.blackchannel.data.MatchData;
 import dev.blackchannel.data.NetData;
 import net.minecraft.core.BlockPos;
 import net.minecraft.network.chat.Component;
@@ -168,6 +169,11 @@ public final class SignalEnv {
                 });
             });
         }
+        // Своя вышка рядом работает как аплинк и тарелку сразу
+        if (link.mode == Link.Mode.NONE && towerNear(player, profile, Config.TOWER_LINK_RADIUS.get())) {
+            link.mode = Link.Mode.DISH;
+            link.dish = true;
+        }
         if (link.mode == Link.Mode.NONE && profile.satCharges > 0) link.mode = Link.Mode.SAT;
         // Вышка даёт связь как аплинк+тарелка: если рядом своя вышка — есть сеть
         if (link.mode == Link.Mode.NONE) {
@@ -206,7 +212,22 @@ public final class SignalEnv {
         if (Devices.has(player, dev.blackchannel.registry.ModContent.PHONE.get())) range = Config.RADAR_PHONE.get();
         if (Devices.has(player, dev.blackchannel.registry.ModContent.LAPTOP.get())) range = Math.max(range, Config.RADAR_LAPTOP.get());
         if (dishNear(player, profile, 128)) range += Config.DISH_RADAR_BONUS.get();
+        if (range > 0 && towerNear(player, profile, Config.TOWER_LINK_RADIUS.get())) range += Config.TOWER_RADAR_BONUS.get();
         return range;
+    }
+
+    /** Есть ли рядом (в радиусе) своя рабочая вышка отряда игрока. */
+    public static boolean towerNear(ServerPlayer player, NetData.Profile profile, int radius) {
+        if (profile.crew == null || profile.crew.isEmpty()) return false;
+        MatchData match = MatchData.get(player.getServer());
+        if (!match.active) return false;
+        long now = player.getServer().getTickCount();
+        long r2 = (long) radius * radius;
+        for (MatchData.TowerInfo info : match.towerInfos) {
+            if (!profile.crew.equals(info.owner) || info.disabledUntil > now) continue;
+            if (player.blockPosition().distSqr(info.pos) <= r2) return true;
+        }
+        return false;
     }
 
     public static int structureRange(ServerPlayer player, NetData.Profile profile) {

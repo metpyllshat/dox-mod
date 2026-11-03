@@ -70,10 +70,14 @@ public final class Contracts {
     public static void tick(MinecraftServer server, MatchData match, long now) {
         if (!match.active || match.finalActive) return;
         expire(server, match, now);
-        Map<String, Integer> lowest = lowestCrews(match);
-        for (String crew : crews(match)) {
-            boolean weakest = lowest.containsKey(crew) && !hadDesperate(match, crew);
-            refill(server, match, crew, now, weakest);
+        // Новые задания приходят по общему таймеру, а не каждый тик: меньше шума в чате
+        if (now >= match.nextContractTick) {
+            match.nextContractTick = now + Config.CONTRACT_REFRESH_MINUTES.get() * 1200L;
+            Map<String, Integer> lowest = lowestCrews(match);
+            for (String crew : crews(match)) {
+                boolean weakest = lowest.containsKey(crew) && !hadDesperate(match, crew);
+                refill(server, match, crew, now, weakest);
+            }
         }
         match.contracts.removeIf(c -> !c.open(now) && !c.desperate);
         match.setDirty();
@@ -83,6 +87,7 @@ public final class Contracts {
     public static void reset(MatchData match) {
         match.contracts.clear();
         match.contractSeq = 1;
+        match.nextContractTick = 0L;
         match.setDirty();
     }
 
@@ -92,8 +97,6 @@ public final class Contracts {
             if (c.expiresTick <= 0L) continue;
             // сгорел один раз: помечаем, чтобы не объявлять дважды
             c.expiresTick = 0L;
-            notifyCrew(server, match, c.crew, Msg.paint(Component.translatable("blackchannel.contract.expired",
-                    titleOf(c.kind, c.target, c.item)).withStyle(ChatFormatting.GRAY)), null);
         }
     }
 
@@ -121,8 +124,10 @@ public final class Contracts {
             }
             match.contracts.add(c);
             open++;
-            Component line = Msg.paint(Component.translatable("blackchannel.contract.new",
-                    titleOf(c.kind, c.target, c.item), c.reward).withStyle(c.desperate ? ChatFormatting.RED : ChatFormatting.AQUA));
+            Component line = c.desperate
+                    ? Msg.paint(Component.translatable("blackchannel.contract.new",
+                    titleOf(c.kind, c.target, c.item), c.reward).withStyle(ChatFormatting.RED))
+                    : null;
             notifyCrew(server, match, crew, line, SoundEvents.NOTE_BLOCK_CHIME.value());
         }
     }
@@ -368,7 +373,7 @@ public final class Contracts {
     private static void notifyCrew(MinecraftServer server, MatchData match, String crew, Component line, net.minecraft.sounds.SoundEvent sound) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             if (!crew.equals(match.playerCrew.get(player.getUUID()))) continue;
-            player.sendSystemMessage(line);
+            if (line != null) player.sendSystemMessage(line);
             if (sound != null) player.playNotifySound(sound, SoundSource.MASTER, 0.7f, 1.1f);
         }
     }

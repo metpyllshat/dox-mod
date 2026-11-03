@@ -173,6 +173,8 @@ public final class ClientState {
     public static void applyStatus(CompoundTag tag) {
         applyBase(tag);
         if (tag.contains("radarHud")) radarHud = tag.getBoolean("radarHud");
+        // Миникарта живёт и при закрытом телефоне: блипы приходят в статус-пакете
+        if (tag.contains("blips")) readBlips(tag.getList("blips", Tag.TAG_COMPOUND));
     }
 
     private static void applyBase(CompoundTag tag) {
