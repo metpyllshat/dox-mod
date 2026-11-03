@@ -294,7 +294,7 @@ public final class Ui {
         return switch (kind) {
             case "friend", "beacon", "bed", "radio" -> GREEN;
             case "decoy", "dish", "radar" -> BLUE;
-            case "drone", "rack", "ew" -> AMBER;
+            case "drone", "rack", "ew", "cache" -> AMBER;
             case "cage" -> MUTED;
             default -> RED;
         };

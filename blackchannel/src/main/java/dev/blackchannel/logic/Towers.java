@@ -513,10 +513,10 @@ public final class Towers {
 
     // ---------- обзор от вышки по кругу ----------
 
-    /** Длительность обзора и шаг поворота: за 20 секунд взгляд делает ровно один круг. */
-    private static final int CAM_TICKS = 400;
-    private static final int CAM_STEP_TICKS = 2;
-    private static final float CAM_STEP_DEG = (float) (360.0 / (CAM_TICKS / CAM_STEP_TICKS));
+    /** Длительность обзора без действий; поворот делает сам игрок мышью (см. client/TowerCam). */
+    private static final int CAM_TICKS = 2400;
+    /** Как часто сервер проверяет, не пора ли выйти из обзора. */
+    private static final int CAM_CHECK_TICKS = 20;
     /** Чуть вниз, чтобы в кадре был верх вышки и ближняя земля. */
     private static final float CAM_PITCH = 18f;
     private static final String CAM_END = "bc_cam_end";
@@ -526,9 +526,9 @@ public final class Towers {
 
     /**
      * Обзор от своей вышки: игрок стоит на верхушке вышки в режиме наблюдателя, а камера —
-     * невидимый маркер на том же месте, который поворачивается по кругу. Игрок не двигается,
-     * поэтому чанки вокруг вышки остаются загруженными и экран не пустеет.
-     * Повторное нажатие КАМЕРА — выход. Через 20 секунд выход сам.
+     * невидимый маркер на том же месте. Взгляд крутит сам игрок мышью на клиенте; сервер
+     * лишь держит игрока на вышке. Игрок не двигается, поэтому чанки вокруг остаются
+     * загруженными и экран не пустеет. Повторное нажатие КАМЕРА — выход. Через 2 минуты выход сам.
      */
     public static void camera(ServerPlayer player, dev.blackchannel.data.NetData.Profile profile) {
         MinecraftServer server = player.getServer();
@@ -563,28 +563,24 @@ public final class Towers {
         player.setCamera(marker);
         player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_ok", owned.pos.getX(), owned.pos.getZ(), CAM_TICKS / 20)), false);
         player.playNotifySound(SoundEvents.SPYGLASS_USE, SoundSource.MASTER, 1f, 1f);
-        camSchedule(server, player.getUUID(), 1);
+        camSchedule(server, player.getUUID());
     }
 
-    private static void camSchedule(MinecraftServer server, UUID id, int k) {
-        server.tell(new net.minecraft.server.TickTask(server.getTickCount() + CAM_STEP_TICKS, () -> {
+    /** Сервер только следит за сроком и за тем, жива ли камера. Поворот на сервер не идёт. */
+    private static void camSchedule(MinecraftServer server, UUID id) {
+        server.tell(new net.minecraft.server.TickTask(server.getTickCount() + CAM_CHECK_TICKS, () -> {
             ServerPlayer player = server.getPlayerList().getPlayer(id);
             // вышел из игры: вернём при входе (см. restoreCam)
             if (player == null) return;
             CompoundTag data = player.getPersistentData();
             if (!data.contains(CAM_END)) return;
             if (server.getTickCount() >= data.getLong(CAM_END)
-                    || player.gameMode.getGameModeForPlayer() != GameType.SPECTATOR) {
+                    || player.gameMode.getGameModeForPlayer() != GameType.SPECTATOR
+                    || markerOf(player) == null) {
                 restoreCam(player);
                 return;
             }
-            net.minecraft.world.entity.Entity marker = markerOf(player);
-            if (marker == null) {
-                restoreCam(player);
-                return;
-            }
-            marker.moveTo(marker.getX(), marker.getY(), marker.getZ(), k * CAM_STEP_DEG, CAM_PITCH);
-            camSchedule(server, id, k + 1);
+            camSchedule(server, id);
         }));
     }
 

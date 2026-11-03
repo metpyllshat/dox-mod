@@ -268,7 +268,7 @@
   "blackchannel.spam.4": "ОБРАТНЫЙ ВЫЗОВ СОРВАН",
   "blackchannel.spam.5": "SIM ЗАБЛОКИРОВАНА",
   "blackchannel.spam.6": "ПЕТЛЯ МАРШРУТА",
-  "blackchannel.tower.cam_ok": "Обзор от вышки %s %s на %sс. Повторное нажатие КАМЕРА — выход.",
+  "blackchannel.tower.cam_ok": "Обзор от вышки %s %s на %sс. Мышь — поворот, повторное нажатие КАМЕРА — выход.",
   "blackchannel.tower.captured": "%s захватил вышку %s @ %s %s",
   "blackchannel.tower.crypto": "Вышка %s %s: +%s крипты.",
   "blackchannel.tower.disabled": "Вышка глушится ещё %sс.",
@@ -561,5 +561,6 @@
   "blackchannel.minigame.stats_row": "%s [%s]: убийств %s, смертей %s, пеленгов %s, вышек %s, крипты с заданий %s · %s",
   "blackchannel.minigame.stats_none": "Статистики пока нет: катка не начиналась.",
   "blackchannel.tower.cam_off": "Обзор вышки выключен.",
-  "blackchannel.tower.cam_fail": "Не удалось запустить обзор, крипта не списана."
+  "blackchannel.tower.cam_fail": "Не удалось запустить обзор, крипта не списана.",
+  "blackchannel.blip.cache": "схрон"
 }

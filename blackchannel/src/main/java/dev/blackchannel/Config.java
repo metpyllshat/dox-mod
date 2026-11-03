@@ -110,6 +110,8 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue TOWER_SECTOR_RADIUS;
     public static final ForgeConfigSpec.IntValue TOWER_CHAT_RADIUS;
     public static final ForgeConfigSpec.IntValue TOWER_INTERCEPT_RADIUS;
+    /** Радиус, с которого радар видит схрон. 0 — схроны не видны на радаре. */
+    public static final ForgeConfigSpec.IntValue CACHE_SIGNAL_RADIUS;
     public static final ForgeConfigSpec.IntValue TOWER_CRYPTO_PER_MIN;
     public static final ForgeConfigSpec.IntValue TOWER_HACK_SECONDS;
     public static final ForgeConfigSpec.IntValue TOWER_DISABLE_SECONDS;
@@ -556,6 +558,7 @@ public final class Config {
         TOWER_SECTOR_SECONDS = b.defineInRange("towerSectorSeconds", 60, 10, 600);
         TOWER_CHAT_RADIUS = b.defineInRange("towerChatRadius", 800, 32, 2048);
         TOWER_INTERCEPT_RADIUS = b.defineInRange("towerInterceptRadius", 400, 32, 2048);
+        CACHE_SIGNAL_RADIUS = b.defineInRange("cacheSignalRadius", 160, 0, 1024);
         TOWER_CRYPTO_PER_MIN = b.defineInRange("towerCryptoPerMin", 2, 0, 100);
         TOWER_HACK_SECONDS = b.defineInRange("towerHackSeconds", 20, 2, 120);
         TOWER_DISABLE_SECONDS = b.defineInRange("towerDisableSeconds", 300, 10, 3600);

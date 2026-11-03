@@ -268,7 +268,7 @@
   "blackchannel.spam.4": "CALLBACK FAILED",
   "blackchannel.spam.5": "SIM LOCK",
   "blackchannel.spam.6": "ROUTE LOOP",
-  "blackchannel.tower.cam_ok": "Tower view %s %s for %ss. Press CAM again to exit.",
+  "blackchannel.tower.cam_ok": "Tower view %s %s for %ss. Move the mouse to look around, press CAM again to exit.",
   "blackchannel.tower.captured": "%s captured tower %s @ %s %s",
   "blackchannel.tower.crypto": "Tower %s %s: +%s crypto.",
   "blackchannel.tower.disabled": "Tower jammed for %ss more.",
@@ -561,5 +561,6 @@
   "blackchannel.minigame.stats_row": "%s [%s]: kills %s, deaths %s, traces %s, towers %s, contract crypto %s · %s",
   "blackchannel.minigame.stats_none": "No stats yet: no match has started.",
   "blackchannel.tower.cam_off": "Tower view off.",
-  "blackchannel.tower.cam_fail": "Could not start the view, crypto not charged."
+  "blackchannel.tower.cam_fail": "Could not start the view, crypto not charged.",
+  "blackchannel.blip.cache": "cache"
 }
