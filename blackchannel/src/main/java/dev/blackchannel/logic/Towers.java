@@ -519,6 +519,8 @@ public final class Towers {
     private static final int CAM_CHECK_TICKS = 5;
     /** Допуск, на сколько игрок может отойти от точки на платформе. */
     private static final double CAM_HOLD_RADIUS = 0.6;
+    /** Чуть вниз, чтобы в кадре был верх вышки и ближняя земля. */
+    private static final float CAM_PITCH = 18f;
     private static final String CAM_END = "bc_cam_end";
     private static final String CAM_MODE = "bc_cam_mode";
     private static final String CAM_RET = "bc_cam_ret";
