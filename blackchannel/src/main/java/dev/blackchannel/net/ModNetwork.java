@@ -31,6 +31,8 @@ public final class ModNetwork {
         CHANNEL.registerMessage(id++, StatusPkt.class, StatusPkt::encode, StatusPkt::decode, StatusPkt::handle);
         CHANNEL.registerMessage(id++, OpenPkt.class, OpenPkt::encode, OpenPkt::decode, OpenPkt::handle);
         CHANNEL.registerMessage(id++, FloodPkt.class, FloodPkt::encode, FloodPkt::decode, FloodPkt::handle);
+        CHANNEL.registerMessage(id++, CamPkt.class, CamPkt::encode, CamPkt::decode, CamPkt::handle);
+        CHANNEL.registerMessage(id++, CamMovePkt.class, CamMovePkt::encode, CamMovePkt::decode, CamMovePkt::handle);
     }
 
     public static void syncFull(ServerPlayer player) {
@@ -48,9 +50,77 @@ public final class ModNetwork {
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new FloodPkt(dev.blackchannel.logic.Flood.images()));
     }
 
+    /** Обзор вышки: включить или выключить на клиенте. */
+    public static void sendCam(ServerPlayer player, boolean on) {
+        if (CHANNEL == null || player == null) return;
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new CamPkt(on));
+    }
+
+    /** Ввод камеры на сервер (клиент вызывает каждый тик, пока активен обзор). */
+    public static void sendCamMove(double fwd, double side, double up, float yaw, float pitch) {
+        if (CHANNEL == null) return;
+        CHANNEL.sendToServer(new CamMovePkt(fwd, side, up, yaw, pitch));
+    }
+
     public static void open(ServerPlayer player, String screen) {
         if (CHANNEL == null || player == null) return;
         CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new OpenPkt(screen));
+    }
+
+    /** Сервер -> клиент: обзор вышки включён или выключен. */
+    public static final class CamPkt {
+        public final boolean on;
+
+        public CamPkt(boolean on) {
+            this.on = on;
+        }
+
+        public static void encode(CamPkt msg, FriendlyByteBuf buf) {
+            buf.writeBoolean(msg.on);
+        }
+
+        public static CamPkt decode(FriendlyByteBuf buf) {
+            return new CamPkt(buf.readBoolean());
+        }
+
+        public static void handle(CamPkt msg, Supplier<NetworkEvent.Context> ctx) {
+            ctx.get().enqueueWork(() -> dev.blackchannel.client.TowerCam.apply(msg.on));
+            ctx.get().setPacketHandled(true);
+        }
+    }
+
+    /** Клиент -> сервер: ввод камеры (вперёд, вбок, вверх от -1 до 1) и угол взгляда. */
+    public static final class CamMovePkt {
+        public final double fwd, side, up;
+        public final float yaw, pitch;
+
+        public CamMovePkt(double fwd, double side, double up, float yaw, float pitch) {
+            this.fwd = fwd;
+            this.side = side;
+            this.up = up;
+            this.yaw = yaw;
+            this.pitch = pitch;
+        }
+
+        public static void encode(CamMovePkt msg, FriendlyByteBuf buf) {
+            buf.writeDouble(msg.fwd);
+            buf.writeDouble(msg.side);
+            buf.writeDouble(msg.up);
+            buf.writeFloat(msg.yaw);
+            buf.writeFloat(msg.pitch);
+        }
+
+        public static CamMovePkt decode(FriendlyByteBuf buf) {
+            return new CamMovePkt(buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readFloat(), buf.readFloat());
+        }
+
+        public static void handle(CamMovePkt msg, Supplier<NetworkEvent.Context> ctx) {
+            ServerPlayer player = ctx.get().getSender();
+            ctx.get().enqueueWork(() -> {
+                if (player != null) dev.blackchannel.logic.Towers.camMove(player, msg.fwd, msg.side, msg.up, msg.yaw, msg.pitch);
+            });
+            ctx.get().setPacketHandled(true);
+        }
     }
 
     public static final class ActionPkt {
