@@ -6,6 +6,8 @@
     "blackchannel:faraday_anchor",
     "blackchannel:signal_jammer",
     "blackchannel:team_beacon",
-    "blackchannel:decoy_beacon"
+    "blackchannel:decoy_beacon",
+    "blackchannel:trace_logger",
+    "blackchannel:tower_terminal"
   ]
 }

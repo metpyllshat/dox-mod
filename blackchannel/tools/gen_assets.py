@@ -13,7 +13,9 @@ BLOCKS = [
     "signal_jammer",
     "team_beacon",
     "decoy_beacon",
+    "trace_logger",
 ]
+CUSTOM_TAG_BLOCKS = ["tower_terminal"]
 ITEMS = [
     "burner_phone",
     "field_laptop",
@@ -66,7 +68,7 @@ def models():
         })
     dump(os.path.join(RES, "data/minecraft/tags/blocks/mineable/pickaxe.json"), {
         "replace": False,
-        "values": ["blackchannel:" + b for b in BLOCKS],
+        "values": ["blackchannel:" + b for b in BLOCKS + CUSTOM_TAG_BLOCKS],
     })
 
 
@@ -191,6 +193,7 @@ def lang():
         "signal_jammer": "Signal Jammer",
         "team_beacon": "Team Beacon",
         "decoy_beacon": "Decoy Beacon",
+        "trace_logger": "Trace Logger",
         "burner_phone": "Burner Phone",
         "field_laptop": "Field Laptop",
         "vpn_chip": "VPN Chip",
@@ -213,6 +216,7 @@ def lang():
         "signal_jammer": "Глушилка сигнала",
         "team_beacon": "Маяк отряда",
         "decoy_beacon": "Ложный маяк",
+        "trace_logger": "Логгер трассировки",
         "burner_phone": "Одноразовый телефон",
         "field_laptop": "Полевой ноутбук",
         "vpn_chip": "Чип VPN",
@@ -230,6 +234,7 @@ def lang():
     }
     for block in BLOCKS:
         both("block.blackchannel." + block, names_en[block], names_ru[block])
+    both("block.blackchannel.tower_terminal", "Tower Terminal", "Терминал вышки")
     for item in ITEMS:
         both("item.blackchannel." + item, names_en[item], names_ru[item])
 

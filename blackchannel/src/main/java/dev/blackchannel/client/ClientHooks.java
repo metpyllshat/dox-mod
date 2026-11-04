@@ -38,6 +38,8 @@ public final class ClientHooks {
         MinecraftForge.EVENT_BUS.addListener(ClientHooks::menu);
         MinecraftForge.EVENT_BUS.addListener(TowerCam::tick);
         MinecraftForge.EVENT_BUS.addListener(TowerCam::input);
+        MinecraftForge.EVENT_BUS.addListener(TowerCam::screen);
+        MinecraftForge.EVENT_BUS.addListener(TowerCam::logout);
     }
 
     /** Ванильный титульный экран подменяем своим: это отдельная игра, а не список кнопок. */
@@ -67,6 +69,7 @@ public final class ClientHooks {
         Minecraft mc = Minecraft.getInstance();
         if (mc.player == null) return;
         GuiGraphics g = event.getGuiGraphics();
+        TowerCam.hud(g);
         if (mc.screen == null) FloodHud.draw(g);
         if (mc.options.hideGui) return;
         int w = mc.getWindow().getGuiScaledWidth();

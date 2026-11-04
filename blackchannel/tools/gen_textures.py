@@ -466,6 +466,42 @@ def block_logger():
     return a
 
 
+def block_terminal():
+    a = Art()
+    a.rect(0, 0, 15, 15, c(0x161D21))
+    a.frame(0, 0, 15, 15, c(0x070A0C))
+    a.frame(1, 1, 14, 14, c(0x303A3F))
+    for y in (4, 11):
+        a.hline(2, 13, y, c(0x0E1417))
+        a.hline(3, 12, y + 1, c(0x252E33))
+    for x, y in ((2, 2), (13, 2), (2, 13), (13, 13)):
+        a.px(x, y, c(0x7D878C))
+        a.px(x + (1 if x == 2 else -1), y, c(0x343D42))
+    a.rect(5, 7, 10, 9, c(0x0A1012))
+    a.px(6, 8, GREEN)
+    a.px(8, 8, AMBER)
+    a.px(10, 8, RED_LO)
+    return a
+
+
+def block_terminal_screen():
+    a = Art()
+    a.rect(0, 0, 15, 15, c(0x090D0F))
+    a.frame(0, 0, 15, 15, c(0x49545A))
+    a.frame(1, 1, 14, 14, c(0x111A1D))
+    a.rect(3, 3, 12, 11, c(0x071311))
+    a.hline(4, 11, 5, GREEN_LO)
+    a.hline(4, 9, 7, c(0x2B7F65))
+    a.hline(4, 7, 9, c(0x225D4D))
+    a.px(11, 9, AMBER)
+    a.px(12, 3, GREEN_HI)
+    a.hline(3, 12, 13, c(0x212B2F))
+    a.px(4, 13, RED)
+    a.px(6, 13, AMBER)
+    a.px(8, 13, GREEN)
+    return a
+
+
 ITEMS = {
     "burner_phone": burner_phone,
     "field_laptop": field_laptop,
@@ -499,6 +535,8 @@ BLOCKS = {
     "team_beacon": lambda: block_beacon(GREEN_LO, GREEN, GREEN_HI),
     "decoy_beacon": lambda: block_beacon(c(0xB06A1E), AMBER, AMBER_HI),
     "trace_logger": block_logger,
+    "tower_terminal": block_terminal,
+    "tower_terminal_screen": block_terminal_screen,
 }
 
 

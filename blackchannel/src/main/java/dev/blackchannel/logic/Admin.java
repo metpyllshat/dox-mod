@@ -88,7 +88,8 @@ public final class Admin {
             player.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.admin.no_match")));
             return;
         }
-        long now = server.getTickCount();
+        ServerLevel level = Ops.levelOf(server, match.dim);
+        long now = level == null ? server.overworld().getGameTime() : level.getGameTime();
         match.matchEndTick = now + 60L * 20L;
         match.finalEndTick = match.matchEndTick + 60L * 20L;
         match.setDirty();
@@ -212,7 +213,9 @@ public final class Admin {
         StringBuilder sb = new StringBuilder();
         sb.append(match.active ? "матч идёт" : "матч не запущен");
         if (match.active) {
-            int left = Math.max(0, (int) ((match.matchEndTick - server.getTickCount()) / 20L));
+            ServerLevel level = Ops.levelOf(server, match.dim);
+            long now = level == null ? server.overworld().getGameTime() : level.getGameTime();
+            int left = Math.max(0, (int) ((match.matchEndTick - now) / 20L));
             sb.append(", до конца ").append(left / 60).append(":").append(String.format("%02d", left % 60));
         }
         sb.append(", центр ").append(match.centerX).append(" ").append(match.centerZ).append(" (").append(match.size).append(")");

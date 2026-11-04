@@ -51,26 +51,26 @@ public final class Flood {
         return List.of("НЕИЗВЕСТНЫЙ НОМЕР", "ЛИНИЯ ЗАНЯТА", "ПОТОК ПАКЕТОВ", "SIM ЗАБЛОКИРОВАНА");
     }
 
-    public static String line(int tick) {
+    public static String line(long tick) {
         List<String> lines = lines();
-        return lines.get(Math.floorMod(tick / 5, lines.size()));
+        return lines.get((int) Math.floorMod(tick / 5L, lines.size()));
     }
 
-    public static void play(ServerPlayer player, int tick) {
+    public static void play(ServerPlayer player, long tick) {
         List<String> sounds = clean(Config.FLOOD_SOUNDS.get(), 12, 80);
         if (sounds.isEmpty()) return;
-        String id = sounds.get(Math.floorMod(tick, sounds.size()));
+        String id = sounds.get((int) Math.floorMod(tick, sounds.size()));
         ResourceLocation loc = ResourceLocation.tryParse(id);
         if (loc == null) return;
         SoundEvent event = ForgeRegistries.SOUND_EVENTS.getValue(loc);
         if (event == null) return;
         float volume = Config.FLOOD_VOLUME.get().floatValue();
         if (volume <= 0f) return;
-        float pitch = 0.65f + (tick % 7) * 0.12f;
+        float pitch = 0.65f + (float) (tick % 7L) * 0.12f;
         player.playNotifySound(event, SoundSource.MASTER, volume, pitch);
     }
 
-    public static void spam(ServerPlayer player, int tick, boolean actionBar) {
+    public static void spam(ServerPlayer player, long tick, boolean actionBar) {
         Component line = Component.literal(line(tick));
         if (actionBar) player.displayClientMessage(Msg.paint(line), true);
         else player.sendSystemMessage(Msg.paint(line));

@@ -1,0 +1,8 @@
+{
+  "variants": {
+    "facing=north": { "model": "blackchannel:block/tower_terminal" },
+    "facing=east": { "model": "blackchannel:block/tower_terminal", "y": 90 },
+    "facing=south": { "model": "blackchannel:block/tower_terminal", "y": 180 },
+    "facing=west": { "model": "blackchannel:block/tower_terminal", "y": 270 }
+  }
+}

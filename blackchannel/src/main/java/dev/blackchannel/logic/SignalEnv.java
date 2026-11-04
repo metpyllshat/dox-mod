@@ -110,7 +110,7 @@ public final class SignalEnv {
     }
 
     public static boolean emp(NetData.Profile profile, MinecraftServer server) {
-        return server != null && server.getTickCount() < profile.empUntil;
+        return server != null && Ops.now(server) < profile.empUntil;
     }
 
     public static boolean friendly(NetData.Profile self, UUID owner, MinecraftServer server) {
@@ -160,7 +160,8 @@ public final class SignalEnv {
                 if (dish.kind() != NodeBlock.Kind.DISH || !dish.powered() || !friendly(profile, dish.owner, player.getServer())) return;
                 if (silenced(level, dish.getBlockPos()) || dish.getBlockPos().distSqr(pos) > dish2) return;
                 NodeBlockEntity.each(level, rack -> {
-                    if (rack.kind() == NodeBlock.Kind.RACK && rack.powered() && !silenced(level, rack.getBlockPos()) && dish.owner != null && dish.owner.equals(rack.owner)
+                    if (rack.kind() == NodeBlock.Kind.RACK && rack.powered() && !silenced(level, rack.getBlockPos())
+                            && friendly(profile, rack.owner, player.getServer())
                             && rack.getBlockPos().distSqr(dish.getBlockPos()) <= 32L * 32L) {
                         link.mode = Link.Mode.DISH;
                         link.rack = rack.getBlockPos();
@@ -175,20 +176,6 @@ public final class SignalEnv {
             link.dish = true;
         }
         if (link.mode == Link.Mode.NONE && profile.satCharges > 0) link.mode = Link.Mode.SAT;
-        // Вышка даёт связь как аплинк+тарелка: если рядом своя вышка — есть сеть
-        if (link.mode == Link.Mode.NONE) {
-            try {
-                dev.blackchannel.data.MatchData match = dev.blackchannel.data.MatchData.get(player.getServer());
-                for (dev.blackchannel.data.MatchData.TowerInfo inf : match.towerInfos) {
-                    if (inf.owner == null || !inf.owner.equals(profile.crew) || inf.disabledUntil > player.getServer().getTickCount()) continue;
-                    if (pos.distSqr(inf.pos) <= (long) dev.blackchannel.Config.TOWER_CHAT_RADIUS.get() * dev.blackchannel.Config.TOWER_CHAT_RADIUS.get()) {
-                        link.mode = Link.Mode.RACK;
-                        link.dish = true;
-                        break;
-                    }
-                }
-            } catch (Exception ignored) {}
-        }
         link.dish = link.dish || dishNear(player, profile, 96);
         return link;
     }
@@ -218,13 +205,14 @@ public final class SignalEnv {
 
     /** Есть ли рядом (в радиусе) своя рабочая вышка отряда игрока. */
     public static boolean towerNear(ServerPlayer player, NetData.Profile profile, int radius) {
-        if (profile.crew == null || profile.crew.isEmpty()) return false;
         MatchData match = MatchData.get(player.getServer());
-        if (!match.active) return false;
-        long now = player.getServer().getTickCount();
+        if (!match.active || !Str.dim(player.level()).equals(match.dim)) return false;
+        String crew = match.playerCrew.getOrDefault(player.getUUID(), profile.crew == null ? "" : profile.crew);
+        if (crew.isEmpty()) return false;
+        long now = player.serverLevel().getGameTime();
         long r2 = (long) radius * radius;
         for (MatchData.TowerInfo info : match.towerInfos) {
-            if (!profile.crew.equals(info.owner) || info.disabledUntil > now) continue;
+            if (!crew.equals(info.owner) || info.disabledUntil > now) continue;
             if (player.blockPosition().distSqr(info.pos) <= r2) return true;
         }
         return false;
@@ -268,7 +256,7 @@ public final class SignalEnv {
     public static void applyEmp(ServerLevel level, BlockPos pos, int radius, int seconds, String source) {
         if (level == null || radius <= 0 || seconds <= 0) return;
         MinecraftServer server = level.getServer();
-        int now = server.getTickCount();
+        long now = Ops.now(server);
         long r2 = (long) radius * radius;
         Vec3 center = Vec3.atCenterOf(pos);
         List<UUID> hit = new ArrayList<>();
@@ -319,9 +307,9 @@ public final class SignalEnv {
         }
         level.playSound(null, pos, SoundEvents.BEACON_DEACTIVATE, SoundSource.BLOCKS, 1.4f, 0.4f);
         level.sendParticles(net.minecraft.core.particles.ParticleTypes.ELECTRIC_SPARK, center.x, center.y, center.z, 40, radius / 6.0, 0.6, radius / 6.0, 0.05);
-        // Вышки глохнут на 5 мин от ЭМИ
+        // Вышки используют тот же радиус, длительность и измерение, что и сам импульс.
         try {
-            Towers.pulse(dev.blackchannel.data.MatchData.get(server), pos, server.getTickCount());
+            Towers.pulse(dev.blackchannel.data.MatchData.get(server), level, pos, radius, seconds);
         } catch (RuntimeException e) {
             // удар не должен рушиться из-за вышек, но сбой должен быть виден в логе
             dev.blackchannel.BlackChannelMod.LOGGER.warn("EMP towers pulse failed: {}", e.toString());
@@ -360,7 +348,7 @@ public final class SignalEnv {
             int dx = (int) (other.getX() - viewer.getX());
             int dz = (int) (other.getZ() - viewer.getZ());
             if (op.vpn > 0 && !self.deanons.containsKey(op.handle)) {
-                int seed = (server.getTickCount() / 40) ^ op.id.hashCode();
+                int seed = (int) (Ops.now(server) / 40L) ^ op.id.hashCode();
                 net.minecraft.util.RandomSource random = net.minecraft.util.RandomSource.create(seed);
                 int noise = 18 * op.vpn;
                 dx += random.nextInt(noise * 2 + 1) - noise;
@@ -450,7 +438,7 @@ public final class SignalEnv {
     public static List<Track> tracks(ServerPlayer viewer, NetData.Profile self) {
         List<Track> out = new ArrayList<>();
         MinecraftServer server = viewer.getServer();
-        long now = server.getTickCount();
+        long now = Ops.now(server);
         for (NetData.Profile other : NetData.get(server).profiles.values()) {
             for (NetData.Bug bug : other.bugs) {
                 if (!self.id.equals(bug.owner) || bug.expireTick < now) continue;

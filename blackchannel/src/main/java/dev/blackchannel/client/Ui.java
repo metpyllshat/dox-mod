@@ -107,6 +107,18 @@ public final class Ui {
         hits.add(new Hit(x, y, w, h, action, arg, tip));
     }
 
+    public static void buttonEnabled(GuiGraphics g, Font font, List<Hit> hits, int x, int y, int w, int h,
+                                     String label, String tip, boolean enabled, String action, String arg) {
+        if (enabled) {
+            button(g, font, hits, x, y, w, h, label, tip, false, action, arg);
+            return;
+        }
+        g.fill(x, y, x + w, y + h, 0xFF0D1113);
+        g.fill(x, y, x + w, y + 1, 0xFF242A2D);
+        g.fill(x, y + h - 1, x + w, y + h, 0xFF000000);
+        g.drawString(font, trim(font, label, w - 8), x + 4, y + (h - 8) / 2, 0xFF3F474B, false);
+    }
+
     /** То же, но текст по центру: для баров вкладок и крупных кнопок. */
     public static void tab(GuiGraphics g, Font font, List<Hit> hits, int x, int y, int w, int h,
                            String label, boolean on, String action, String arg) {
