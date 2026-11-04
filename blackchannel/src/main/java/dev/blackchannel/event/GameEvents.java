@@ -47,6 +47,7 @@ public final class GameEvents {
         if (server == null) return;
         Ops.tick(server);
         Minigame.tick(server);
+        dev.blackchannel.logic.Towers.tickChunkResync(server);
     }
 
     @SubscribeEvent
@@ -61,6 +62,7 @@ public final class GameEvents {
         if (!(event.getLevel() instanceof ServerLevel level)) return;
         // Щит маяка: в первые минуты взрыв его не снимает
         Minigame.onExplode(event);
+        dev.blackchannel.logic.Towers.onExplosion(level, event.getExplosion().getPosition(), event.getAffectedBlocks());
         if (!Config.HOOK_EMP.get()) return;
         Entity exploder = event.getExplosion().getExploder();
         if (exploder == null) return;
@@ -71,6 +73,9 @@ public final class GameEvents {
 
     @SubscribeEvent
     public static void stop(ServerStoppingEvent event) {
+        dev.blackchannel.logic.Towers.discardAllCameras(event.getServer());
+        dev.blackchannel.logic.Towers.resetRuntime(null);
+        Minigame.resetRuntime(event.getServer());
         NodeBlockEntity.clearIndex();
     }
 
@@ -81,20 +86,25 @@ public final class GameEvents {
 
     @SubscribeEvent
     public static void started(ServerStartedEvent event) {
+        dev.blackchannel.logic.Towers.resetRuntime(dev.blackchannel.data.MatchData.get(event.getServer()));
         Minigame.onServerStarted(event.getServer());
     }
 
     @SubscribeEvent
     public static void hurt(LivingHurtEvent event) {
-        // Урон по телу в обзоре вышки выбрасывает из камеры
-        if (event.getEntity() instanceof ServerPlayer player && event.getAmount() > 0f) {
+        Minigame.onHurt(event);
+        // Сначала применяются PvP/щитовые правила мини-игры. Отменённый урон камеру не сбрасывает.
+        if (!event.isCanceled() && event.getEntity() instanceof ServerPlayer player && event.getAmount() > 0f) {
             dev.blackchannel.logic.Towers.camHurt(player);
         }
-        Minigame.onHurt(event);
     }
 
     @SubscribeEvent
     public static void attack(AttackEntityEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player && dev.blackchannel.logic.Towers.camExit(player)) {
+            event.setCanceled(true);
+            return;
+        }
         Minigame.onAttack(event);
     }
 
@@ -115,6 +125,16 @@ public final class GameEvents {
             Minigame.onLogin(player);
             dev.blackchannel.logic.Towers.restoreCam(player);
         }
+    }
+
+    @SubscribeEvent
+    public static void logout(PlayerEvent.PlayerLoggedOutEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) dev.blackchannel.logic.Towers.disconnectCamera(player);
+    }
+
+    @SubscribeEvent
+    public static void changedDimension(PlayerEvent.PlayerChangedDimensionEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) dev.blackchannel.logic.Towers.restoreCam(player);
     }
 
     @SubscribeEvent
@@ -157,6 +177,10 @@ public final class GameEvents {
 
     @SubscribeEvent
     public static void interactSpecific(PlayerInteractEvent.EntityInteractSpecific event) {
+        if (event.getEntity() instanceof ServerPlayer player && dev.blackchannel.logic.Towers.camExit(player)) {
+            event.setCanceled(true);
+            return;
+        }
         if (event.getEntity() instanceof ServerPlayer player && Minigame.isDowned(player)) event.setCanceled(true);
     }
 
@@ -172,6 +196,10 @@ public final class GameEvents {
 
     @SubscribeEvent
     public static void interactEntity(PlayerInteractEvent.EntityInteract event) {
+        if (event.getEntity() instanceof ServerPlayer player && dev.blackchannel.logic.Towers.camExit(player)) {
+            event.setCanceled(true);
+            return;
+        }
         Minigame.onInteractEntity(event);
     }
 

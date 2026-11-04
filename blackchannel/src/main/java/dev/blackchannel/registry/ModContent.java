@@ -3,6 +3,7 @@ package dev.blackchannel.registry;
 import dev.blackchannel.BlackChannelMod;
 import dev.blackchannel.block.NodeBlock;
 import dev.blackchannel.block.NodeBlockEntity;
+import dev.blackchannel.block.TowerTerminalBlock;
 import dev.blackchannel.block.LoggerBlock;
 import dev.blackchannel.block.LoggerBlockEntity;
 import dev.blackchannel.item.DefibItem;
@@ -43,6 +44,7 @@ public final class ModContent {
     public static final RegistryObject<Block> BEACON = BLOCKS.register("team_beacon", () -> new NodeBlock(NodeBlock.Kind.BEACON, MapColor.COLOR_GREEN));
     public static final RegistryObject<Block> DECOY = BLOCKS.register("decoy_beacon", () -> new NodeBlock(NodeBlock.Kind.DECOY, MapColor.COLOR_ORANGE));
     public static final RegistryObject<Block> LOGGER = BLOCKS.register("trace_logger", LoggerBlock::new);
+    public static final RegistryObject<Block> TOWER_TERMINAL = BLOCKS.register("tower_terminal", TowerTerminalBlock::new);
 
     public static final RegistryObject<BlockEntityType<NodeBlockEntity>> NODE = BLOCK_ENTITIES.register("node",
             () -> BlockEntityType.Builder.of(NodeBlockEntity::new,
@@ -58,6 +60,7 @@ public final class ModContent {
     public static final RegistryObject<Item> DECOY_ITEM = blockItem(DECOY);
     public static final RegistryObject<Item> LOGGER_ITEM = ITEMS.register("trace_logger",
             () -> new LoggerItem(LOGGER.get(), new Item.Properties().stacksTo(16)));
+    public static final RegistryObject<Item> TOWER_TERMINAL_ITEM = blockItem(TOWER_TERMINAL);
     public static final RegistryObject<Item> DEFIB = ITEMS.register("defibrillator",
             () -> new DefibItem(new Item.Properties().stacksTo(1).rarity(Rarity.RARE)));
     public static final RegistryObject<Item> DETECTOR = ITEMS.register("metal_detector",

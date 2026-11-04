@@ -3,6 +3,7 @@ package dev.blackchannel.block;
 import dev.blackchannel.Config;
 import dev.blackchannel.data.NetData;
 import dev.blackchannel.logic.Devices;
+import dev.blackchannel.logic.Ops;
 import dev.blackchannel.registry.ModContent;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
@@ -78,7 +79,7 @@ public class NodeBlockEntity extends BlockEntity {
                 if (gain > 0 && profile.crypto < 5000 && mintFree(profile) && level instanceof net.minecraft.server.level.ServerLevel serverLevel
                         && !dev.blackchannel.logic.SignalEnv.silenced(serverLevel, getBlockPos())) {
                     profile.crypto = Math.min(5000, profile.crypto + gain);
-                    profile.mintTick = level.getServer().getTickCount();
+                    profile.mintTick = Ops.now(level.getServer());
                     profile.mintDim = level.dimension().location().toString();
                     profile.mintX = getBlockPos().getX();
                     profile.mintY = getBlockPos().getY();
@@ -95,7 +96,7 @@ public class NodeBlockEntity extends BlockEntity {
 
     private boolean mintFree(NetData.Profile profile) {
         if (level == null || level.getServer() == null || profile.mintTick <= 0 || profile.mintDim == null || profile.mintDim.isEmpty()) return true;
-        int now = level.getServer().getTickCount();
+        long now = Ops.now(level.getServer());
         if (now - profile.mintTick >= 20 * 60) return true;
         if (!profile.mintDim.equals(level.dimension().location().toString())) return true;
         int range = Config.RACK_MINT_RANGE.get();

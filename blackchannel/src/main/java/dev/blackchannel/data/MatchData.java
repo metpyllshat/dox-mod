@@ -42,6 +42,7 @@ public class MatchData extends SavedData {
     public long silenceUntil;
     /** Вышки связи: ставим один раз за матч, чтобы не строить их повторно. */
     public boolean towersPlaced;
+    public int towerClockVersion;
     public final java.util.List<BlockPos> towers = new java.util.ArrayList<>();
     public final java.util.List<TowerInfo> towerInfos = new java.util.ArrayList<>();
     public static final class TowerInfo {
@@ -51,6 +52,8 @@ public class MatchData extends SavedData {
         public long nextCryptoTick;
         public long nextSectorTick;
         public long hackStartTick;
+        public int hackDuration;
+        public UUID hacker;
         public String hackCrew = "";
         public TowerInfo(BlockPos pos) { this.pos = pos; }
     }
@@ -93,6 +96,8 @@ public class MatchData extends SavedData {
     public final Set<UUID> permanentDead = new HashSet<>();
     public final Map<UUID, String> playerCrew = new HashMap<>();
     public final Map<UUID, Integer> playerColorIdx = new HashMap<>();
+    public final Map<UUID, Integer> playerModes = new HashMap<>();
+    public int playerModeVersion;
 
     // Статистика катки (показывается в сводке)
     public final Map<UUID, Stats> stats = new HashMap<>();
@@ -139,9 +144,22 @@ public class MatchData extends SavedData {
         data.nextEventTick = tag.getLong("nextEvent");
         data.silenceUntil = tag.getLong("silenceUntil");
         data.towersPlaced = tag.getBoolean("towersPlaced");
+        data.towerClockVersion = tag.getInt("towerClockVersion");
         for (long packed : tag.getLongArray("towers")) data.towers.add(BlockPos.of(packed));
         ListTag ti = tag.getList("towerInfos", Tag.TAG_COMPOUND);
-        for (int i = 0; i < ti.size(); i++) { CompoundTag c = ti.getCompound(i); TowerInfo inf = new TowerInfo(new BlockPos(c.getInt("x"), c.getInt("y"), c.getInt("z"))); inf.owner = c.getString("owner"); inf.disabledUntil = c.getLong("dis"); inf.nextCryptoTick = c.getLong("nc"); inf.nextSectorTick = c.getLong("ns"); inf.hackStartTick = c.getLong("hs"); inf.hackCrew = c.getString("hc"); data.towerInfos.add(inf); }
+        for (int i = 0; i < ti.size(); i++) {
+            CompoundTag c = ti.getCompound(i);
+            TowerInfo inf = new TowerInfo(new BlockPos(c.getInt("x"), c.getInt("y"), c.getInt("z")));
+            inf.owner = c.getString("owner");
+            inf.disabledUntil = c.getLong("dis");
+            inf.nextCryptoTick = c.getLong("nc");
+            inf.nextSectorTick = c.getLong("ns");
+            inf.hackStartTick = c.getLong("hs");
+            inf.hackDuration = c.getInt("hd");
+            if (c.hasUUID("hp")) inf.hacker = c.getUUID("hp");
+            inf.hackCrew = c.getString("hc");
+            data.towerInfos.add(inf);
+        }
         // миграция: если старые towers есть, а infos нет — создать
         if (data.towerInfos.isEmpty() && !data.towers.isEmpty()) { for (BlockPos pos : data.towers) data.towerInfos.add(new TowerInfo(pos)); }
         data.nextAirdropTick = tag.getLong("nextAirdrop");
@@ -180,6 +198,21 @@ public class MatchData extends SavedData {
         readUUIDSet(tag.getList("dead", Tag.TAG_COMPOUND), data.permanentDead, "id");
         readUUIDMap(tag.getList("crew", Tag.TAG_COMPOUND), data.playerCrew);
         readUUIDIntMap(tag.getList("pcolors", Tag.TAG_COMPOUND), data.playerColorIdx);
+        readUUIDIntMap(tag.getList("pmodes", Tag.TAG_COMPOUND), data.playerModes);
+        data.playerModeVersion = tag.getInt("pmodeVersion");
+        ListTag stats = tag.getList("stats", Tag.TAG_COMPOUND);
+        for (int i = 0; i < stats.size(); i++) {
+            CompoundTag row = stats.getCompound(i);
+            if (!row.hasUUID("id")) continue;
+            Stats value = new Stats();
+            value.traces = row.getInt("traces");
+            value.towers = row.getInt("towers");
+            value.kills = row.getInt("kills");
+            value.deaths = row.getInt("deaths");
+            value.cryptoEarned = row.getInt("crypto");
+            value.title = row.getString("title");
+            data.stats.put(row.getUUID("id"), value);
+        }
         data.cacheTick = tag.getInt("cacheTick");
         data.cacheTotal = tag.getInt("cacheTotal");
         data.cacheWave = tag.getInt("cacheWave");
@@ -227,11 +260,26 @@ public class MatchData extends SavedData {
         tag.putLong("nextEvent", nextEventTick);
         tag.putLong("silenceUntil", silenceUntil);
         tag.putBoolean("towersPlaced", towersPlaced);
+        tag.putInt("towerClockVersion", towerClockVersion);
         long[] packed = new long[towers.size()];
         for (int i = 0; i < towers.size(); i++) packed[i] = towers.get(i).asLong();
         tag.putLongArray("towers", packed);
         ListTag tInfos = new ListTag();
-        for (TowerInfo inf : towerInfos) { CompoundTag c = new CompoundTag(); c.putInt("x", inf.pos.getX()); c.putInt("y", inf.pos.getY()); c.putInt("z", inf.pos.getZ()); c.putString("owner", inf.owner == null ? "" : inf.owner); c.putLong("dis", inf.disabledUntil); c.putLong("nc", inf.nextCryptoTick); c.putLong("ns", inf.nextSectorTick); c.putLong("hs", inf.hackStartTick); c.putString("hc", inf.hackCrew == null ? "" : inf.hackCrew); tInfos.add(c); }
+        for (TowerInfo inf : towerInfos) {
+            CompoundTag c = new CompoundTag();
+            c.putInt("x", inf.pos.getX());
+            c.putInt("y", inf.pos.getY());
+            c.putInt("z", inf.pos.getZ());
+            c.putString("owner", inf.owner == null ? "" : inf.owner);
+            c.putLong("dis", inf.disabledUntil);
+            c.putLong("nc", inf.nextCryptoTick);
+            c.putLong("ns", inf.nextSectorTick);
+            c.putLong("hs", inf.hackStartTick);
+            c.putInt("hd", inf.hackDuration);
+            if (inf.hacker != null) c.putUUID("hp", inf.hacker);
+            c.putString("hc", inf.hackCrew == null ? "" : inf.hackCrew);
+            tInfos.add(c);
+        }
         tag.put("towerInfos", tInfos);
         tag.putLong("nextAirdrop", nextAirdropTick);
         tag.putLong("nextContract", nextContractTick);
@@ -273,6 +321,22 @@ public class MatchData extends SavedData {
         tag.put("dead", writeUUIDSet(permanentDead, "id"));
         tag.put("crew", writeUUIDMap(playerCrew));
         tag.put("pcolors", writeUUIDIntMap(playerColorIdx));
+        tag.put("pmodes", writeUUIDIntMap(playerModes));
+        tag.putInt("pmodeVersion", playerModeVersion);
+        ListTag stats = new ListTag();
+        for (Map.Entry<UUID, Stats> entry : this.stats.entrySet()) {
+            CompoundTag row = new CompoundTag();
+            row.putUUID("id", entry.getKey());
+            Stats value = entry.getValue();
+            row.putInt("traces", value.traces);
+            row.putInt("towers", value.towers);
+            row.putInt("kills", value.kills);
+            row.putInt("deaths", value.deaths);
+            row.putInt("crypto", value.cryptoEarned);
+            row.putString("title", value.title == null ? "" : value.title);
+            stats.add(row);
+        }
+        tag.put("stats", stats);
         tag.putInt("cacheTick", cacheTick);
         tag.putInt("cacheTotal", cacheTotal);
         tag.putInt("cacheWave", cacheWave);
@@ -329,8 +393,7 @@ public class MatchData extends SavedData {
 
     public int getAliveCount(MinecraftServer server) {
         int alive = 0;
-        for (ServerPlayer player : server.getPlayerList().getPlayers()) {
-            UUID id = player.getUUID();
+        for (UUID id : playerCrew.keySet()) {
             if (!permanentDead.contains(id) && !downedPlayers.containsKey(id)) {
                 alive++;
             }

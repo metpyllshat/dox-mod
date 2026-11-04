@@ -61,7 +61,7 @@ public final class ClientState {
     public static final List<TowerRow> towers = new ArrayList<>();
     public static final List<String> selfCrew = new ArrayList<>();
 
-    public static final class TowerRow { public int x, z; public String owner = ""; public boolean disabled; }
+    public static final class TowerRow { public int x, y, z; public String owner = ""; public boolean own, disabled; }
     public static final class TeamScore {
         public String code;
         public int score;
@@ -142,7 +142,17 @@ public final class ClientState {
         nodeZ = m.getInt("nodeZ");
         towers.clear();
         ListTag tw = m.getList("towers", Tag.TAG_COMPOUND);
-        for (int i = 0; i < tw.size(); i++) { CompoundTag c = tw.getCompound(i); TowerRow r = new TowerRow(); r.x = c.getInt("x"); r.z = c.getInt("z"); r.owner = c.getString("owner"); r.disabled = c.getLong("dis") > 0; towers.add(r); }
+        for (int i = 0; i < tw.size(); i++) {
+            CompoundTag c = tw.getCompound(i);
+            TowerRow r = new TowerRow();
+            r.x = c.getInt("x");
+            r.y = c.getInt("y");
+            r.z = c.getInt("z");
+            r.owner = c.getString("owner");
+            r.own = c.getBoolean("own");
+            r.disabled = c.getLong("dis") > 0;
+            towers.add(r);
+        }
         aliveCount = m.getInt("alive");
         selfStatus = m.getString("selfStatus");
         selfDownedSeconds = m.getInt("selfDowned");

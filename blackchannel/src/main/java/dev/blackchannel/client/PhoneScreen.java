@@ -350,6 +350,10 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
                 g.drawString(this.font, Ui.trim(this.font, label, rw), rx, ly, tw.disabled ? Ui.RED : tw.owner.isEmpty() ? Ui.MUTED : Ui.GREEN, false);
                 ly += 10; tn++;
             }
+            if (ClientState.towers.size() > tn && ly <= bottom - 10) {
+                g.drawString(this.font, ClientState.tip("screen.blackchannel.tower.more", ClientState.towers.size() - tn),
+                        rx, ly, Ui.MUTED, false);
+            }
         }
     }
 
@@ -389,8 +393,8 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
         // Кнопки вышки: камера и скан (платно) — только если есть своя
         boolean hasOwn = anyOwnTower();
         if (bottom - ly >= 16) {
-            Ui.button(g, this.font, hits, x + 8, ly, 112, 12, Ui.t("screen.blackchannel.btn.tower_cam"), ClientState.tip("screen.blackchannel.tip.tower_cam", ClientState.cfg("towerCam",6)), hasOwn, "tower_cam", "");
-            Ui.button(g, this.font, hits, x + 124, ly, 112, 12, Ui.t("screen.blackchannel.btn.tower_scan"), ClientState.tip("screen.blackchannel.tip.tower_scan", ClientState.cfg("towerScan",4)), hasOwn, "tower_scan", "");
+            Ui.buttonEnabled(g, this.font, hits, x + 8, ly, 112, 12, Ui.t("screen.blackchannel.btn.tower_cam"), ClientState.tip("screen.blackchannel.tip.tower_cam", ClientState.cfg("towerCam", 6)), hasOwn, "tower_cam", "");
+            Ui.buttonEnabled(g, this.font, hits, x + 124, ly, 112, 12, Ui.t("screen.blackchannel.btn.tower_scan"), ClientState.tip("screen.blackchannel.tip.tower_scan", ClientState.cfg("towerScan", 4)), hasOwn, "tower_scan", "");
             ly += 16;
         }
         ly += 4;
@@ -421,7 +425,7 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
 
     private boolean anyOwnTower() {
         // Своя вышка — владелец совпадает с нашим отрядом. Раньше проверяли «чья-то», и кнопка была активна у всех.
-        for (ClientState.TowerRow tw : ClientState.towers) if (!tw.owner.isEmpty() && tw.owner.equals(ClientState.crew) && !tw.disabled) return true;
+        for (ClientState.TowerRow tw : ClientState.towers) if (tw.own && !tw.disabled) return true;
         return false;
     }
 
@@ -717,7 +721,10 @@ public class PhoneScreen extends AbstractContainerScreen<Menus.PhoneMenu> {
             case "mpick" -> shopPick = hit.arg();
             case "lpick" -> listPick = Integer.parseInt(hit.arg());
             case "manual" -> {
-                if (this.minecraft != null) this.minecraft.setScreen(new ManualScreen());
+                if (this.minecraft != null) {
+                    onClose();
+                    this.minecraft.setScreen(new ManualScreen());
+                }
             }
             case "send" -> submit();
             default -> send(hit.action(), hit.arg());

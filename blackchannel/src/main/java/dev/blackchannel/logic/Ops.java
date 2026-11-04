@@ -30,8 +30,14 @@ import java.util.UUID;
 public final class Ops {
     private Ops() {}
 
+    /** Persistent network timers use the overworld clock, not reset-on-restart server ticks. */
+    public static long now(MinecraftServer server) {
+        if (server == null) return 0;
+        return server.overworld().getGameTime();
+    }
+
     public static void tick(MinecraftServer server) {
-        int tick = server.getTickCount();
+        long tick = now(server);
         NetData data = NetData.get(server);
         Bridges.tickWatch(server);
         tickStrikes(server, data, tick);
@@ -91,9 +97,19 @@ public final class Ops {
             Admin.handle(player, action, arg);
             return;
         }
+        if (Actions.TOWER_CAM.equals(action) && Towers.isCamActive(player)) {
+            Towers.camExit(player);
+            return;
+        }
+        MatchData match = MatchData.get(player.getServer());
+        if (match.active && (Minigame.isDowned(player) || match.permanentDead.contains(player.getUUID())
+                || player.isSpectator())) {
+            player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.minigame.action_blocked")), true);
+            return;
+        }
         NetData data = NetData.get(player);
         NetData.Profile profile = data.profile(player.getUUID());
-        int now = player.getServer().getTickCount();
+        long now = now(player.getServer());
         if (profile.bombUntil > now && !profile.airplane && locks(action)) {
             result(player, profile, "blackchannel.result.bomb_locked");
             return;
@@ -187,7 +203,7 @@ public final class Ops {
         NetData.Profile profile = data.profile(player.getUUID());
         noteHeard(profile, handle, name, true);
         rememberName(profile, handle, name);
-        profile.log("blackchannel.log.tag", handle, player.getServer().getTickCount());
+        profile.log("blackchannel.log.tag", handle, now(player.getServer()));
         if (!player.getAbilities().instabuild) stack.shrink(1);
         data.setDirty();
         player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.tag_ok", handle, name.isEmpty() ? "?" : name)), true);
@@ -236,9 +252,9 @@ public final class Ops {
         if (server == null || owner == null || handle == null || handle.isEmpty()) return;
         NetData data = NetData.get(server);
         NetData.Profile profile = data.profile(owner);
-        addIntel(profile, handle, dim, x, y, z, err, server.getTickCount(), stale);
+        addIntel(profile, handle, dim, x, y, z, err, now(server), stale);
         rememberName(profile, handle, name);
-        profile.log(logKey, handle, server.getTickCount());
+        profile.log(logKey, handle, now(server));
         data.setDirty();
         ServerPlayer online = server.getPlayerList().getPlayer(owner);
         if (online != null) ModNetwork.syncFull(online);
@@ -252,7 +268,7 @@ public final class Ops {
         boolean known = self.deanons.containsKey(other.handle);
         if (!alwaysTell && known) return;
         remember(self, other);
-        self.log("blackchannel.log.body", other.handle, reader.getServer().getTickCount());
+        self.log("blackchannel.log.body", other.handle, now(reader.getServer()));
         data.setDirty();
         if (alwaysTell || !known) {
             reader.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.body_ok", other.handle, other.lastName)), true);
@@ -350,7 +366,7 @@ public final class Ops {
         return server.getLevel(ResourceKey.create(Registries.DIMENSION, loc));
     }
 
-    private static void tickPlayer(MinecraftServer server, NetData data, ServerPlayer player, int tick) {
+    private static void tickPlayer(MinecraftServer server, NetData data, ServerPlayer player, long tick) {
         NetData.Profile profile = data.profile(player.getUUID());
         profile.lastName = player.getGameProfile().getName();
         if (!profile.welcomed) {
@@ -472,10 +488,10 @@ public final class Ops {
             result(player, profile, "blackchannel.result.no_target");
             return;
         }
-        int nowCost = traceCost(profile, player.getServer().getTickCount());
+        int nowCost = traceCost(profile, now(player.getServer()));
         if (!pay(player, profile, nowCost)) return;
         ServerPlayer online = player.getServer().getPlayerList().getPlayer(target.id);
-        int now = player.getServer().getTickCount();
+        long now = now(player.getServer());
         boolean live = online != null && SignalEnv.transmitting(online, target);
         boolean memory = !target.lastDim.isEmpty() && now - target.lastPosTick < Config.MEMORY.get() * 20;
         if (!live && !memory) {
@@ -570,7 +586,7 @@ public final class Ops {
      * Если у цели уже есть пеленг, второй замер лучше держать с другого места.
      */
     private static NetData.Beam beamFor(NetData.Profile profile, String handle, ServerPlayer player, String dim,
-                                        NetData.Profile target, int tx, int tz, int now) {
+                                        NetData.Profile target, int tx, int tz, long now) {
         BlockPos here = player.blockPosition();
         RandomSource random = player.getRandom();
         double angle = Bearings.angleTo(here.getX(), here.getZ(), tx, tz);
@@ -633,7 +649,7 @@ public final class Ops {
         if (!pay(player, profile, Config.BOMB_COST.get())) return;
         int dur = target.dnd ? 12 : 25;
         if (target.vpn > 0) dur = Math.max(6, dur - 6);
-        int now = player.getServer().getTickCount();
+        long now = now(player.getServer());
         target.bombUntil = now + dur * 20;
         target.toast("blackchannel.spam.1", "");
         profile.cdBomb = now + Config.BOMB_CD.get() * 20;
@@ -661,7 +677,7 @@ public final class Ops {
         int err = Config.UAV_ERROR.get() + player.getRandom().nextInt(12);
         int x = op.blockPosition().getX() + player.getRandom().nextInt(err * 2 + 1) - err;
         int z = op.blockPosition().getZ() + player.getRandom().nextInt(err * 2 + 1) - err;
-        int now = player.getServer().getTickCount();
+        long now = now(player.getServer());
         addIntel(profile, target.handle, Str.dim(op.level()), x, op.blockPosition().getY(), z, err, now, false);
         profile.cdTrace = now + Config.TRACE_CD.get() * 20;
         result(player, profile, "blackchannel.result.drone_ok", target.handle, String.valueOf(x), String.valueOf(z), String.valueOf(err));
@@ -723,7 +739,7 @@ public final class Ops {
             seller.crypto = Math.min(5000, seller.crypto + taxed);
         }
         if (listing.intel) {
-            addIntel(profile, listing.handle, listing.dim, listing.x, listing.y, listing.z, listing.err, player.getServer().getTickCount(), listing.stale);
+            addIntel(profile, listing.handle, listing.dim, listing.x, listing.y, listing.z, listing.err, now(player.getServer()), listing.stale);
         } else {
             ItemStack stack = ItemStack.of(listing.stack);
             if (!stack.isEmpty()) give(player, stack);
@@ -810,11 +826,11 @@ public final class Ops {
         ServerPlayer online = player.getServer().getPlayerList().getPlayer(be.owner);
         if (online != null) {
             online.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.chat.ids_hack")));
-            owner.log("blackchannel.chat.ids_hack", bearing(online, player), player.getServer().getTickCount());
+            owner.log("blackchannel.chat.ids_hack", bearing(online, player), now(player.getServer()));
         }
     }
 
-    private static void tickStrikes(MinecraftServer server, NetData data, int tick) {
+    private static void tickStrikes(MinecraftServer server, NetData data, long tick) {
         var it = data.strikes.iterator();
         while (it.hasNext()) {
             NetData.Strike strike = it.next();
@@ -886,7 +902,7 @@ public final class Ops {
         return n;
     }
 
-    private static void tickRumor(MinecraftServer server, NetData data, int tick) {
+    private static void tickRumor(MinecraftServer server, NetData data, long tick) {
         if (!Config.RUMOR_ENABLED.get()) return;
         if (data.nextRumorTick == 0) data.nextRumorTick = tick + 20 * 60 * 8;
         if (tick < data.nextRumorTick) return;
@@ -907,7 +923,7 @@ public final class Ops {
         data.addChat(line);
     }
 
-    private static void addIntel(NetData.Profile profile, String handle, String dim, int x, int y, int z, int err, int tick, boolean stale) {
+    private static void addIntel(NetData.Profile profile, String handle, String dim, int x, int y, int z, int err, long tick, boolean stale) {
         NetData.Intel intel = new NetData.Intel();
         intel.id = profile.intelSeq++;
         intel.handle = handle;
@@ -936,7 +952,7 @@ public final class Ops {
         target.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.value(), SoundSource.MASTER, 0.8f, 0.6f);
         NetData.Profile profile = NetData.get(target).profile(target.getUUID());
         profile.toast(key, dir);
-        profile.log(key, dir, target.getServer().getTickCount());
+        profile.log(key, dir, now(target.getServer()));
     }
 
     public static String bearing(ServerPlayer from, ServerPlayer to) {
@@ -979,7 +995,8 @@ public final class Ops {
     public static boolean silent(ServerPlayer player) {
         MatchData match = MatchData.get(player.getServer());
         if (match == null || !match.active) return false;
-        return match.silenceUntil > player.getServer().getTickCount();
+        ServerLevel level = levelOf(player.getServer(), match.dim);
+        return level != null && match.silenceUntil > level.getGameTime();
     }
 
     static boolean gate(ServerPlayer player, NetData.Profile profile, boolean laptop, boolean uplink) {
@@ -1072,7 +1089,7 @@ public final class Ops {
     }
 
     private static boolean rate(ServerPlayer player, NetData.Profile profile) {
-        int now = player.getServer().getTickCount();
+        long now = now(player.getServer());
         if (now - profile.chatWindow > 200) {
             profile.chatWindow = now;
             profile.chatCount = 0;
@@ -1085,9 +1102,9 @@ public final class Ops {
         return true;
     }
 
-    static boolean cd(ServerPlayer player, NetData.Profile profile, int ready) {
+    static boolean cd(ServerPlayer player, NetData.Profile profile, long ready) {
         if (free(player)) return true;
-        int now = player.getServer().getTickCount();
+        long now = now(player.getServer());
         if (now < ready) {
             result(player, profile, "blackchannel.result.cooldown", String.valueOf((ready - now + 19) / 20));
             return false;
@@ -1095,7 +1112,7 @@ public final class Ops {
         return true;
     }
 
-    static int traceCost(NetData.Profile profile, int now) {
+    static int traceCost(NetData.Profile profile, long now) {
         int base = Math.max(1, Config.TRACE_COST.get());
         if (now - profile.traceStreakTick > 12000) profile.traceStreak = 0;
         int[] table = {base, Math.min(6, (int)Math.round(base*1.3)), Math.min(6, (int)Math.round(base*1.3*1.3)), 5, 6};
@@ -1188,7 +1205,7 @@ public final class Ops {
         NetData.ChatLine line = new NetData.ChatLine();
         line.from = profile.handle;
         line.text = text;
-        line.tick = player.getServer().getTickCount();
+        line.tick = now(player.getServer());
         line.encrypted = profile.vpn > 0;
         line.dim = Str.dim(player.level());
         line.x = player.blockPosition().getX();

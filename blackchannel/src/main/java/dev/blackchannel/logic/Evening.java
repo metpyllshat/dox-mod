@@ -55,7 +55,7 @@ public final class Evening {
     private static void storm(MinecraftServer server, long now) {
         for (ServerPlayer player : server.getPlayerList().getPlayers()) {
             NetData.Profile profile = NetData.get(player).profile(player.getUUID());
-            profile.empUntil = Math.max(profile.empUntil, (int) now + 400);
+            profile.empUntil = Math.max(profile.empUntil, now + 400L);
             // Шторм обнуляет шум: у всех чистый лист
             profile.noise = 0;
         }

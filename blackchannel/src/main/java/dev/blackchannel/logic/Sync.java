@@ -11,6 +11,7 @@ import net.minecraft.nbt.CompoundTag;
 import net.minecraft.nbt.ListTag;
 import net.minecraft.nbt.StringTag;
 import net.minecraft.server.MinecraftServer;
+import net.minecraft.server.level.ServerLevel;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraft.world.item.ItemStack;
 
@@ -24,7 +25,7 @@ public final class Sync {
         NetData data = NetData.get(player);
         NetData.Profile profile = data.profile(player.getUUID());
         MinecraftServer server = player.getServer();
-        int now = server.getTickCount();
+        long now = Ops.now(server);
         tag.putString("resultKey", profile.resultKey == null ? "" : profile.resultKey);
         tag.putString("resultScope", profile.resultScope == null || profile.resultScope.isEmpty() ? "ops" : profile.resultScope);
         ListTag args = new ListTag();
@@ -51,7 +52,7 @@ public final class Sync {
             c.putInt("y", row.y);
             c.putInt("z", row.z);
             c.putInt("e", row.err);
-            c.putInt("age", Math.max(0, (now - row.tick) / 20));
+            c.putInt("age", bounded((now - row.tick) / 20L));
             c.putBoolean("stale", row.stale);
             intel.add(c);
         }
@@ -66,7 +67,7 @@ public final class Sync {
             c.putDouble("a", beam.angle);
             c.putDouble("w", beam.alpha);
             c.putInt("n", beam.samples);
-            c.putInt("age", Math.max(0, (now - beam.tick) / 20));
+            c.putInt("age", bounded((now - beam.tick) / 20L));
             c.putString("dim", Str.dimShort(beam.dim));
             c.putString("src", beam.source == null ? "TRACE" : beam.source);
             beams.add(c);
@@ -100,7 +101,7 @@ public final class Sync {
             c.putString("f", line.from);
             c.putString("t", line.text);
             c.putBoolean("e", line.encrypted);
-            c.putInt("age", Math.max(0, (now - line.tick) / 20));
+            c.putInt("age", bounded((now - line.tick) / 20L));
             chat.add(0, c);
             added++;
         }
@@ -138,7 +139,7 @@ public final class Sync {
             CompoundTag c = new CompoundTag();
             c.putString("k", log.key);
             c.putString("a", log.arg);
-            c.putInt("age", Math.max(0, (now - log.tick) / 20));
+            c.putInt("age", bounded((now - log.tick) / 20L));
             logs.add(c);
         }
         tag.put("logs", logs);
@@ -198,7 +199,7 @@ public final class Sync {
     private static CompoundTag base(ServerPlayer player) {
         NetData.Profile profile = NetData.get(player).profile(player.getUUID());
         MinecraftServer server = player.getServer();
-        int now = server.getTickCount();
+        long now = Ops.now(server);
         CompoundTag tag = new CompoundTag();
         tag.putString("handle", profile.handle);
         tag.putString("name", profile.lastName);
@@ -209,8 +210,8 @@ public final class Sync {
         tag.putInt("battery", Devices.battery(player));
         tag.putInt("signal", SignalEnv.signalBars(player, profile));
         tag.putInt("noise", Math.max(0, Math.min(100, profile.noise)));
-        tag.putInt("emp", Math.max(0, profile.empUntil - now));
-        tag.putInt("bomb", Math.max(0, profile.bombUntil - now));
+        tag.putInt("emp", bounded(profile.empUntil - now));
+        tag.putInt("bomb", bounded(profile.bombUntil - now));
         tag.putBoolean("jammed", SignalEnv.jammed(player.serverLevel(), player.blockPosition()));
         tag.putBoolean("faraday", SignalEnv.faraday(player.serverLevel(), player.blockPosition()));
         SignalEnv.Link link = SignalEnv.link(player, profile);
@@ -280,6 +281,8 @@ public final class Sync {
         cfg.putInt("dishBonus", Config.DISH_RADAR_BONUS.get());
         cfg.putInt("structure", Config.STRUCTURE_RADAR.get());
         cfg.putInt("structurePhone", Config.STRUCTURE_PHONE.get());
+        cfg.putInt("towerCam", Config.TOWER_CAM_COST.get());
+        cfg.putInt("towerScan", Config.TOWER_SCAN_COST.get());
         cfg.putInt("refundVpn", half("vpn"));
         cfg.putInt("refundDeep", half("deep"));
         cfg.putInt("refundIds", half("ids"));
@@ -395,8 +398,12 @@ public final class Sync {
         return "dm:" + b + ":" + a;
     }
 
-    private static int secs(int ready, int now) {
-        return ready <= now ? 0 : (ready - now + 19) / 20;
+    private static int secs(long ready, long now) {
+        return ready <= now ? 0 : bounded((ready - now + 19L) / 20L);
+    }
+
+    private static int bounded(long value) {
+        return (int) Math.max(0L, Math.min(Integer.MAX_VALUE, value));
     }
 
     private static double horiz(ServerPlayer player, NetData.Strike strike) {
@@ -405,13 +412,14 @@ public final class Sync {
         return Math.sqrt(dx * dx + dz * dz);
     }
 
-    private static void putMatchState(CompoundTag tag, ServerPlayer player, NetData.Profile profile, int now) {
+    private static void putMatchState(CompoundTag tag, ServerPlayer player, NetData.Profile profile, long now) {
         MatchData match = MatchData.get(player.getServer());
         if (!match.active) {
             tag.put("match", new CompoundTag());
             return;
         }
-        long matchTime = player.getServer().overworld().getGameTime();
+        ServerLevel matchLevel = Ops.levelOf(player.getServer(), match.dim);
+        long matchTime = matchLevel == null ? player.level().getGameTime() : matchLevel.getGameTime();
         long endTick = match.finalActive ? match.finalEndTick : match.matchEndTick;
         int timeLeftSec = (int) Math.max(0, (endTick - matchTime) / 20L);
         CompoundTag m = new CompoundTag();
@@ -442,7 +450,18 @@ public final class Sync {
         m.putInt("nodeX", match.nodeX);
         m.putInt("nodeZ", match.nodeZ);
         ListTag towers = new ListTag();
-        for (dev.blackchannel.data.MatchData.TowerInfo inf : match.towerInfos) { CompoundTag c = new CompoundTag(); c.putInt("x", inf.pos.getX()); c.putInt("z", inf.pos.getZ()); c.putString("owner", inf.owner == null ? "" : inf.owner); c.putLong("dis", Math.max(0L, inf.disabledUntil - now)); towers.add(c); }
+        String ownCrew = match.playerCrew.getOrDefault(player.getUUID(), profile.crew == null ? "" : profile.crew);
+        long towerNow = matchLevel == null ? player.level().getGameTime() : matchLevel.getGameTime();
+        for (dev.blackchannel.data.MatchData.TowerInfo inf : match.towerInfos) {
+            CompoundTag c = new CompoundTag();
+            c.putInt("x", inf.pos.getX());
+            c.putInt("y", inf.pos.getY());
+            c.putInt("z", inf.pos.getZ());
+            c.putString("owner", inf.owner == null ? "" : inf.owner);
+            c.putBoolean("own", !ownCrew.isEmpty() && ownCrew.equals(inf.owner));
+            c.putLong("dis", Math.max(0L, inf.disabledUntil - towerNow));
+            towers.add(c);
+        }
         m.put("towers", towers);
         ListTag teams = new ListTag();
         for (String code : match.teamScores.keySet()) {

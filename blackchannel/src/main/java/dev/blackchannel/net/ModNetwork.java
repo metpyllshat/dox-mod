@@ -8,16 +8,18 @@ import net.minecraft.network.FriendlyByteBuf;
 import net.minecraft.resources.ResourceLocation;
 import net.minecraft.server.level.ServerPlayer;
 import net.minecraftforge.network.NetworkEvent;
+import net.minecraftforge.network.NetworkDirection;
 import net.minecraftforge.network.NetworkRegistry;
 import net.minecraftforge.network.PacketDistributor;
 import net.minecraftforge.network.simple.SimpleChannel;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 import java.util.function.Supplier;
 
 public final class ModNetwork {
-    private static final String PROTO = "1";
+    private static final String PROTO = "3";
     public static SimpleChannel CHANNEL;
     private static int id;
 
@@ -26,13 +28,20 @@ public final class ModNetwork {
     public static void register() {
         CHANNEL = NetworkRegistry.newSimpleChannel(new ResourceLocation(BlackChannelMod.MODID, "main"), () -> PROTO, PROTO::equals, PROTO::equals);
         id = 0;
-        CHANNEL.registerMessage(id++, ActionPkt.class, ActionPkt::encode, ActionPkt::decode, ActionPkt::handle);
-        CHANNEL.registerMessage(id++, SyncPkt.class, SyncPkt::encode, SyncPkt::decode, SyncPkt::handle);
-        CHANNEL.registerMessage(id++, StatusPkt.class, StatusPkt::encode, StatusPkt::decode, StatusPkt::handle);
-        CHANNEL.registerMessage(id++, OpenPkt.class, OpenPkt::encode, OpenPkt::decode, OpenPkt::handle);
-        CHANNEL.registerMessage(id++, FloodPkt.class, FloodPkt::encode, FloodPkt::decode, FloodPkt::handle);
-        CHANNEL.registerMessage(id++, CamPkt.class, CamPkt::encode, CamPkt::decode, CamPkt::handle);
-        CHANNEL.registerMessage(id++, CamMovePkt.class, CamMovePkt::encode, CamMovePkt::decode, CamMovePkt::handle);
+        CHANNEL.registerMessage(id++, ActionPkt.class, ActionPkt::encode, ActionPkt::decode, ActionPkt::handle,
+                Optional.of(NetworkDirection.PLAY_TO_SERVER));
+        CHANNEL.registerMessage(id++, SyncPkt.class, SyncPkt::encode, SyncPkt::decode, SyncPkt::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(id++, StatusPkt.class, StatusPkt::encode, StatusPkt::decode, StatusPkt::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(id++, OpenPkt.class, OpenPkt::encode, OpenPkt::decode, OpenPkt::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(id++, FloodPkt.class, FloodPkt::encode, FloodPkt::decode, FloodPkt::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(id++, CamPkt.class, CamPkt::encode, CamPkt::decode, CamPkt::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
+        CHANNEL.registerMessage(id++, CamTargetsPkt.class, CamTargetsPkt::encode, CamTargetsPkt::decode, CamTargetsPkt::handle,
+                Optional.of(NetworkDirection.PLAY_TO_CLIENT));
     }
 
     public static void syncFull(ServerPlayer player) {
@@ -51,15 +60,14 @@ public final class ModNetwork {
     }
 
     /** Обзор вышки: включить или выключить на клиенте. */
-    public static void sendCam(ServerPlayer player, boolean on) {
+    public static void sendCam(ServerPlayer player, boolean on, int x, int y, int z, float yaw, float pitch, int ticks) {
         if (CHANNEL == null || player == null) return;
-        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new CamPkt(on));
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new CamPkt(on, x, y, z, yaw, pitch, ticks));
     }
 
-    /** Ввод камеры на сервер (клиент вызывает каждый тик, пока активен обзор). */
-    public static void sendCamMove(double fwd, double side, double up, float yaw, float pitch) {
-        if (CHANNEL == null) return;
-        CHANNEL.sendToServer(new CamMovePkt(fwd, side, up, yaw, pitch));
+    public static void sendCamTargets(ServerPlayer player, List<CamTarget> targets) {
+        if (CHANNEL == null || player == null) return;
+        CHANNEL.send(PacketDistributor.PLAYER.with(() -> player), new CamTargetsPkt(targets));
     }
 
     public static void open(ServerPlayer player, String screen) {
@@ -70,56 +78,85 @@ public final class ModNetwork {
     /** Сервер -> клиент: обзор вышки включён или выключен. */
     public static final class CamPkt {
         public final boolean on;
+        public final int x, y, z, ticks;
+        public final float yaw, pitch;
 
-        public CamPkt(boolean on) {
+        public CamPkt(boolean on, int x, int y, int z, float yaw, float pitch, int ticks) {
             this.on = on;
+            this.x = x;
+            this.y = y;
+            this.z = z;
+            this.yaw = yaw;
+            this.pitch = pitch;
+            this.ticks = ticks;
         }
 
         public static void encode(CamPkt msg, FriendlyByteBuf buf) {
             buf.writeBoolean(msg.on);
+            buf.writeBlockPos(new net.minecraft.core.BlockPos(msg.x, msg.y, msg.z));
+            buf.writeFloat(msg.yaw);
+            buf.writeFloat(msg.pitch);
+            buf.writeVarInt(Math.max(0, msg.ticks));
         }
 
         public static CamPkt decode(FriendlyByteBuf buf) {
-            return new CamPkt(buf.readBoolean());
+            boolean on = buf.readBoolean();
+            net.minecraft.core.BlockPos pos = buf.readBlockPos();
+            float yaw = buf.readFloat();
+            float pitch = buf.readFloat();
+            int ticks = Math.min(20 * 60 * 10, Math.max(0, buf.readVarInt()));
+            return new CamPkt(on, pos.getX(), pos.getY(), pos.getZ(), yaw, pitch, ticks);
         }
 
         public static void handle(CamPkt msg, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get().enqueueWork(() -> dev.blackchannel.client.TowerCam.apply(msg.on));
-            ctx.get().setPacketHandled(true);
+            NetworkEvent.Context context = ctx.get();
+            if (context.getDirection() == NetworkDirection.PLAY_TO_CLIENT) {
+                context.enqueueWork(() -> dev.blackchannel.client.TowerCam.apply(
+                        msg.on, msg.x, msg.y, msg.z, msg.yaw, msg.pitch, msg.ticks));
+            }
+            context.setPacketHandled(true);
         }
     }
 
-    /** Клиент -> сервер: ввод камеры (вперёд, вбок, вверх от -1 до 1) и угол взгляда. */
-    public static final class CamMovePkt {
-        public final double fwd, side, up;
-        public final float yaw, pitch;
+    public record CamTarget(float x, float y, float z, String label, int kind) {}
 
-        public CamMovePkt(double fwd, double side, double up, float yaw, float pitch) {
-            this.fwd = fwd;
-            this.side = side;
-            this.up = up;
-            this.yaw = yaw;
-            this.pitch = pitch;
+    /** Lightweight CCTV overlay; never injects remote entities into vanilla client tracking. */
+    public static final class CamTargetsPkt {
+        public final List<CamTarget> targets;
+
+        public CamTargetsPkt(List<CamTarget> targets) {
+            this.targets = targets == null ? List.of() : List.copyOf(targets);
         }
 
-        public static void encode(CamMovePkt msg, FriendlyByteBuf buf) {
-            buf.writeDouble(msg.fwd);
-            buf.writeDouble(msg.side);
-            buf.writeDouble(msg.up);
-            buf.writeFloat(msg.yaw);
-            buf.writeFloat(msg.pitch);
+        public static void encode(CamTargetsPkt msg, FriendlyByteBuf buf) {
+            int count = Math.min(32, msg.targets.size());
+            buf.writeVarInt(count);
+            for (int i = 0; i < count; i++) {
+                CamTarget target = msg.targets.get(i);
+                buf.writeFloat(target.x());
+                buf.writeFloat(target.y());
+                buf.writeFloat(target.z());
+                buf.writeUtf(target.label(), 32);
+                buf.writeByte(Math.max(0, Math.min(2, target.kind())));
+            }
         }
 
-        public static CamMovePkt decode(FriendlyByteBuf buf) {
-            return new CamMovePkt(buf.readDouble(), buf.readDouble(), buf.readDouble(), buf.readFloat(), buf.readFloat());
+        public static CamTargetsPkt decode(FriendlyByteBuf buf) {
+            int count = Math.min(32, Math.max(0, buf.readVarInt()));
+            List<CamTarget> targets = new ArrayList<>(count);
+            for (int i = 0; i < count; i++) {
+                targets.add(new CamTarget(buf.readFloat(), buf.readFloat(), buf.readFloat(),
+                        buf.readUtf(32), buf.readUnsignedByte()));
+            }
+            return new CamTargetsPkt(targets);
         }
 
-        public static void handle(CamMovePkt msg, Supplier<NetworkEvent.Context> ctx) {
-            ServerPlayer player = ctx.get().getSender();
-            ctx.get().enqueueWork(() -> {
-                if (player != null) dev.blackchannel.logic.Towers.camMove(player, msg.fwd, msg.side, msg.up, msg.yaw, msg.pitch);
-            });
-            ctx.get().setPacketHandled(true);
+        public static void handle(CamTargetsPkt msg, Supplier<NetworkEvent.Context> ctx) {
+            NetworkEvent.Context context = ctx.get();
+            if (context.getDirection() == NetworkDirection.PLAY_TO_CLIENT) {
+                context.enqueueWork(() -> dev.blackchannel.client.TowerCam.applyTargets(msg.targets));
+            }
+            context.setPacketHandled(true);
         }
     }
 
@@ -142,11 +179,12 @@ public final class ModNetwork {
         }
 
         public static void handle(ActionPkt msg, Supplier<NetworkEvent.Context> ctx) {
-            ServerPlayer sender = ctx.get().getSender();
-            ctx.get().enqueueWork(() -> {
+            NetworkEvent.Context context = ctx.get();
+            ServerPlayer sender = context.getDirection() == NetworkDirection.PLAY_TO_SERVER ? context.getSender() : null;
+            context.enqueueWork(() -> {
                 if (sender != null) Ops.action(sender, msg.action, msg.arg);
             });
-            ctx.get().setPacketHandled(true);
+            context.setPacketHandled(true);
         }
     }
 
@@ -167,8 +205,11 @@ public final class ModNetwork {
         }
 
         public static void handle(SyncPkt msg, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get().enqueueWork(() -> dev.blackchannel.client.ClientState.applyFull(msg.tag));
-            ctx.get().setPacketHandled(true);
+            NetworkEvent.Context context = ctx.get();
+            if (context.getDirection() == NetworkDirection.PLAY_TO_CLIENT) {
+                context.enqueueWork(() -> dev.blackchannel.client.ClientState.applyFull(msg.tag));
+            }
+            context.setPacketHandled(true);
         }
     }
 
@@ -189,8 +230,11 @@ public final class ModNetwork {
         }
 
         public static void handle(StatusPkt msg, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get().enqueueWork(() -> dev.blackchannel.client.ClientState.applyStatus(msg.tag));
-            ctx.get().setPacketHandled(true);
+            NetworkEvent.Context context = ctx.get();
+            if (context.getDirection() == NetworkDirection.PLAY_TO_CLIENT) {
+                context.enqueueWork(() -> dev.blackchannel.client.ClientState.applyStatus(msg.tag));
+            }
+            context.setPacketHandled(true);
         }
     }
 
@@ -236,8 +280,11 @@ public final class ModNetwork {
         }
 
         public static void handle(FloodPkt msg, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get().enqueueWork(() -> dev.blackchannel.client.FloodHud.install(msg.names, msg.pngs));
-            ctx.get().setPacketHandled(true);
+            NetworkEvent.Context context = ctx.get();
+            if (context.getDirection() == NetworkDirection.PLAY_TO_CLIENT) {
+                context.enqueueWork(() -> dev.blackchannel.client.FloodHud.install(msg.names, msg.pngs));
+            }
+            context.setPacketHandled(true);
         }
     }
 
@@ -257,8 +304,11 @@ public final class ModNetwork {
         }
 
         public static void handle(OpenPkt msg, Supplier<NetworkEvent.Context> ctx) {
-            ctx.get().enqueueWork(() -> dev.blackchannel.client.ClientHooks.open(msg.id));
-            ctx.get().setPacketHandled(true);
+            NetworkEvent.Context context = ctx.get();
+            if (context.getDirection() == NetworkDirection.PLAY_TO_CLIENT) {
+                context.enqueueWork(() -> dev.blackchannel.client.ClientHooks.open(msg.id));
+            }
+            context.setPacketHandled(true);
         }
     }
 }

@@ -34,7 +34,7 @@ public final class Optics {
         }
         if (!Ops.pay(player, profile, Config.OPTIC_COST.get())) return;
         ServerLevel level = Ops.levelOf(player.getServer(), intel.dim);
-        int now = player.getServer().getTickCount();
+        long now = Ops.now(player.getServer());
         profile.cdOptic = now + Config.OPTIC_CD.get() * 20;
         if (level == null) {
             profile.optic = new byte[0];
@@ -144,7 +144,7 @@ public final class Optics {
             return;
         }
         if (!Ops.payPeekWithSampleOrCrypto(player, profile, Config.PEEK_COST.get(), intel.handle)) return;
-        int now = player.getServer().getTickCount();
+        long now = Ops.now(player.getServer());
         profile.cdPeek = now + Config.PEEK_CD.get() * 20;
         int dist = 9999;
         if (Str.dim(online.level()).equals(intel.dim)) {

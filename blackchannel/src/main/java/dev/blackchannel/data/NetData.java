@@ -26,9 +26,12 @@ public class NetData extends SavedData {
     public int listingSeq = 1;
     public int strikeSeq = 1;
     public long nextRumorTick;
+    public int clockVersion;
 
     public static NetData get(MinecraftServer server) {
-        return server.overworld().getDataStorage().computeIfAbsent(NetData::load, NetData::new, "blackchannel");
+        NetData data = server.overworld().getDataStorage().computeIfAbsent(NetData::load, NetData::new, "blackchannel");
+        if (data.clockVersion < 1) data.migrateClock();
+        return data;
     }
 
     public static NetData get(ServerPlayer player) {
@@ -52,6 +55,7 @@ public class NetData extends SavedData {
         data.listingSeq = tag.getInt("listingSeq");
         data.strikeSeq = tag.getInt("strikeSeq");
         data.nextRumorTick = tag.getLong("nextRumor");
+        data.clockVersion = tag.getInt("clockVersion");
         if (data.listingSeq < 1) data.listingSeq = 1;
         if (data.strikeSeq < 1) data.strikeSeq = 1;
         return data;
@@ -75,7 +79,32 @@ public class NetData extends SavedData {
         tag.putInt("listingSeq", listingSeq);
         tag.putInt("strikeSeq", strikeSeq);
         tag.putLong("nextRumor", nextRumorTick);
+        tag.putInt("clockVersion", clockVersion);
         return tag;
+    }
+
+    /** Old saves stored absolute server ticks, which reset whenever the server restarts. */
+    private void migrateClock() {
+        for (Profile profile : profiles.values()) {
+            profile.empUntil = 0;
+            profile.bombUntil = 0;
+            profile.floodPicsFor = 0;
+            profile.cdTrace = profile.cdDeanon = profile.cdSwat = profile.cdBomb = 0;
+            profile.cdOptic = profile.cdPeek = 0;
+            profile.lastPosTick = 0;
+            profile.mintTick = 0;
+            profile.chatWindow = 0;
+            profile.bugs.clear();
+            profile.beams.clear();
+            for (Intel intel : profile.intel) {
+                intel.tick = 0;
+                intel.stale = true;
+            }
+        }
+        blockBugs.clear();
+        nextRumorTick = 0;
+        clockVersion = 1;
+        setDirty();
     }
 
     public Profile profile(UUID id) {
@@ -156,10 +185,10 @@ public class NetData extends SavedData {
         public String crew = "";
         public String channel = "darknet";
         public String dm = "";
-        public int empUntil;
-        public int bombUntil;
-        public int floodPicsFor;
-        public int cdTrace, cdDeanon, cdSwat, cdBomb, cdOptic, cdPeek;
+        public long empUntil;
+        public long bombUntil;
+        public long floodPicsFor;
+        public long cdTrace, cdDeanon, cdSwat, cdBomb, cdOptic, cdPeek;
         public byte[] optic = new byte[0];
         public int[] opticColor = new int[0];
         public int opticHx = -1, opticHz = -1, opticConf, opticErr;
@@ -168,10 +197,10 @@ public class NetData extends SavedData {
         public String opticHandle = "";
         public String opticDim = "";
         public final List<CompoundTag> peek = new ArrayList<>();
-        public int lastPosTick;
+        public long lastPosTick;
         public String lastDim = "";
         public int lastX, lastY, lastZ;
-        public int mintTick;
+        public long mintTick;
         public String mintDim = "";
         public int mintX, mintY, mintZ;
         public String resultKey = "";
@@ -181,10 +210,10 @@ public class NetData extends SavedData {
         public String toastKey = "";
         public String toastArg = "";
         public boolean welcomed;
-        public int chatWindow;
+        public long chatWindow;
         public int chatCount;
         public int traceStreak;
-        public int traceStreakTick;
+        public long traceStreakTick;
         public int swatCount;
         public int intelSeq = 1;
         public final List<Intel> intel = new ArrayList<>();
@@ -215,20 +244,20 @@ public class NetData extends SavedData {
             tag.putString("crew", crew);
             tag.putString("chan", channel);
             tag.putString("dm", dm);
-            tag.putInt("emp", empUntil);
-            tag.putInt("bomb", bombUntil);
-            tag.putInt("cdT", cdTrace);
-            tag.putInt("cdD", cdDeanon);
-            tag.putInt("cdS", cdSwat);
-            tag.putInt("cdB", cdBomb);
-            tag.putInt("cdO", cdOptic);
-            tag.putInt("cdP", cdPeek);
-            tag.putInt("lpT", lastPosTick);
+            tag.putLong("emp", empUntil);
+            tag.putLong("bomb", bombUntil);
+            tag.putLong("cdT", cdTrace);
+            tag.putLong("cdD", cdDeanon);
+            tag.putLong("cdS", cdSwat);
+            tag.putLong("cdB", cdBomb);
+            tag.putLong("cdO", cdOptic);
+            tag.putLong("cdP", cdPeek);
+            tag.putLong("lpT", lastPosTick);
             tag.putString("lpD", lastDim);
             tag.putInt("lpX", lastX);
             tag.putInt("lpY", lastY);
             tag.putInt("lpZ", lastZ);
-            tag.putInt("mintT", mintTick);
+            tag.putLong("mintT", mintTick);
             tag.putString("mintD", mintDim == null ? "" : mintDim);
             tag.putInt("mintX", mintX);
             tag.putInt("mintY", mintY);
@@ -244,7 +273,7 @@ public class NetData extends SavedData {
             tag.putBoolean("wel", welcomed);
             tag.putInt("seq", intelSeq);
             tag.putInt("tStreak", traceStreak);
-            tag.putInt("tTick", traceStreakTick);
+            tag.putLong("tTick", traceStreakTick);
             tag.putInt("swat", swatCount);
             ListTag intel = new ListTag();
             for (Intel row : this.intel) intel.add(row.save());
@@ -283,20 +312,20 @@ public class NetData extends SavedData {
             profile.crew = tag.getString("crew");
             profile.channel = tag.contains("chan") ? tag.getString("chan") : "darknet";
             profile.dm = tag.getString("dm");
-            profile.empUntil = tag.getInt("emp");
-            profile.bombUntil = tag.getInt("bomb");
-            profile.cdTrace = tag.getInt("cdT");
-            profile.cdDeanon = tag.getInt("cdD");
-            profile.cdSwat = tag.getInt("cdS");
-            profile.cdBomb = tag.getInt("cdB");
-            profile.cdOptic = tag.getInt("cdO");
-            profile.cdPeek = tag.getInt("cdP");
-            profile.lastPosTick = tag.getInt("lpT");
+            profile.empUntil = tag.getLong("emp");
+            profile.bombUntil = tag.getLong("bomb");
+            profile.cdTrace = tag.getLong("cdT");
+            profile.cdDeanon = tag.getLong("cdD");
+            profile.cdSwat = tag.getLong("cdS");
+            profile.cdBomb = tag.getLong("cdB");
+            profile.cdOptic = tag.getLong("cdO");
+            profile.cdPeek = tag.getLong("cdP");
+            profile.lastPosTick = tag.getLong("lpT");
             profile.lastDim = tag.getString("lpD");
             profile.lastX = tag.getInt("lpX");
             profile.lastY = tag.getInt("lpY");
             profile.lastZ = tag.getInt("lpZ");
-            profile.mintTick = tag.getInt("mintT");
+            profile.mintTick = tag.getLong("mintT");
             profile.mintDim = tag.getString("mintD");
             profile.mintX = tag.getInt("mintX");
             profile.mintY = tag.getInt("mintY");
@@ -311,7 +340,7 @@ public class NetData extends SavedData {
             profile.welcomed = tag.getBoolean("wel");
             profile.intelSeq = Math.max(1, tag.getInt("seq"));
             profile.traceStreak = tag.getInt("tStreak");
-            profile.traceStreakTick = tag.getInt("tTick");
+            profile.traceStreakTick = tag.getLong("tTick");
             profile.swatCount = tag.getInt("swat");
             ListTag intel = tag.getList("intel", Tag.TAG_COMPOUND);
             for (int i = 0; i < intel.size(); i++) profile.intel.add(Intel.load(intel.getCompound(i)));
@@ -342,7 +371,7 @@ public class NetData extends SavedData {
             toastArg = arg == null ? "" : arg;
         }
 
-        public void log(String key, String arg, int tick) {
+        public void log(String key, String arg, long tick) {
             logs.add(new LogLine(key, arg == null ? "" : arg, tick));
             while (logs.size() > 16) logs.remove(0);
         }
@@ -360,7 +389,7 @@ public class NetData extends SavedData {
         public double angle;
         public double alpha = 10.0;
         public int samples = 1;
-        public int tick;
+        public long tick;
         public String source = "trace";
 
         public CompoundTag save() {
@@ -374,7 +403,7 @@ public class NetData extends SavedData {
             tag.putDouble("a", angle);
             tag.putDouble("w", alpha);
             tag.putInt("n", samples);
-            tag.putInt("t", tick);
+            tag.putLong("t", tick);
             tag.putString("s", source);
             return tag;
         }
@@ -390,7 +419,7 @@ public class NetData extends SavedData {
             beam.angle = tag.getDouble("a");
             beam.alpha = tag.getDouble("w");
             beam.samples = Math.max(1, tag.getInt("n"));
-            beam.tick = tag.getInt("t");
+            beam.tick = tag.getLong("t");
             beam.source = tag.contains("s") ? tag.getString("s") : "trace";
             return beam;
         }
@@ -401,7 +430,7 @@ public class NetData extends SavedData {
         public String handle = "";
         public String dim = "";
         public int x, y, z, err;
-        public int tick;
+        public long tick;
         public boolean stale;
 
         public CompoundTag save() {
@@ -413,7 +442,7 @@ public class NetData extends SavedData {
             tag.putInt("y", y);
             tag.putInt("z", z);
             tag.putInt("e", err);
-            tag.putInt("t", tick);
+            tag.putLong("t", tick);
             tag.putBoolean("s", stale);
             return tag;
         }
@@ -427,7 +456,7 @@ public class NetData extends SavedData {
             intel.y = tag.getInt("y");
             intel.z = tag.getInt("z");
             intel.err = tag.getInt("e");
-            intel.tick = tag.getInt("t");
+            intel.tick = tag.getLong("t");
             intel.stale = tag.getBoolean("s");
             return intel;
         }
@@ -490,9 +519,9 @@ public class NetData extends SavedData {
     public static final class LogLine {
         public String key = "";
         public String arg = "";
-        public int tick;
+        public long tick;
 
-        public LogLine(String key, String arg, int tick) {
+        public LogLine(String key, String arg, long tick) {
             this.key = key;
             this.arg = arg;
             this.tick = tick;
@@ -502,12 +531,12 @@ public class NetData extends SavedData {
             CompoundTag tag = new CompoundTag();
             tag.putString("k", key);
             tag.putString("a", arg);
-            tag.putInt("t", tick);
+            tag.putLong("t", tick);
             return tag;
         }
 
         public static LogLine load(CompoundTag tag) {
-            return new LogLine(tag.getString("k"), tag.getString("a"), tag.getInt("t"));
+            return new LogLine(tag.getString("k"), tag.getString("a"), tag.getLong("t"));
         }
     }
 
@@ -515,7 +544,7 @@ public class NetData extends SavedData {
         public String channel = "darknet";
         public String from = "";
         public String text = "";
-        public int tick;
+        public long tick;
         public boolean encrypted;
         public String dim = "";
         public int x, y, z;
@@ -525,7 +554,7 @@ public class NetData extends SavedData {
             tag.putString("c", channel);
             tag.putString("f", from);
             tag.putString("t", text);
-            tag.putInt("k", tick);
+            tag.putLong("k", tick);
             tag.putBoolean("e", encrypted);
             tag.putString("d", dim);
             tag.putInt("x", x);
@@ -539,7 +568,7 @@ public class NetData extends SavedData {
             line.channel = tag.getString("c");
             line.from = tag.getString("f");
             line.text = tag.getString("t");
-            line.tick = tag.getInt("k");
+            line.tick = tag.getLong("k");
             line.encrypted = tag.getBoolean("e");
             line.dim = tag.getString("d");
             line.x = tag.getInt("x");
