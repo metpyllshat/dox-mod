@@ -2,6 +2,9 @@ package dev.blackchannel.logic;
 
 import dev.blackchannel.Config;
 import dev.blackchannel.data.MatchData;
+import dev.blackchannel.net.ModNetwork;
+import net.minecraft.world.effect.MobEffectInstance;
+import net.minecraft.world.effect.MobEffects;
 import net.minecraft.core.BlockPos;
 import net.minecraft.core.Direction;
 import net.minecraft.nbt.CompoundTag;
@@ -18,6 +21,10 @@ import net.minecraft.world.level.block.Blocks;
 import net.minecraft.world.level.block.state.BlockState;
 import net.minecraft.world.level.levelgen.Heightmap;
 
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 
 /**
@@ -167,11 +174,8 @@ public final class Towers {
         set(level, x, top + 1, z, air);
         BlockPos chest = new BlockPos(x + 1, top + 1, z + 1);
         set(level, chest.getX(), chest.getY(), chest.getZ(), Blocks.CHEST.defaultBlockState());
-        if (Config.TOWER_LOOT.get()) { for(int i=0;i<3;i++) Minigame.queueLoot(chest); }
-        // второй сундук для баланса 1.5x лута
-        BlockPos chest2 = new BlockPos(x -1, top + 1, z + 1);
-        set(level, chest2.getX(), chest2.getY(), chest2.getZ(), Blocks.CHEST.defaultBlockState());
-        if (Config.TOWER_LOOT.get()) Minigame.queueLoot(chest2);
+        // один сундук на вышку: только ресурсы, без оружия (пул cacheTower)
+        if (Config.TOWER_LOOT.get()) Minigame.queueTowerLoot(chest);
         // Терминал — магнетит (лодстоун) в центре, на него ПКМ пустой рукой для взлома
         BlockPos terminal = new BlockPos(x, top + 1, z);
         set(level, terminal.getX(), terminal.getY(), terminal.getZ(), Blocks.LODESTONE.defaultBlockState());
@@ -336,8 +340,12 @@ public final class Towers {
     }
 
     /** Тик вышек: крипта, сектор, перехват. */
+    /** Чужие игроки, которые сейчас в зоне вышки (ключ — позиция вышки). Нужно, чтобы сообщать только о входе. */
+    private static final Map<Long, Set<UUID>> ZONE_INSIDE = new HashMap<>();
+
     public static void tick(MinecraftServer server, MatchData match, ServerLevel level, long now) {
         if (!match.active || match.towerInfos.isEmpty()) return;
+        zoneAlerts(server, match, now);
         for (MatchData.TowerInfo info : match.towerInfos) {
             if (info.disabledUntil > now) continue;
             if (info.owner == null || info.owner.isEmpty()) continue;
@@ -349,7 +357,6 @@ public final class Towers {
                     if (crew.equals(info.owner)) {
                         // прямое зачисление в профиль
                         dev.blackchannel.data.NetData.get(server).profile(p.getUUID()).crypto = Math.min(5000, dev.blackchannel.data.NetData.get(server).profile(p.getUUID()).crypto + Config.TOWER_CRYPTO_PER_MIN.get());
-                        p.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.crypto", info.pos.getX(), info.pos.getZ(), Config.TOWER_CRYPTO_PER_MIN.get())), true);
                     }
                 }
                 match.setDirty();
@@ -429,6 +436,7 @@ public final class Towers {
             for (int dy=2; dy<=6; dy++) level.setBlock(new BlockPos(g.getX()-2, top+dy, g.getZ()-2), net.minecraft.world.level.block.Blocks.AIR.defaultBlockState(),3);
         }
         match.towerInfos.clear(); match.towers.clear(); match.towersPlaced=false; pendingSlot=0; pendingAttempt=0; match.setDirty();
+        ZONE_INSIDE.clear();
     }
     /** ЭМИ глушит вышки на 5 мин. */
     public static void pulse(MatchData match, BlockPos center, long now) {
@@ -441,6 +449,35 @@ public final class Towers {
             }
         }
         match.setDirty();
+    }
+
+    /** Раз в секунду: владельцу вышки сообщение, когда чужой игрок входит в её зону. */
+    private static void zoneAlerts(MinecraftServer server, MatchData match, long now) {
+        if (now % 20L != 0L) return;
+        long r = Config.TOWER_INTERCEPT_RADIUS.get();
+        long r2 = r * r;
+        for (MatchData.TowerInfo info : match.towerInfos) {
+            if (info.owner == null || info.owner.isEmpty()) continue;
+            Set<UUID> before = ZONE_INSIDE.computeIfAbsent(info.pos.asLong(), k -> new HashSet<>());
+            Set<UUID> after = new HashSet<>();
+            for (ServerPlayer p : server.getPlayerList().getPlayers()) {
+                String crew = match.playerCrew.getOrDefault(p.getUUID(), "");
+                if (crew.isEmpty() || crew.equals(info.owner)) continue;
+                if (p.blockPosition().distSqr(info.pos) > r2) continue;
+                after.add(p.getUUID());
+                if (before.contains(p.getUUID())) continue;
+                String handle = dev.blackchannel.data.NetData.get(server).profile(p.getUUID()).handle;
+                if (handle == null || handle.isEmpty()) handle = "?";
+                for (ServerPlayer owner : server.getPlayerList().getPlayers()) {
+                    if (!info.owner.equals(match.playerCrew.get(owner.getUUID()))) continue;
+                    owner.sendSystemMessage(Msg.paint(Component.translatable("blackchannel.tower.zone_enter",
+                            info.pos.getX(), info.pos.getZ(), handle)));
+                    owner.playNotifySound(SoundEvents.NOTE_BLOCK_BELL.value(), SoundSource.MASTER, 0.6f, 1.0f);
+                }
+            }
+            before.clear();
+            before.addAll(after);
+        }
     }
 
     /** Перехват: владелец видит чужие действия в радиусе. */
@@ -477,94 +514,220 @@ public final class Towers {
     }
 
 
-    // ---------- обзор вокруг вышки ----------
+    // ---------- обзор от вышки по кругу ----------
 
-    /** Длительность обзора и шаг: за один круг точка обходит вышку ровно один раз. */
-    private static final int CAM_TICKS = 400;
-    private static final int CAM_STEP_TICKS = 2;
-    private static final double CAM_RADIUS = 14.0;
-    private static final double CAM_STEP_RAD = 2.0 * Math.PI / (CAM_TICKS / CAM_STEP_TICKS);
+    /** Длительность обзора без действий: потом выход сам. */
+    private static final int CAM_TICKS = 2400;
+    /** Как часто сервер возвращает игрока на платформу, если его сдвинуло. */
+    private static final int CAM_CHECK_TICKS = 5;
+    /** Допуск, на сколько игрок может отойти от точки на платформе. */
+    private static final double CAM_HOLD_RADIUS = 0.6;
+    /** Чуть вниз, чтобы в кадре был верх вышки и ближняя земля. */
+    private static final float CAM_PITCH = 18f;
     private static final String CAM_END = "bc_cam_end";
     private static final String CAM_MODE = "bc_cam_mode";
     private static final String CAM_RET = "bc_cam_ret";
-    private static final String CAM_BASE = "bc_cam_base";
+    private static final String CAM_MARKER = "bc_cam_marker";
+    private static final String CAM_HOLD = "bc_cam_hold";
+    /** Камеру можно отвести от вышки не дальше этого радиуса (блоки). */
+    private static final double CAM_RADIUS = 40.0;
+    /** Шаг камеры за один тик ввода (блоки). */
+    private static final double CAM_SPEED = 0.35;
+    private static final double CAM_MIN_DY = -3.0;
+    private static final double CAM_MAX_DY = 30.0;
+    private static final String CAM_MOVE_TICK = "bc_cam_move_tick";
 
     /**
-     * Обзор вокруг своей вышки: игрок переходит в наблюдателя, а точка обзора облетает
-     * вышку по кругу на высоте верхней части. Куда смотреть, игрок решает сам мышью.
-     * В конце режим и место возвращаются прежние.
+     * Обзор от своей вышки по образцу дрона SuperbWarfare: игрок остаётся в обычном режиме,
+     * его видно и он может получить урон. Его камера — невидимый маркер на платформе
+     * (ServerPlayer.setCamera). Взгляд крутит мышь на клиенте (client/TowerCam).
+     * Игрок привязан к точке на платформе: если его сдвинуло, сервер возвращает его на место.
+     * Во время обзора блоки не ломаются и не ставятся (см. GameEvents).
+     * Повторное нажатие КАМЕРА — выход. Через 2 минуты выход сам.
      */
     public static void camera(ServerPlayer player, dev.blackchannel.data.NetData.Profile profile) {
         MinecraftServer server = player.getServer();
+        if (isCamActive(player)) {
+            restoreCam(player);
+            player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_off")), false);
+            return;
+        }
         MatchData match = MatchData.get(server);
-        if (isCamActive(player)) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_busy")), false); return; }
         MatchData.TowerInfo owned = null;
         for (MatchData.TowerInfo inf : match.towerInfos) if (inf.owner!=null && inf.owner.equals(profile.crew) && inf.disabledUntil <= server.getTickCount()) { owned = inf; break; }
         if (owned==null) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.no_own")), false); return; }
         int cost = Config.TOWER_CAM_COST.get();
         if (profile.crypto < cost) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.result.need_crypto", cost)), false); return; }
-        profile.crypto -= cost;
         ServerLevel level = player.serverLevel();
-        int bx = owned.pos.getX();
-        int by = owned.pos.getY();
-        int bz = owned.pos.getZ();
-        // запоминаем, куда и в каком режиме вернуть игрока
+        // Точка стояния: центр платформы, ноги на её верхнем слое
+        double fx = owned.pos.getX() + 0.5;
+        double fy = owned.pos.getY() + HEIGHT + 2;
+        double fz = owned.pos.getZ() + 0.5;
+        net.minecraft.world.entity.Entity marker = net.minecraft.world.entity.EntityType.MARKER.create(level);
+        if (marker == null) { player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_fail")), false); return; }
+        profile.crypto -= cost;
+        // Камера на уровне глаз игрока, смотрит вниз под углом
+        marker.moveTo(fx, fy + 1.6, fz, 0f, CAM_PITCH);
+        level.addFreshEntity(marker);
         BlockPos ret = player.blockPosition();
         CompoundTag data = player.getPersistentData();
         data.putIntArray(CAM_RET, new int[]{ret.getX(), ret.getY(), ret.getZ()});
-        data.putIntArray(CAM_BASE, new int[]{bx, by, bz});
+        data.putDouble(CAM_HOLD + "x", fx);
+        data.putDouble(CAM_HOLD + "y", fy);
+        data.putDouble(CAM_HOLD + "z", fz);
         data.putInt(CAM_MODE, player.gameMode.getGameModeForPlayer().getId());
+        data.putUUID(CAM_MARKER, marker.getUUID());
         data.putLong(CAM_END, server.getTickCount() + (long) CAM_TICKS);
-        player.setGameMode(GameType.SPECTATOR);
-        camTeleport(player, level, bx, by, bz, 0);
-        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_ok", bx, bz, CAM_TICKS / 20)), false);
+        player.teleportTo(level, fx, fy, fz, 0f, CAM_PITCH);
+        // Тело невидимо для других, но урон по нему выбрасывает из обзора (см. camHurt)
+        player.addEffect(new MobEffectInstance(MobEffects.INVISIBILITY, CAM_TICKS + 200, 0, false, false, false));
+        player.setCamera(marker);
+        ModNetwork.sendCam(player, true);
+        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_ok", owned.pos.getX(), owned.pos.getZ(), CAM_TICKS / 20)), false);
         player.playNotifySound(SoundEvents.SPYGLASS_USE, SoundSource.MASTER, 1f, 1f);
-        camSchedule(server, player.getUUID(), 1);
+        camSchedule(server, player.getUUID());
     }
 
-    /** Точка обзора на шаге k: по кругу вокруг вышки, на высоте верхней части. */
-    private static void camTeleport(ServerPlayer player, ServerLevel level, int bx, int by, int bz, int k) {
-        double a = k * CAM_STEP_RAD;
-        double x = bx + 0.5 + CAM_RADIUS * Math.cos(a);
-        double z = bz + 0.5 + CAM_RADIUS * Math.sin(a);
-        double y = by + HEIGHT + 3;
-        player.teleportTo(level, x, y, z, player.getYRot(), player.getXRot());
-    }
-
-    private static void camSchedule(MinecraftServer server, UUID id, int k) {
-        server.tell(new net.minecraft.server.TickTask(server.getTickCount() + CAM_STEP_TICKS, () -> {
+    /** Сервер следит за сроком, за маркером и держит игрока на платформе. */
+    private static void camSchedule(MinecraftServer server, UUID id) {
+        server.tell(new net.minecraft.server.TickTask(server.getTickCount() + CAM_CHECK_TICKS, () -> {
             ServerPlayer player = server.getPlayerList().getPlayer(id);
             // вышел из игры: вернём при входе (см. restoreCam)
             if (player == null) return;
             CompoundTag data = player.getPersistentData();
             if (!data.contains(CAM_END)) return;
             if (server.getTickCount() >= data.getLong(CAM_END)
-                    || player.gameMode.getGameModeForPlayer() != GameType.SPECTATOR) {
+                    || player.isDeadOrDying()
+                    || markerOf(player) == null) {
                 restoreCam(player);
                 return;
             }
-            int[] base = data.getIntArray(CAM_BASE);
-            if (base.length >= 3) camTeleport(player, player.serverLevel(), base[0], base[1], base[2], k);
-            camSchedule(server, id, k + 1);
+            holdOnPlatform(player);
+            camSchedule(server, id);
         }));
+    }
+
+    /** Если игрока сдвинуло (отбросило, сорвался с платформы), возвращаем на точку. */
+    private static void holdOnPlatform(ServerPlayer player) {
+        CompoundTag data = player.getPersistentData();
+        if (!data.contains(CAM_HOLD + "x")) return;
+        double hx = data.getDouble(CAM_HOLD + "x"), hy = data.getDouble(CAM_HOLD + "y"), hz = data.getDouble(CAM_HOLD + "z");
+        double dx = player.getX() - hx, dy = player.getY() - hy, dz = player.getZ() - hz;
+        if (dx * dx + dz * dz <= CAM_HOLD_RADIUS * CAM_HOLD_RADIUS && Math.abs(dy) <= 1.0) return;
+        player.teleportTo(player.serverLevel(), hx, hy, hz, player.getYRot(), player.getXRot());
+    }
+
+    private static net.minecraft.world.entity.Entity markerOf(ServerPlayer player) {
+        CompoundTag data = player.getPersistentData();
+        if (!data.hasUUID(CAM_MARKER)) return null;
+        return player.serverLevel().getEntity(data.getUUID(CAM_MARKER));
+    }
+
+    /** Клик или КАМЕРА во время обзора: выйти из него. Возвращает true, если обзор был включён. */
+    public static boolean camExit(ServerPlayer player) {
+        if (!isCamActive(player)) return false;
+        restoreCam(player);
+        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.cam_off")), false);
+        return true;
+    }
+
+    /**
+     * Камера-дрон: клиент шлёт ввод каждый тик, сервер двигает маркер вокруг вышки.
+     * Тело игрока не двигается. Не больше одного шага за тик.
+     */
+    public static void camMove(ServerPlayer player, double fwd, double side, double up, float yaw, float pitch) {
+        if (!isCamActive(player)) return;
+        net.minecraft.world.entity.Entity marker = markerOf(player);
+        if (marker == null) return;
+        CompoundTag data = player.getPersistentData();
+        long now = player.getServer().getTickCount();
+        if (data.getLong(CAM_MOVE_TICK) == now && data.contains(CAM_MOVE_TICK)) return;
+        data.putLong(CAM_MOVE_TICK, now);
+        double ix = Math.max(-1.0, Math.min(1.0, fwd));
+        double is = Math.max(-1.0, Math.min(1.0, side));
+        double iu = Math.max(-1.0, Math.min(1.0, up));
+        double rad = Math.toRadians(yaw);
+        double vx = -Math.sin(rad) * ix + Math.cos(rad) * is;
+        double vz = Math.cos(rad) * ix + Math.sin(rad) * is;
+        double len = Math.sqrt(vx * vx + vz * vz);
+        if (len > 1.0) { vx /= len; vz /= len; }
+        double hx = data.getDouble(CAM_HOLD + "x"), hy = data.getDouble(CAM_HOLD + "y"), hz = data.getDouble(CAM_HOLD + "z");
+        double nx = marker.getX() + vx * CAM_SPEED;
+        double nz = marker.getZ() + vz * CAM_SPEED;
+        double ny = marker.getY() + iu * CAM_SPEED;
+        double ox = nx - hx, oz = nz - hz;
+        double d = Math.sqrt(ox * ox + oz * oz);
+        if (d > CAM_RADIUS) { nx = hx + ox / d * CAM_RADIUS; nz = hz + oz / d * CAM_RADIUS; }
+        ny = Math.max(hy + CAM_MIN_DY, Math.min(hy + CAM_MAX_DY, ny));
+        marker.moveTo(nx, ny, nz, net.minecraft.util.Mth.wrapDegrees(yaw), net.minecraft.util.Mth.clamp(pitch, -89f, 89f));
+    }
+
+    /** Урон по телу в обзоре выбрасывает из камеры. */
+    public static void camHurt(ServerPlayer player) {
+        if (isCamActive(player)) restoreCam(player);
+    }
+
+    /** Удар током: тот, кто начал ломать терминал, получает урон (не чаще раза в секунду). */
+    public static void terminalHit(ServerPlayer player, BlockPos pos) {
+        MatchData match = MatchData.get(player.getServer());
+        if (!match.active || !isTerminal(match, pos)) return;
+        CompoundTag data = player.getPersistentData();
+        long now = player.getServer().getTickCount();
+        if (now < data.getLong("bc_shock_next")) return;
+        data.putLong("bc_shock_next", now + 20);
+        float dmg = (float) Config.TOWER_SHOCK_DAMAGE.get().doubleValue();
+        if (dmg > 0f) player.hurt(player.damageSources().magic(), dmg);
+        player.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.shock")), true);
+        player.playNotifySound(SoundEvents.NOTE_BLOCK_BASS.value(), SoundSource.MASTER, 1f, 0.5f);
+    }
+
+    /**
+     * Ломание терминала не уничтожает его: блок остаётся, а вышка отключается на
+     * towerBreakDisableSeconds и потом работает снова. Возвращает true, если событие обработано.
+     */
+    public static boolean onTerminalBreak(MinecraftServer server, ServerPlayer breaker, BlockPos pos) {
+        MatchData match = MatchData.get(server);
+        if (!match.active || !isTerminal(match, pos)) return false;
+        MatchData.TowerInfo info = at(match, pos);
+        if (info == null) return false;
+        long now = server.getTickCount();
+        info.disabledUntil = now + Config.TOWER_BREAK_DISABLE_SECONDS.get() * 20L;
+        info.hackCrew = "";
+        info.hackStartTick = 0;
+        match.setDirty();
+        if (breaker != null) {
+            breaker.displayClientMessage(Msg.paint(Component.translatable("blackchannel.tower.broken", Config.TOWER_BREAK_DISABLE_SECONDS.get())), true);
+        }
+        return true;
     }
 
     public static boolean isCamActive(ServerPlayer player) {
         return player.getPersistentData().contains(CAM_END);
     }
 
-    /** Возвращает игрока из обзора в прежний режим и на прежнее место. Безопасно вызывать многократно. */
+    /** Выход из обзора: камера обратно на игрока, место прежнее. Безопасно вызывать многократно. */
     public static void restoreCam(ServerPlayer player) {
         CompoundTag data = player.getPersistentData();
         if (!data.contains(CAM_END)) return;
         int[] ret = data.getIntArray(CAM_RET);
         GameType mode = GameType.byId(data.contains(CAM_MODE) ? data.getInt(CAM_MODE) : 0);
+        net.minecraft.world.entity.Entity marker = markerOf(player);
+        if (marker != null) marker.discard();
         data.remove(CAM_END);
         data.remove(CAM_MODE);
         data.remove(CAM_RET);
-        data.remove(CAM_BASE);
-        player.setGameMode(mode);
-        if (ret.length >= 3) player.teleportTo(player.serverLevel(), ret[0] + 0.5, ret[1], ret[2] + 0.5, player.getYRot(), player.getXRot());
+        data.remove(CAM_MARKER);
+        data.remove(CAM_HOLD + "x");
+        data.remove(CAM_HOLD + "y");
+        data.remove(CAM_HOLD + "z");
+        player.setCamera(player);
+        player.removeEffect(MobEffects.INVISIBILITY);
+        ModNetwork.sendCam(player, false);
+        // Режим не менялся с начала обзора, но если его сменил старый вариант, вернём прежний
+        if (player.gameMode.getGameModeForPlayer() != mode) player.setGameMode(mode);
+        if (ret.length >= 3 && !player.isDeadOrDying()) {
+            player.teleportTo(player.serverLevel(), ret[0] + 0.5, ret[1], ret[2] + 0.5, player.getYRot(), player.getXRot());
+        }
     }
 
     public static void scan(ServerPlayer player, dev.blackchannel.data.NetData.Profile profile) {

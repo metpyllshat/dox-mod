@@ -268,7 +268,7 @@
   "blackchannel.spam.4": "CALLBACK FAILED",
   "blackchannel.spam.5": "SIM LOCK",
   "blackchannel.spam.6": "ROUTE LOOP",
-  "blackchannel.tower.cam_ok": "Tower view %s %s for %ss. Look with the mouse, the view circles the tower.",
+  "blackchannel.tower.cam_ok": "Tower view %s %s for %ss. WASD and Space/Shift move the camera around the tower, mouse looks. Click or CAM to exit. Taking damage also ends the view.",
   "blackchannel.tower.captured": "%s captured tower %s @ %s %s",
   "blackchannel.tower.crypto": "Tower %s %s: +%s crypto.",
   "blackchannel.tower.disabled": "Tower jammed for %ss more.",
@@ -278,6 +278,7 @@
   "blackchannel.tower.need_crew": "Tower: join a crew via menu to capture.",
   "blackchannel.tower.no_own": "Need owned tower online.",
   "blackchannel.tower.own": "Tower already yours: %s.",
+  "blackchannel.tower.zone_enter": "Tower zone %s %s: %s entered",
   "blackchannel.tower.scan_ok": "Tower scan %sm: points updated.",
   "block.blackchannel.decoy_beacon": "Decoy Beacon",
   "block.blackchannel.faraday_anchor": "Faraday Anchor",
@@ -557,5 +558,15 @@
   "tooltip.blackchannel.zero": "Keep it in inventory. DEANON ignores VPN and opens an encrypted sample.",
   "blackchannel.tower.cam_busy": "Tower view is already active.",
   "blackchannel.minigame.stats_header": "Match stats:",
-  "blackchannel.minigame.stats_row": "%s [%s]: kills %s, deaths %s, traces %s, towers %s, contract crypto %s · %s"
+  "blackchannel.minigame.stats_row": "%s [%s]: kills %s, deaths %s, traces %s, towers %s, contract crypto %s · %s",
+  "blackchannel.minigame.stats_none": "No stats yet: no match has started.",
+  "blackchannel.tower.cam_off": "Tower view off.",
+  "blackchannel.tower.shock": "Terminal is live: a shock hits you. Tower goes offline if it breaks.",
+  "blackchannel.tower.broken": "Tower terminal broken. Tower offline for %s s, then it comes back.",
+  "blackchannel.tower.cam_fail": "Could not start the view, crypto not charged.",
+  "item.blackchannel.metal_detector": "Metal detector",
+  "tooltip.blackchannel.metal_detector": "Finds caches nearby. Wears out with use.",
+  "blackchannel.detector.off": "The metal detector only works during a match.",
+  "blackchannel.detector.quiet": "The metal detector is silent.",
+  "blackchannel.detector.hit": "Metal detector: cache %s m away, %s"
 }

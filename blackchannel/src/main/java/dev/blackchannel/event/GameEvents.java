@@ -86,6 +86,10 @@ public final class GameEvents {
 
     @SubscribeEvent
     public static void hurt(LivingHurtEvent event) {
+        // Урон по телу в обзоре вышки выбрасывает из камеры
+        if (event.getEntity() instanceof ServerPlayer player && event.getAmount() > 0f) {
+            dev.blackchannel.logic.Towers.camHurt(player);
+        }
         Minigame.onHurt(event);
     }
 
@@ -96,6 +100,7 @@ public final class GameEvents {
 
     @SubscribeEvent
     public static void death(LivingDeathEvent event) {
+        if (event.getEntity() instanceof ServerPlayer player) dev.blackchannel.logic.Towers.restoreCam(player);
         Minigame.onDeath(event);
     }
 
@@ -114,11 +119,22 @@ public final class GameEvents {
 
     @SubscribeEvent
     public static void useBlock(PlayerInteractEvent.RightClickBlock event) {
+        // Во время обзора с вышки блоки не трогаем, клик выводит из обзора
+        if (event.getEntity() instanceof ServerPlayer player && dev.blackchannel.logic.Towers.isCamActive(player)) {
+            dev.blackchannel.logic.Towers.camExit(player);
+            event.setCanceled(true);
+            return;
+        }
         Minigame.onUseBlock(event);
     }
 
     @SubscribeEvent
     public static void useItem(PlayerInteractEvent.RightClickItem event) {
+        if (event.getEntity() instanceof ServerPlayer player && dev.blackchannel.logic.Towers.isCamActive(player)) {
+            dev.blackchannel.logic.Towers.camExit(player);
+            event.setCanceled(true);
+            return;
+        }
         if (!(event.getEntity() instanceof ServerPlayer player) || !Minigame.isDowned(player)) return;
         // Лежачий может дёрнуть дефибриллятор на себе
         if (Minigame.holdsDefib(player) && Minigame.selfDefib(player)) return;
@@ -127,6 +143,15 @@ public final class GameEvents {
 
     @SubscribeEvent
     public static void leftClickBlock(PlayerInteractEvent.LeftClickBlock event) {
+        if (event.getEntity() instanceof ServerPlayer player && dev.blackchannel.logic.Towers.isCamActive(player)) {
+            dev.blackchannel.logic.Towers.camExit(player);
+            event.setCanceled(true);
+            return;
+        }
+        if (event.getEntity() instanceof ServerPlayer player) {
+            // Удар током тому, кто начал ломать терминал вышки
+            dev.blackchannel.logic.Towers.terminalHit(player, event.getPos());
+        }
         if (event.getEntity() instanceof ServerPlayer player && Minigame.isDowned(player)) event.setCanceled(true);
     }
 
@@ -157,6 +182,16 @@ public final class GameEvents {
 
     @SubscribeEvent
     public static void broken(BlockEvent.BreakEvent event) {
+        if (event.getPlayer() instanceof ServerPlayer player && dev.blackchannel.logic.Towers.isCamActive(player)) {
+            event.setCanceled(true);
+            return;
+        }
+        // Терминал вышки не ломается насовсем: вышка отключается и работает снова
+        if (event.getPlayer() instanceof ServerPlayer breaker && dev.blackchannel.logic.Towers.onTerminalBreak(
+                breaker.getServer(), breaker, event.getPos())) {
+            event.setCanceled(true);
+            return;
+        }
         Minigame.onBreak(event);
     }
 

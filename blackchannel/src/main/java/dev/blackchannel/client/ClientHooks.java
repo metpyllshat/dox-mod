@@ -36,6 +36,8 @@ public final class ClientHooks {
         MinecraftForge.EVENT_BUS.addListener(ClientHooks::hud);
         MinecraftForge.EVENT_BUS.addListener(ClientHooks::screen);
         MinecraftForge.EVENT_BUS.addListener(ClientHooks::menu);
+        MinecraftForge.EVENT_BUS.addListener(TowerCam::tick);
+        MinecraftForge.EVENT_BUS.addListener(TowerCam::input);
     }
 
     /** Ванильный титульный экран подменяем своим: это отдельная игра, а не список кнопок. */

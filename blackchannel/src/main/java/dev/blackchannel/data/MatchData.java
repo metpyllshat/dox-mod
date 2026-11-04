@@ -56,6 +56,8 @@ public class MatchData extends SavedData {
     }
     /** Тик следующего аирдропа. Ноль — аирдропы выключены. */
     public long nextAirdropTick;
+    /** Когда отрядам добавятся новые задания (общий таймер). */
+    public long nextContractTick;
     /** Бункеры баз: {x, z, нижний слой, верхний слой}. После матча их засыпаем. */
     public final List<int[]> bunkers = new ArrayList<>();
     public boolean borderSaved;
@@ -143,6 +145,7 @@ public class MatchData extends SavedData {
         // миграция: если старые towers есть, а infos нет — создать
         if (data.towerInfos.isEmpty() && !data.towers.isEmpty()) { for (BlockPos pos : data.towers) data.towerInfos.add(new TowerInfo(pos)); }
         data.nextAirdropTick = tag.getLong("nextAirdrop");
+        data.nextContractTick = tag.getLong("nextContract");
         data.bunkers.clear();
         for (Tag element : tag.getList("bunkers", Tag.TAG_INT_ARRAY)) {
             int[] box = ((IntArrayTag) element).getAsIntArray();
@@ -231,6 +234,7 @@ public class MatchData extends SavedData {
         for (TowerInfo inf : towerInfos) { CompoundTag c = new CompoundTag(); c.putInt("x", inf.pos.getX()); c.putInt("y", inf.pos.getY()); c.putInt("z", inf.pos.getZ()); c.putString("owner", inf.owner == null ? "" : inf.owner); c.putLong("dis", inf.disabledUntil); c.putLong("nc", inf.nextCryptoTick); c.putLong("ns", inf.nextSectorTick); c.putLong("hs", inf.hackStartTick); c.putString("hc", inf.hackCrew == null ? "" : inf.hackCrew); tInfos.add(c); }
         tag.put("towerInfos", tInfos);
         tag.putLong("nextAirdrop", nextAirdropTick);
+        tag.putLong("nextContract", nextContractTick);
         ListTag bunkers = new ListTag();
         for (int[] box : this.bunkers) bunkers.add(new IntArrayTag(box));
         tag.put("bunkers", bunkers);

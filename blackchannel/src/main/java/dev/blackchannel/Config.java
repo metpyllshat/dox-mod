@@ -84,11 +84,14 @@ public final class Config {
     public static final ForgeConfigSpec.DoubleValue LOOT_SCALE_MAX;
     public static final ForgeConfigSpec.IntValue CACHE_ITEMS_MIN;
     public static final ForgeConfigSpec.IntValue CACHE_ITEMS_MAX;
+    public static final ForgeConfigSpec.DoubleValue CACHES_PER_TEAM;
+    public static final ForgeConfigSpec.IntValue CACHES_MAX;
     public static final ForgeConfigSpec.BooleanValue AIRDROP_ENABLED;
     public static final ForgeConfigSpec.IntValue AIRDROP_FIRST_MINUTE;
     public static final ForgeConfigSpec.IntValue AIRDROP_INTERVAL_MINUTES;
     public static final ForgeConfigSpec.IntValue AIRDROP_ITEMS;
     public static final ForgeConfigSpec.IntValue CONTRACT_MINUTES;
+    public static final ForgeConfigSpec.IntValue CONTRACT_REFRESH_MINUTES;
     public static final ForgeConfigSpec.IntValue BEACON_SHIELD_SECONDS;
     public static final ForgeConfigSpec.BooleanValue TRACE_SCALE_MAP;
     public static final ForgeConfigSpec.IntValue TRACE_MAP_REF;
@@ -99,13 +102,23 @@ public final class Config {
     public static final ForgeConfigSpec.IntValue LEAK_SCATTER_PERCENT;
     public static final ForgeConfigSpec.IntValue TOWER_COUNT;
     public static final ForgeConfigSpec.BooleanValue TOWER_LOOT;
+    public static final ForgeConfigSpec.IntValue TOWER_LOOT_ROLLS;
+    public static final ForgeConfigSpec.ConfigValue<List<? extends String>> CACHE_TOWER;
+    public static final ForgeConfigSpec.IntValue TOWER_LINK_RADIUS;
+    public static final ForgeConfigSpec.IntValue TOWER_RADAR_BONUS;
     public static final ForgeConfigSpec.IntValue TOWER_PELENG_RADIUS;
     public static final ForgeConfigSpec.IntValue TOWER_SECTOR_RADIUS;
     public static final ForgeConfigSpec.IntValue TOWER_CHAT_RADIUS;
     public static final ForgeConfigSpec.IntValue TOWER_INTERCEPT_RADIUS;
+    public static final ForgeConfigSpec.IntValue DETECTOR_RADIUS;
+    public static final ForgeConfigSpec.IntValue DETECTOR_USES;
     public static final ForgeConfigSpec.IntValue TOWER_CRYPTO_PER_MIN;
     public static final ForgeConfigSpec.IntValue TOWER_HACK_SECONDS;
     public static final ForgeConfigSpec.IntValue TOWER_DISABLE_SECONDS;
+    /** Урон током тому, кто ломает терминал вышки (за удар, не чаще раза в секунду). */
+    public static final ForgeConfigSpec.DoubleValue TOWER_SHOCK_DAMAGE;
+    /** На сколько секунд отключается вышка, если её терминал сломали. */
+    public static final ForgeConfigSpec.IntValue TOWER_BREAK_DISABLE_SECONDS;
     public static final ForgeConfigSpec.IntValue TOWER_CAM_COST;
     public static final ForgeConfigSpec.IntValue TOWER_SCAN_COST;
     public static final ForgeConfigSpec.IntValue TOWER_SECTOR_SECONDS;
@@ -234,22 +247,22 @@ public final class Config {
                 + "Оружие TACZ задаётся NBT: tacz:modern_kinetic_gun{GunId=tacz:glock_17}, "
                 + "патроны так же: tacz:ammo{AmmoId=tacz:9mm}*24-48.");
         CACHE_EARLY = b.defineList("cacheEarly", List.of(
-                "tacz:modern_kinetic_gun{GunId=tacz:glock_17}@9",
-                "tacz:modern_kinetic_gun{GunId=tacz:m1911}@8",
-                "tacz:modern_kinetic_gun{GunId=tacz:p320}@6",
-                "tacz:modern_kinetic_gun{GunId=tacz:cz75}@6",
-                "tacz:modern_kinetic_gun{GunId=tacz:uzi}@6",
-                "tacz:modern_kinetic_gun{GunId=tacz:taurus943}@5",
-                "tacz:modern_kinetic_gun{GunId=tacz:db_short}@6",
-                "tacz:modern_kinetic_gun{GunId=tacz:m870}@5",
-                "tacz:modern_kinetic_gun{GunId=tacz:sks_tactical}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:kar98}@3",
-                "tacz:ammo{AmmoId=tacz:9mm}*48-96@16",
-                "tacz:ammo{AmmoId=tacz:45acp}*32-64@11",
-                "tacz:ammo{AmmoId=tacz:12g}*16-32@10",
-                "tacz:ammo{AmmoId=tacz:762x39}*20-40@8",
-                "tacz:ammo{AmmoId=tacz:22wmr}*24-48@5",
-                "tacz:ammo{AmmoId=tacz:792x57}*5-10@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:glock_17}@7",
+                "tacz:modern_kinetic_gun{GunId=tacz:m1911}@6",
+                "tacz:modern_kinetic_gun{GunId=tacz:p320}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:cz75}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:uzi}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:taurus943}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:db_short}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:m870}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:sks_tactical}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:kar98}@2",
+                "tacz:ammo{AmmoId=tacz:9mm}*36-72@16",
+                "tacz:ammo{AmmoId=tacz:45acp}*24-48@11",
+                "tacz:ammo{AmmoId=tacz:12g}*12-24@10",
+                "tacz:ammo{AmmoId=tacz:762x39}*15-30@8",
+                "tacz:ammo{AmmoId=tacz:22wmr}*18-36@5",
+                "tacz:ammo{AmmoId=tacz:792x57}*4-8@3",
                 "minecraft:bread*2-4@14",
                 "minecraft:iron_ingot*6-14@16",
                 "minecraft:gunpowder*8-14@20",
@@ -275,35 +288,35 @@ public final class Config {
         ), o -> o instanceof String);
         b.comment("Средняя волна: вторая треть матча. Автоматы, пистолеты-пулемёты, броня, взрывчатка, РЭБ.");
         CACHE_MID = b.defineList("cacheMid", List.of(
-                "tacz:modern_kinetic_gun{GunId=tacz:ak47}@7",
-                "tacz:modern_kinetic_gun{GunId=tacz:m4a1}@6",
-                "tacz:modern_kinetic_gun{GunId=tacz:m16a4}@5",
-                "tacz:modern_kinetic_gun{GunId=tacz:hk416d}@5",
-                "tacz:modern_kinetic_gun{GunId=tacz:g36k}@5",
-                "tacz:modern_kinetic_gun{GunId=tacz:scar_l}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:aug}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:type_81}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:qbz_95}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:hk_mp5a5}@6",
-                "tacz:modern_kinetic_gun{GunId=tacz:ump45}@5",
-                "tacz:modern_kinetic_gun{GunId=tacz:vector45}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:p90}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:fn_fal}@3",
-                "tacz:modern_kinetic_gun{GunId=tacz:hk_g3}@3",
-                "tacz:modern_kinetic_gun{GunId=tacz:mk14}@3",
-                "tacz:modern_kinetic_gun{GunId=tacz:spas_12}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:m1014}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:deagle}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:rhino357}@3",
-                "tacz:ammo{AmmoId=tacz:556x45}*40-80@15",
-                "tacz:ammo{AmmoId=tacz:762x39}*40-80@13",
-                "tacz:ammo{AmmoId=tacz:9mm}*48-96@10",
-                "tacz:ammo{AmmoId=tacz:45acp}*32-64@9",
-                "tacz:ammo{AmmoId=tacz:308}*40-80@8",
-                "tacz:ammo{AmmoId=tacz:12g}*16-32@8",
-                "tacz:ammo{AmmoId=tacz:57x28}*20-40@4",
-                "tacz:ammo{AmmoId=tacz:58x42}*20-40@4",
-                "tacz:ammo{AmmoId=tacz:50ae}*7-14@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:ak47}@5",
+                "tacz:modern_kinetic_gun{GunId=tacz:m4a1}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:m16a4}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:hk416d}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:g36k}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:scar_l}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:aug}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:type_81}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:qbz_95}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:hk_mp5a5}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:ump45}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:vector45}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:p90}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:fn_fal}@2",
+                "tacz:modern_kinetic_gun{GunId=tacz:hk_g3}@2",
+                "tacz:modern_kinetic_gun{GunId=tacz:mk14}@2",
+                "tacz:modern_kinetic_gun{GunId=tacz:spas_12}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:m1014}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:deagle}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:rhino357}@2",
+                "tacz:ammo{AmmoId=tacz:556x45}*30-60@15",
+                "tacz:ammo{AmmoId=tacz:762x39}*30-60@13",
+                "tacz:ammo{AmmoId=tacz:9mm}*36-72@10",
+                "tacz:ammo{AmmoId=tacz:45acp}*24-48@9",
+                "tacz:ammo{AmmoId=tacz:308}*30-60@8",
+                "tacz:ammo{AmmoId=tacz:12g}*12-24@8",
+                "tacz:ammo{AmmoId=tacz:57x28}*15-30@4",
+                "tacz:ammo{AmmoId=tacz:58x42}*15-30@4",
+                "tacz:ammo{AmmoId=tacz:50ae}*5-10@3",
                 "superbwarfare:medical_kit*1-2@8",
                 "superbwarfare:heal_clip*1-2@8",
                 "superbwarfare:field_doctor@3",
@@ -348,30 +361,30 @@ public final class Config {
         ), o -> o instanceof String);
         b.comment("Поздняя волна: последняя треть матча. Снайперки, пулемёты, РПГ, хазмат, топ-броня.");
         CACHE_LATE = b.defineList("cacheLate", List.of(
-                "tacz:modern_kinetic_gun{GunId=tacz:ai_awp}@5",
-                "tacz:modern_kinetic_gun{GunId=tacz:m700}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:m107}@3",
-                "tacz:modern_kinetic_gun{GunId=tacz:m95}@3",
-                "tacz:modern_kinetic_gun{GunId=tacz:mk14}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:scar_h}@4",
-                "tacz:modern_kinetic_gun{GunId=tacz:m249}@3",
-                "tacz:modern_kinetic_gun{GunId=tacz:fn_evolys}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:ai_awp}@4",
+                "tacz:modern_kinetic_gun{GunId=tacz:m700}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:m107}@2",
+                "tacz:modern_kinetic_gun{GunId=tacz:m95}@2",
+                "tacz:modern_kinetic_gun{GunId=tacz:mk14}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:scar_h}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:m249}@2",
+                "tacz:modern_kinetic_gun{GunId=tacz:fn_evolys}@2",
                 "tacz:modern_kinetic_gun{GunId=tacz:minigun}@2",
-                "tacz:modern_kinetic_gun{GunId=tacz:rpg7}@3",
-                "tacz:modern_kinetic_gun{GunId=tacz:m320}@3",
-                "tacz:modern_kinetic_gun{GunId=tacz:aa12}@3",
-                "tacz:modern_kinetic_gun{GunId=tacz:taurus500}@3",
+                "tacz:modern_kinetic_gun{GunId=tacz:rpg7}@2",
+                "tacz:modern_kinetic_gun{GunId=tacz:m320}@2",
+                "tacz:modern_kinetic_gun{GunId=tacz:aa12}@2",
+                "tacz:modern_kinetic_gun{GunId=tacz:taurus500}@2",
                 "tacz:modern_kinetic_gun{GunId=tacz:timeless50}@1",
-                "tacz:ammo{AmmoId=tacz:338}*10-20@8",
-                "tacz:ammo{AmmoId=tacz:50bmg}*5-10@6",
-                "tacz:ammo{AmmoId=tacz:30_06}*10-20@7",
-                "tacz:ammo{AmmoId=tacz:308}*20-40@8",
-                "tacz:ammo{AmmoId=tacz:556x45}*60-120@8",
-                "tacz:ammo{AmmoId=tacz:12g}*24-48@6",
+                "tacz:ammo{AmmoId=tacz:338}*8-15@8",
+                "tacz:ammo{AmmoId=tacz:50bmg}*4-8@6",
+                "tacz:ammo{AmmoId=tacz:30_06}*8-15@7",
+                "tacz:ammo{AmmoId=tacz:308}*15-30@8",
+                "tacz:ammo{AmmoId=tacz:556x45}*45-90@8",
+                "tacz:ammo{AmmoId=tacz:12g}*18-36@6",
                 "tacz:ammo{AmmoId=tacz:rpg_rocket}*1-2@4",
-                "tacz:ammo{AmmoId=tacz:40mm}*2-4@4",
-                "tacz:ammo{AmmoId=tacz:500mag}*5-10@3",
-                "tacz:ammo{AmmoId=tacz:357mag}*6-12@3",
+                "tacz:ammo{AmmoId=tacz:40mm}*2-3@4",
+                "tacz:ammo{AmmoId=tacz:500mag}*4-8@3",
+                "tacz:ammo{AmmoId=tacz:357mag}*4-9@3",
                 "superbwarfare:thermal_imaging_goggles@4",
                 "superbwarfare:parachute@4",
                 "superbwarfare:repair_tool@5",
@@ -462,6 +475,9 @@ public final class Config {
         LOOT_SCALE_MAX = b.defineInRange("lootScaleMax", 3.0D, 1.0D, 6.0D);
         CACHE_ITEMS_MIN = b.defineInRange("cacheItemsMin", 3, 1, 12);
         CACHE_ITEMS_MAX = b.defineInRange("cacheItemsMax", 6, 1, 12);
+        b.comment("Схронов на команду на карте 1000x1000 за 30 минут. Дальше масштабируется по размеру карты и длине катки.");
+        CACHES_PER_TEAM = b.defineInRange("cachesPerTeam", 9.0D, 1.0D, 30.0D);
+        CACHES_MAX = b.defineInRange("cachesMax", 120, 8, 400);
         b.comment("Аирдропы: сброс в случайную точку карты с координатами для всех. Первый — через airDropFirstMinute минут, дальше каждые airDropIntervalMinutes.");
         AIRDROP_ENABLED = b.define("airdropEnabled", true);
         AIRDROP_FIRST_MINUTE = b.defineInRange("airdropFirstMinute", 15, 1, 180);
@@ -469,6 +485,8 @@ public final class Config {
         AIRDROP_ITEMS = b.defineInRange("airdropItems", 5, 1, 12);
         b.comment("Контракты отряда: сколько минут живёт задание до замены. Выполненное платит сразу, отчаянное — вдвое.");
         CONTRACT_MINUTES = b.defineInRange("contractMinutes", 10, 3, 60);
+        b.comment("Как часто отряду добавляются новые задания (до трёх открытых).");
+        CONTRACT_REFRESH_MINUTES = b.defineInRange("contractRefreshMinutes", 5, 1, 60);
         b.pop();
 
         b.push("world");
@@ -519,15 +537,40 @@ public final class Config {
         TOWER_COUNT = b.defineInRange("towerCount", 6, 0, 12);
         b.comment("Класть ли на верхнюю площадку вышки контейнер с лутом поздней волны.");
         TOWER_LOOT = b.define("towerLoot", true);
+        b.comment("Сколько раз вытаскивать предмет из пула вышки (один сундук на вышку). Пул — cacheTower.");
+        TOWER_LOOT_ROLLS = b.defineInRange("towerLootRolls", 4, 1, 12);
+        b.comment("Лут сундука вышки: только ресурсы, без оружия. Формат как у остальных пулов: предмет*мин-макс@вес.");
+        CACHE_TOWER = b.defineList("cacheTower", List.of(
+                "minecraft:iron_ingot*4-12@10",
+                "minecraft:raw_iron*3-8@6",
+                "minecraft:copper_ingot*6-16@10",
+                "minecraft:raw_copper*4-10@6",
+                "minecraft:gold_ingot*2-6@6",
+                "minecraft:raw_gold*2-6@4",
+                "minecraft:redstone*8-24@10",
+                "minecraft:lapis_lazuli*4-12@6",
+                "minecraft:quartz*4-12@6",
+                "minecraft:glass_pane*4-12@4"
+        ), o -> o instanceof String);
+        b.comment("Вышка работает как аплинк и тарелка: в этом радиусе от своей вышки связь есть.");
+        TOWER_LINK_RADIUS = b.defineInRange("towerLinkRadius", 96, 16, 512);
+        b.comment("Прибавка к радару телефона/ноутбука рядом со своей вышкой (в блоках).");
+        TOWER_RADAR_BONUS = b.defineInRange("towerRadarBonus", 120, 0, 512);
         b.comment("Что даёт вышка: пеленг на любой шум 400, карта сектора 600 раз в 60с, крипта 2/мин, чат отряда 800 без стойки, перехват чужих действий");
         TOWER_PELENG_RADIUS = b.defineInRange("towerPelengRadius", 400, 32, 2048);
         TOWER_SECTOR_RADIUS = b.defineInRange("towerSectorRadius", 600, 32, 2048);
         TOWER_SECTOR_SECONDS = b.defineInRange("towerSectorSeconds", 60, 10, 600);
         TOWER_CHAT_RADIUS = b.defineInRange("towerChatRadius", 800, 32, 2048);
         TOWER_INTERCEPT_RADIUS = b.defineInRange("towerInterceptRadius", 400, 32, 2048);
+        b.comment("Металлоискатель: на каком расстоянии в блоках он замечает схрон.");
+        DETECTOR_RADIUS = b.defineInRange("detectorRadius", 50, 8, 200);
+        b.comment("Металлоискатель: сколько раз его можно использовать до поломки.");
+        DETECTOR_USES = b.defineInRange("detectorUses", 40, 1, 500);
         TOWER_CRYPTO_PER_MIN = b.defineInRange("towerCryptoPerMin", 2, 0, 100);
         TOWER_HACK_SECONDS = b.defineInRange("towerHackSeconds", 20, 2, 120);
         TOWER_DISABLE_SECONDS = b.defineInRange("towerDisableSeconds", 300, 10, 3600);
+        TOWER_SHOCK_DAMAGE = b.defineInRange("towerShockDamage", 2.0D, 0.0D, 20.0D);
+        TOWER_BREAK_DISABLE_SECONDS = b.defineInRange("towerBreakDisableSeconds", 120, 10, 1800);
         b.comment("Платные действия с вышки: камера и скан");
         TOWER_CAM_COST = b.defineInRange("towerCamCost", 6, 0, 100);
         TOWER_SCAN_COST = b.defineInRange("towerScanCost", 4, 0, 100);
